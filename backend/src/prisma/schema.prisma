@@ -1,0 +1,629 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cargo {
+  id_cargo     Int        @id @default(autoincrement())
+  nombre_cargo String     @db.VarChar(100)
+  salario_base Decimal    @db.Decimal(12, 2)
+  created_at   DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?  @default(now()) @updatedAt @db.Timestamp(6)
+  empleados    Empleado[]
+
+  @@map("cargo")
+}
+
+model Area {
+  id_area              Int                   @id @default(autoincrement())
+  nombre_area          String                @db.VarChar(100)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+
+  @@map("area")
+}
+
+model Turno {
+  id_turno             Int                   @id @default(autoincrement())
+  codigo               String                @unique @db.VarChar(20)
+  hora_entrada         DateTime              @db.Time(6)
+  hora_salida          DateTime              @db.Time(6)
+  tipo_turno           String                @db.VarChar(50)
+  estado               Boolean?              @default(true)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+
+  @@map("turno")
+}
+
+model TipoNovedad {
+  id_novedad_tipo Int              @id @default(autoincrement())
+  codigo          String           @unique @db.VarChar(20)
+  nombre_novedad  String           @db.VarChar(100)
+  afecta_pago     Boolean          @default(false)
+  created_at      DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_novedad DetalleNovedad[]
+
+  @@map("tipo_novedad")
+}
+
+model TipoRecargo {
+  id_tipo_recargo    Int              @id @default(autoincrement())
+  codigo             String           @unique @db.VarChar(20)
+  nombre_recargo     String           @db.VarChar(100)
+  porcentaje_recargo Decimal          @db.Decimal(5, 2)
+  created_at         DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_recargo    DetalleRecargo[]
+
+  @@map("tipo_recargo")
+}
+
+model Parametrizacion {
+  id_parametro          Int       @id @default(autoincrement())
+  nombre_parametro      String    @unique @db.VarChar(100)
+  valor_numerico        Decimal?  @db.Decimal(10, 2)
+  valor_texto           String?   @db.Text
+  descripcion           String?
+  tipo_parametro        String?   @db.VarChar(50)
+  categoria             String?   @db.VarChar(50)
+  activo                Boolean?  @default(true)
+  fecha_vigencia_inicio DateTime? @db.Date
+  fecha_vigencia_fin    DateTime? @db.Date
+  created_at            DateTime? @default(now()) @db.Timestamp(6)
+  updated_at            DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@index([activo], map: "idx_parametrizacion_activo")
+  @@index([categoria], map: "idx_parametrizacion_categoria")
+  @@map("parametrizacion")
+}
+
+model Calendario {
+  id_calendario  Int       @id @default(autoincrement())
+  fecha          DateTime  @unique @db.Date
+  es_festivo     Boolean?  @default(false)
+  es_domingo     Boolean?  @default(false)
+  nombre_festivo String?   @db.VarChar(100)
+  tipo_festivo   String?   @db.VarChar(50)
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  updated_at     DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+
+  @@index([fecha], map: "idx_calendario_fecha")
+  @@index([es_festivo], map: "idx_calendario_festivo")
+  @@map("calendario")
+}
+
+model Empleado {
+  id_empleado      Int               @id @default(autoincrement())
+  nombre1          String            @db.VarChar(50)
+  nombre2          String?           @db.VarChar(50)
+  apellido1        String            @db.VarChar(50)
+  apellido2        String?           @db.VarChar(50)
+  cedula           String            @unique @db.VarChar(20)
+  edad             Int?
+  sexo             String?           @db.Char(1)
+  vehiculo         String?           @db.VarChar(20)
+  estado           Boolean?          @default(true)
+  id_cargo         Int
+  areas_permitidas Json?
+  created_at       DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+  cargo            Cargo             @relation(fields: [id_cargo], references: [id_cargo], onDelete: NoAction, onUpdate: NoAction)
+  labor_mes        LaborMes[]
+  novedad_empleado NovedadEmpleado[]
+  usuario          Usuario?
+
+  @@index([id_cargo], map: "idx_empleado_cargo")
+  @@index([estado], map: "idx_empleado_estado")
+  @@index([cedula], map: "idx_empleado_cedula")
+  @@map("empleado")
+}
+
+model Usuario {
+  id_usuario       Int               @id @default(autoincrement())
+  usuario          String            @unique @db.VarChar(50)
+  contrasenia      String            @db.VarChar(255)
+  tipo_usuario     String            @db.VarChar(50)
+  nombre_completo  String            @db.VarChar(150)
+  estado           Boolean?          @default(true)
+  fecha_creacion   DateTime          @db.Date
+  id_empleado      Int?              @unique
+  created_at       DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado NovedadEmpleado[]
+  empleado         Empleado?         @relation(fields: [id_empleado], references: [id_empleado], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("usuario")
+}
+
+model LaborMes {
+  id                   Int                   @id @default(autoincrement())
+  fecha_inicio         DateTime              @db.Date
+  fecha_fin            DateTime              @db.Date
+  horas_ordinarias     Decimal?              @default(0) @db.Decimal(8, 2)
+  total_horas          Decimal?              @default(0) @db.Decimal(8, 2)
+  total_recargos       Decimal?              @default(0) @db.Decimal(12, 2)
+  id_empleado          Int
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+  empleado             Empleado              @relation(fields: [id_empleado], references: [id_empleado], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([id_empleado, fecha_inicio, fecha_fin])
+  @@index([id_empleado], map: "idx_labor_mes_empleado")
+  @@index([fecha_inicio, fecha_fin], map: "idx_labor_mes_fechas")
+  @@map("labor_mes")
+}
+
+model NovedadEmpleado {
+  id_novedad_registro Int              @id @default(autoincrement())
+  fecha_solicitud     DateTime         @db.Date
+  fecha_registro      DateTime         @db.Date
+  fecha_vencimiento   DateTime?        @db.Date
+  etapa               String?          @default("pendiente") @db.VarChar(50)
+  id_usuario          Int
+  id_empleado         Int
+  created_at          DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_novedad     DetalleNovedad[]
+  empleado            Empleado         @relation(fields: [id_empleado], references: [id_empleado], onDelete: NoAction, onUpdate: NoAction)
+  usuario             Usuario          @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([id_usuario], map: "idx_novedad_usuario")
+  @@index([id_empleado], map: "idx_novedad_empleado")
+  @@index([etapa], map: "idx_novedad_etapa")
+  @@map("novedad_empleado")
+}
+
+model DetalleProgramacion {
+  id_detalle_turno      Int       @id @default(autoincrement())
+  fecha                 DateTime  @db.Date
+  id_area               Int
+  total_horas_laboradas Decimal?  @default(0) @db.Decimal(8, 2)
+  fk_id_labor_mes       Int
+  fk_id_turno           Int
+  created_at            DateTime? @default(now()) @db.Timestamp(6)
+  updated_at            DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+  labor_mes             LaborMes  @relation(fields: [fk_id_labor_mes], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  turno                 Turno     @relation(fields: [fk_id_turno], references: [id_turno], onDelete: NoAction, onUpdate: NoAction)
+  area                  Area      @relation(fields: [id_area], references: [id_area], onDelete: NoAction, onUpdate: NoAction)
+  recargo               Recargo[]
+
+  @@index([fk_id_labor_mes], map: "idx_detalle_programacion_labor")
+  @@index([fecha], map: "idx_detalle_programacion_fecha")
+  @@map("detalle_programacion")
+}
+
+model DetalleNovedad {
+  id_detalle_novedad  Int             @id @default(autoincrement())
+  fecha               DateTime        @db.Date
+  cantidad            Decimal?        @db.Decimal(10, 2)
+  observaciones       String?
+  id_novedad_registro Int
+  id_novedad_tipo     Int
+  created_at          DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?       @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado    NovedadEmpleado @relation(fields: [id_novedad_registro], references: [id_novedad_registro], onDelete: NoAction, onUpdate: NoAction)
+  tipo_novedad        TipoNovedad     @relation(fields: [id_novedad_tipo], references: [id_novedad_tipo], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([id_novedad_registro], map: "idx_detalle_novedad_registro")
+  @@map("detalle_novedad")
+}
+
+model Recargo {
+  id_recargo           Int                 @id @default(autoincrement())
+  total_horas          Decimal?            @default(0) @db.Decimal(8, 2)
+  total_dinero         Decimal?            @default(0) @db.Decimal(12, 2)
+  dominicales          Int?                @default(0)
+  festivos             Int?                @default(0)
+  rno                  Decimal?            @default(0) @db.Decimal(8, 2)
+  rnf                  Decimal?            @default(0) @db.Decimal(8, 2)
+  heon                 Decimal?            @default(0) @db.Decimal(8, 2)
+  heod                 Decimal?            @default(0) @db.Decimal(8, 2)
+  hefd                 Decimal?            @default(0) @db.Decimal(8, 2)
+  hefn                 Decimal?            @default(0) @db.Decimal(8, 2)
+  fecha_inicio         DateTime            @db.Date
+  fecha_fin            DateTime            @db.Date
+  fk_id_detalle_turno  Int
+  created_at           DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?           @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_recargo      DetalleRecargo[]
+  detalle_programacion DetalleProgramacion @relation(fields: [fk_id_detalle_turno], references: [id_detalle_turno], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([fk_id_detalle_turno], map: "idx_recargo_detalle_turno")
+  @@map("recargo")
+}
+
+model DetalleRecargo {
+  id_recargo      Int
+  id_tipo_recargo Int
+  cantidad        Decimal     @db.Decimal(10, 2)
+  valor_calculado Decimal?    @db.Decimal(12, 2)
+  created_at      DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?   @default(now()) @updatedAt @db.Timestamp(6)
+  recargo         Recargo     @relation(fields: [id_recargo], references: [id_recargo], onDelete: NoAction, onUpdate: NoAction)
+  tipo_recargo    TipoRecargo @relation(fields: [id_tipo_recargo], references: [id_tipo_recargo], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([id_recargo, id_tipo_recargo])
+  @@map("detalle_recargo")
+}
+
+model AuditoriaLaborMes {
+  id_auditoria              Int       @id @default(autoincrement())
+  id_labor_mes              Int
+  accion                    String    @db.VarChar(10)
+  id_empleado_anterior      Int?
+  id_empleado_nuevo         Int?
+  fecha_inicio_anterior     DateTime? @db.Date
+  fecha_inicio_nueva        DateTime? @db.Date
+  fecha_fin_anterior        DateTime? @db.Date
+  fecha_fin_nueva           DateTime? @db.Date
+  horas_ordinarias_anterior Decimal?  @db.Decimal(8, 2)
+  horas_ordinarias_nueva    Decimal?  @db.Decimal(8, 2)
+  total_horas_anterior      Decimal?  @db.Decimal(8, 2)
+  total_horas_nueva         Decimal?  @db.Decimal(8, 2)
+  total_recargos_anterior   Decimal?  @db.Decimal(12, 2)
+  total_recargos_nueva      Decimal?  @db.Decimal(12, 2)
+  usuario_modificacion      String?   @db.VarChar(100)
+  ip_modificacion           String?   @db.VarChar(45)
+  fecha_modificacion        DateTime? @default(now()) @db.Timestamp(6)
+  observaciones             String?
+
+  @@index([id_labor_mes], map: "idx_audit_labor_mes")
+  @@index([fecha_modificacion], map: "idx_audit_labor_fecha")
+  @@index([usuario_modificacion], map: "idx_audit_labor_usuario")
+  @@map("auditoria_labor_mes")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_detalle_novedad {
+  id_auditoria                 Int       @id @default(autoincrement())
+  id_detalle_novedad           Int
+  accion                       String    @db.VarChar(10)
+  fecha_anterior               DateTime? @db.Date
+  fecha_nueva                  DateTime? @db.Date
+  cantidad_anterior            Decimal?  @db.Decimal(10, 2)
+  cantidad_nueva               Decimal?  @db.Decimal(10, 2)
+  observaciones_anterior       String?
+  observaciones_nueva          String?
+  id_novedad_registro_anterior Int?
+  id_novedad_registro_nueva    Int?
+  id_novedad_tipo_anterior     Int?
+  id_novedad_tipo_nueva        Int?
+  usuario_modificacion         String?   @db.VarChar(100)
+  ip_modificacion              String?   @db.VarChar(45)
+  fecha_modificacion           DateTime? @default(now()) @db.Timestamp(6)
+  observaciones_auditoria      String?
+
+  @@index([id_detalle_novedad], map: "idx_audit_detalle_novedad")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_detalle_programacion {
+  id_auditoria                   Int       @id @default(autoincrement())
+  id_detalle_turno               Int
+  accion                         String    @db.VarChar(10)
+  fecha_anterior                 DateTime? @db.Date
+  fecha_nueva                    DateTime? @db.Date
+  id_area_anterior               Int?
+  id_area_nueva                  Int?
+  total_horas_laboradas_anterior Decimal?  @db.Decimal(8, 2)
+  total_horas_laboradas_nueva    Decimal?  @db.Decimal(8, 2)
+  fk_id_labor_mes_anterior       Int?
+  fk_id_labor_mes_nueva          Int?
+  fk_id_turno_anterior           Int?
+  fk_id_turno_nueva              Int?
+  usuario_modificacion           String?   @db.VarChar(100)
+  ip_modificacion                String?   @db.VarChar(45)
+  fecha_modificacion             DateTime? @default(now()) @db.Timestamp(6)
+  observaciones                  String?
+
+  @@index([id_detalle_turno], map: "idx_audit_detalle_prog")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_detalle_recargo {
+  id_auditoria             Int       @id @default(autoincrement())
+  id_recargo               Int
+  id_tipo_recargo          Int
+  accion                   String    @db.VarChar(10)
+  cantidad_anterior        Decimal?  @db.Decimal(10, 2)
+  cantidad_nueva           Decimal?  @db.Decimal(10, 2)
+  valor_calculado_anterior Decimal?  @db.Decimal(12, 2)
+  valor_calculado_nueva    Decimal?  @db.Decimal(12, 2)
+  usuario_modificacion     String?   @db.VarChar(100)
+  ip_modificacion          String?   @db.VarChar(45)
+  fecha_modificacion       DateTime? @default(now()) @db.Timestamp(6)
+  observaciones            String?
+
+  @@index([id_recargo], map: "idx_audit_detalle_recargo")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_novedad_empleado {
+  id_auditoria               Int       @id @default(autoincrement())
+  id_novedad_registro        Int
+  accion                     String    @db.VarChar(10)
+  fecha_solicitud_anterior   DateTime? @db.Date
+  fecha_solicitud_nueva      DateTime? @db.Date
+  fecha_registro_anterior    DateTime? @db.Date
+  fecha_registro_nueva       DateTime? @db.Date
+  fecha_vencimiento_anterior DateTime? @db.Date
+  fecha_vencimiento_nueva    DateTime? @db.Date
+  etapa_anterior             String?   @db.VarChar(50)
+  etapa_nueva                String?   @db.VarChar(50)
+  id_usuario_anterior        Int?
+  id_usuario_nueva           Int?
+  id_empleado_anterior       Int?
+  id_empleado_nueva          Int?
+  usuario_modificacion       String?   @db.VarChar(100)
+  ip_modificacion            String?   @db.VarChar(45)
+  fecha_modificacion         DateTime? @default(now()) @db.Timestamp(6)
+  observaciones              String?
+
+  @@index([id_novedad_registro], map: "idx_audit_novedad")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model auditoria_recargo {
+  id_auditoria                 Int       @id @default(autoincrement())
+  id_recargo                   Int
+  accion                       String    @db.VarChar(10)
+  total_horas_anterior         Decimal?  @db.Decimal(8, 2)
+  total_horas_nueva            Decimal?  @db.Decimal(8, 2)
+  total_dinero_anterior        Decimal?  @db.Decimal(12, 2)
+  total_dinero_nueva           Decimal?  @db.Decimal(12, 2)
+  dominicales_anterior         Int?
+  dominicales_nueva            Int?
+  festivos_anterior            Int?
+  festivos_nueva               Int?
+  rno_anterior                 Decimal?  @db.Decimal(8, 2)
+  rno_nueva                    Decimal?  @db.Decimal(8, 2)
+  rnf_anterior                 Decimal?  @db.Decimal(8, 2)
+  rnf_nueva                    Decimal?  @db.Decimal(8, 2)
+  heon_anterior                Decimal?  @db.Decimal(8, 2)
+  heon_nueva                   Decimal?  @db.Decimal(8, 2)
+  heod_anterior                Decimal?  @db.Decimal(8, 2)
+  heod_nueva                   Decimal?  @db.Decimal(8, 2)
+  hefd_anterior                Decimal?  @db.Decimal(8, 2)
+  hefd_nueva                   Decimal?  @db.Decimal(8, 2)
+  hefn_anterior                Decimal?  @db.Decimal(8, 2)
+  hefn_nueva                   Decimal?  @db.Decimal(8, 2)
+  fecha_inicio_anterior        DateTime? @db.Date
+  fecha_inicio_nueva           DateTime? @db.Date
+  fecha_fin_anterior           DateTime? @db.Date
+  fecha_fin_nueva              DateTime? @db.Date
+  fk_id_detalle_turno_anterior Int?
+  fk_id_detalle_turno_nueva    Int?
+  usuario_modificacion         String?   @db.VarChar(100)
+  ip_modificacion              String?   @db.VarChar(45)
+  fecha_modificacion           DateTime? @default(now()) @db.Timestamp(6)
+  observaciones                String?
+
+  @@index([id_recargo], map: "idx_audit_recargo")
+  @@index([fecha_modificacion], map: "idx_audit_recargo_fecha")
+}
+
+view VwEmpleadosCompletos {
+  id_empleado      Int       @map("id_empleado")
+  nombre_completo  String    @map("nombre_completo")
+  cedula           String    @map("cedula") @db.VarChar(20)
+  edad             Int?      @map("edad")
+  sexo             String?   @map("sexo") @db.Char(1)
+  vehiculo         String?   @map("vehiculo") @db.VarChar(20)
+  estado           Boolean?  @map("estado")
+  id_cargo         Int       @map("id_cargo")
+  nombre_cargo     String    @map("nombre_cargo") @db.VarChar(100)
+  salario_base     Decimal   @map("salario_base") @db.Decimal(12, 2)
+  areas_permitidas Json?     @map("areas_permitidas")
+  created_at       DateTime? @map("created_at") @db.Timestamp(6)
+  updated_at       DateTime? @map("updated_at") @db.Timestamp(6)
+
+  @@map("vw_empleados_completos")
+}
+
+view VwTurnosAsignados {
+  id_detalle_turno Int       @map("id_detalle_turno")
+  fecha            DateTime  @map("fecha") @db.Date
+  dia_semana       String    @map("dia_semana") @db.VarChar
+  es_festivo       Boolean   @map("es_festivo")
+  es_domingo       Boolean   @map("es_domingo")
+  id_turno         Int       @map("id_turno")
+  codigo_turno     String    @map("codigo_turno") @db.VarChar(20)
+  hora_entrada     DateTime  @map("hora_entrada") @db.Time(6)
+  hora_salida      DateTime  @map("hora_salida") @db.Time(6)
+  tipo_turno       String    @map("tipo_turno") @db.VarChar(50)
+  thl              Decimal?  @map("thl") @db.Decimal(8, 2)
+  id_area          Int       @map("id_area")
+  nombre_area      String    @map("nombre_area") @db.VarChar(100)
+  id_labor_mes     Int       @map("id_labor_mes")
+  id_empleado      Int       @map("id_empleado")
+  nombre_completo  String    @map("nombre_completo")
+  cedula           String    @map("cedula") @db.VarChar(20)
+  nombre_cargo     String    @map("nombre_cargo") @db.VarChar(100)
+  salario_base     Decimal   @map("salario_base") @db.Decimal(12, 2)
+  created_at       DateTime? @map("created_at") @db.Timestamp(6)
+  updated_at       DateTime? @map("updated_at") @db.Timestamp(6)
+
+  @@map("vw_turnos_asignados")
+}
+
+view VwNovedadesCompletas {
+  id_novedad_registro Int       @map("id_novedad_registro")
+  fecha_solicitud     DateTime  @map("fecha_solicitud") @db.Date
+  fecha_registro      DateTime  @map("fecha_registro") @db.Date
+  fecha_vencimiento   DateTime? @map("fecha_vencimiento") @db.Date
+  etapa               String?   @map("etapa") @db.VarChar(50)
+  id_empleado         Int       @map("id_empleado")
+  empleado            String    @map("empleado")
+  cedula              String    @map("cedula") @db.VarChar(20)
+  nombre_cargo        String    @map("nombre_cargo") @db.VarChar(100)
+  id_novedad_tipo     Int?      @map("id_novedad_tipo")
+  codigo_novedad      String?   @map("codigo_novedad") @db.VarChar(20)
+  tipo                String?   @map("tipo") @db.VarChar(100)
+  afecta_pago         Boolean?  @map("afecta_pago")
+  fecha_inicio        DateTime? @map("fecha_inicio") @db.Date
+  cantidad            Decimal?  @map("cantidad") @db.Decimal(10, 2)
+  observaciones       String?   @map("observaciones")
+  usuario_registro    String    @map("usuario_registro") @db.VarChar(150)
+  created_at          DateTime? @map("created_at") @db.Timestamp(6)
+  updated_at          DateTime? @map("updated_at") @db.Timestamp(6)
+
+  @@map("vw_novedades_completas")
+}
+
+view VwRecargosCompletos {
+  id_recargo       Int       @map("id_recargo")
+  fecha_inicio     DateTime  @map("fecha_inicio") @db.Date
+  fecha_fin        DateTime  @map("fecha_fin") @db.Date
+  total_horas      Decimal?  @map("total_horas") @db.Decimal(8, 2)
+  total_dinero     Decimal?  @map("total_dinero") @db.Decimal(12, 2)
+  dominicales      Int?      @map("dominicales")
+  festivos         Int?      @map("festivos")
+  rno              Decimal?  @map("rno") @db.Decimal(8, 2)
+  rnf              Decimal?  @map("rnf") @db.Decimal(8, 2)
+  heon             Decimal?  @map("heon") @db.Decimal(8, 2)
+  heod             Decimal?  @map("heod") @db.Decimal(8, 2)
+  hefd             Decimal?  @map("hefd") @db.Decimal(8, 2)
+  hefn             Decimal?  @map("hefn") @db.Decimal(8, 2)
+  id_detalle_turno Int       @map("id_detalle_turno")
+  fecha            DateTime  @map("fecha") @db.Date
+  codigo_turno     String    @map("codigo_turno") @db.VarChar(20)
+  hora_entrada     DateTime  @map("hora_entrada") @db.Time(6)
+  hora_salida      DateTime  @map("hora_salida") @db.Time(6)
+  nombre_area      String    @map("nombre_area") @db.VarChar(100)
+  id_empleado      Int       @map("id_empleado")
+  nombre_completo  String    @map("nombre_completo")
+  cedula           String    @map("cedula") @db.VarChar(20)
+  salario_base     Decimal   @map("salario_base") @db.Decimal(12, 2)
+  id_labor_mes     Int       @map("id_labor_mes")
+  created_at       DateTime? @map("created_at") @db.Timestamp(6)
+  updated_at       DateTime? @map("updated_at") @db.Timestamp(6)
+
+  @@map("vw_recargos_completos")
+}
+
+view VwEmpleadosActivosAreas {
+  id_empleado      Int      @map("id_empleado")
+  nombre_completo  String   @map("nombre_completo")
+  cedula           String   @map("cedula") @db.VarChar(20)
+  estado           Boolean? @map("estado")
+  nombre_cargo     String   @map("nombre_cargo") @db.VarChar(100)
+  salario_base     Decimal  @map("salario_base") @db.Decimal(12, 2)
+  areas_permitidas Json?    @map("areas_permitidas")
+  cantidad_areas   Int      @map("cantidad_areas")
+
+  @@map("vw_empleados_activos_areas")
+}
+
+view VwResumenLaborMes {
+  id_labor_mes      Int       @map("id_labor_mes")
+  fecha_inicio      DateTime  @map("fecha_inicio") @db.Date
+  fecha_fin         DateTime  @map("fecha_fin") @db.Date
+  periodo           String    @map("periodo")
+  id_empleado       Int       @map("id_empleado")
+  nombre_completo   String    @map("nombre_completo")
+  cedula            String    @map("cedula") @db.VarChar(20)
+  nombre_cargo      String    @map("nombre_cargo") @db.VarChar(100)
+  salario_base      Decimal   @map("salario_base") @db.Decimal(12, 2)
+  horas_ordinarias  Decimal?  @map("horas_ordinarias") @db.Decimal(8, 2)
+  total_horas       Decimal?  @map("total_horas") @db.Decimal(8, 2)
+  total_recargos    Decimal?  @map("total_recargos") @db.Decimal(12, 2)
+  total_turnos      BigInt?   @map("total_turnos")
+  total_dominicales BigInt?   @map("total_dominicales")
+  total_festivos    BigInt?   @map("total_festivos")
+  created_at        DateTime? @map("created_at") @db.Timestamp(6)
+  updated_at        DateTime? @map("updated_at") @db.Timestamp(6)
+
+  @@map("vw_resumen_labor_mes")
+}
+
+view VwAuditoriaLaborMes {
+  id_auditoria              Int       @map("id_auditoria")
+  id_labor_mes              Int       @map("id_labor_mes")
+  accion                    String    @map("accion") @db.VarChar(10)
+  empleado_anterior         String?   @map("empleado_anterior")
+  empleado_nuevo            String?   @map("empleado_nuevo")
+  fecha_inicio_anterior     DateTime? @map("fecha_inicio_anterior") @db.Date
+  fecha_inicio_nueva        DateTime? @map("fecha_inicio_nueva") @db.Date
+  fecha_fin_anterior        DateTime? @map("fecha_fin_anterior") @db.Date
+  fecha_fin_nueva           DateTime? @map("fecha_fin_nueva") @db.Date
+  horas_ordinarias_anterior Decimal?  @map("horas_ordinarias_anterior") @db.Decimal(8, 2)
+  horas_ordinarias_nueva    Decimal?  @map("horas_ordinarias_nueva") @db.Decimal(8, 2)
+  total_horas_anterior      Decimal?  @map("total_horas_anterior") @db.Decimal(8, 2)
+  total_horas_nueva         Decimal?  @map("total_horas_nueva") @db.Decimal(8, 2)
+  total_recargos_anterior   Decimal?  @map("total_recargos_anterior") @db.Decimal(12, 2)
+  total_recargos_nueva      Decimal?  @map("total_recargos_nueva") @db.Decimal(12, 2)
+  usuario_modificacion      String?   @map("usuario_modificacion") @db.VarChar(100)
+  ip_modificacion           String?   @map("ip_modificacion") @db.VarChar(45)
+  fecha_modificacion        DateTime? @map("fecha_modificacion") @db.Timestamp(6)
+  observaciones             String?   @map("observaciones")
+
+  @@map("vw_auditoria_labor_mes")
+}
+
+view VwAuditoriaRecargos {
+  id_auditoria          Int       @map("id_auditoria")
+  id_recargo            Int       @map("id_recargo")
+  accion                String    @map("accion") @db.VarChar(10)
+  total_horas_anterior  Decimal?  @db.Decimal(8, 2)
+  total_horas_nueva     Decimal?  @db.Decimal(8, 2)
+  total_dinero_anterior Decimal?  @map("total_dinero_anterior") @db.Decimal(12, 2)
+  total_dinero_nueva    Decimal?  @map("total_dinero_nueva") @db.Decimal(12, 2)
+  diferencia_dinero     Decimal?  @map("diferencia_dinero") @db.Decimal
+  dominicales_anterior  Int?      @map("dominicales_anterior")
+  dominicales_nueva     Int?      @map("dominicales_nueva")
+  festivos_anterior     Int?      @map("festivos_anterior")
+  festivos_nueva        Int?      @map("festivos_nueva")
+  rno_anterior          Decimal?  @db.Decimal(8, 2)
+  rno_nueva             Decimal?  @db.Decimal(8, 2)
+  rnf_anterior          Decimal?  @db.Decimal(8, 2)
+  rnf_nueva             Decimal?  @db.Decimal(8, 2)
+  heon_anterior         Decimal?  @db.Decimal(8, 2)
+  heon_nueva            Decimal?  @db.Decimal(8, 2)
+  heod_anterior         Decimal?  @db.Decimal(8, 2)
+  heod_nueva            Decimal?  @db.Decimal(8, 2)
+  hefd_anterior         Decimal?  @db.Decimal(8, 2)
+  hefd_nueva            Decimal?  @db.Decimal(8, 2)
+  hefn_anterior         Decimal?  @db.Decimal(8, 2)
+  hefn_nueva            Decimal?  @db.Decimal(8, 2)
+  fecha_inicio_anterior DateTime? @db.Date
+  fecha_inicio_nueva    DateTime? @map("fecha_inicio_nueva") @db.Date
+  fecha_fin_anterior    DateTime? @db.Date
+  fecha_fin_nueva       DateTime? @map("fecha_fin_nueva") @db.Date
+  usuario_modificacion  String?   @map("usuario_modificacion") @db.VarChar(100)
+  ip_modificacion       String?   @map("ip_modificacion") @db.VarChar(45)
+  fecha_modificacion    DateTime? @map("fecha_modificacion") @db.Timestamp(6)
+  observaciones         String?   @map("observaciones")
+
+  @@map("vw_auditoria_recargos")
+}
+
+view VwAuditoriaNovedades {
+  id_auditoria               Int       @map("id_auditoria")
+  id_novedad_registro        Int       @map("id_novedad_registro")
+  accion                     String    @map("accion") @db.VarChar(10)
+  empleado_anterior          String?   @map("empleado_anterior")
+  empleado_nuevo             String?   @map("empleado_nuevo")
+  etapa_anterior             String?   @map("etapa_anterior") @db.VarChar(50)
+  etapa_nueva                String?   @map("etapa_nueva") @db.VarChar(50)
+  fecha_solicitud_anterior   DateTime? @map("fecha_solicitud_anterior") @db.Date
+  fecha_solicitud_nueva      DateTime? @map("fecha_solicitud_nueva") @db.Date
+  fecha_vencimiento_anterior DateTime? @map("fecha_vencimiento_anterior") @db.Date
+  fecha_vencimiento_nueva    DateTime? @map("fecha_vencimiento_nueva") @db.Date
+  usuario_modificacion       String?   @map("usuario_modificacion") @db.VarChar(100)
+  ip_modificacion            String?   @map("ip_modificacion") @db.VarChar(45)
+  fecha_modificacion         DateTime? @map("fecha_modificacion") @db.Timestamp(6)
+  observaciones              String?   @map("observaciones")
+
+  @@map("vw_auditoria_novedades")
+}
+
