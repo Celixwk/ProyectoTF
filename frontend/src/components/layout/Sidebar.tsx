@@ -18,16 +18,14 @@ const navigation = [
   { name: 'Empleados', href: '/empleados', icon: Users },
   { name: 'Turnos', href: '/turnos', icon: Clock },
   { name: 'Programación', href: '/programacion', icon: Calendar },
+  { name: 'Prog. Áreas', href: '/programacion-areas', icon: Building2 },
   { name: 'Recargos', href: '/recargos', icon: DollarSign },
   { name: 'Novedades', href: '/novedades', icon: FileText },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
   { name: 'Config. Programación', href: '/configuracion-programacion', icon: CalendarCheck },
 ];
 
-const configuracion = [
-  { name: 'Cargos', href: '/configuracion/cargos', icon: Briefcase },
-  { name: 'Áreas', href: '/configuracion/areas', icon: Building2 },
-];
+
 
 export default function Sidebar() {
   return (

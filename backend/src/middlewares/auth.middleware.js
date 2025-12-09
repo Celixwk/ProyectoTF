@@ -6,12 +6,35 @@ const prisma = require('../config/database');
  */
 const verificarToken = async (req, res, next) => {
   try {
+    // BYPASS LOGIN - TEMPORAL (MOCK ONLY)
+    const usuario = {
+      id_usuario: 99999,
+      usuario: 'admin_temporal',
+      tipo_usuario: 'admin',
+      nombre_completo: 'Administrador Temporal',
+      estado: true,
+      empleado: {
+        id_empleado: 99999,
+        nombre1: 'Admin',
+        apellido1: 'Temporal',
+        cargo: {
+          id_cargo: 1,
+          nombre_cargo: 'Administrador Sistema'
+        }
+      }
+    };
+
+    req.usuario = usuario;
+    return next();
+    // FIN BYPASS LOGIN
+
+    /*
     // Obtener token del header
     const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({ 
-        error: 'No se proporcionó token de autenticación' 
+      return res.status(401).json({
+        error: 'No se proporcionó token de autenticación'
       });
     }
 
@@ -31,23 +54,24 @@ const verificarToken = async (req, res, next) => {
     });
 
     if (!usuario || !usuario.estado) {
-      return res.status(401).json({ 
-        error: 'Usuario no válido o inactivo' 
+      return res.status(401).json({
+        error: 'Usuario no válido o inactivo'
       });
     }
+    */
 
     // Agregar usuario al request
     req.usuario = usuario;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Token expirado',
         code: 'TOKEN_EXPIRED'
       });
     }
     if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: 'Token inválido',
         code: 'TOKEN_INVALID'
       });
@@ -63,15 +87,15 @@ const verificarToken = async (req, res, next) => {
 const verificarRol = (...rolesPermitidos) => {
   return (req, res, next) => {
     if (!req.usuario) {
-      return res.status(401).json({ 
-        error: 'Usuario no autenticado' 
+      return res.status(401).json({
+        error: 'Usuario no autenticado'
       });
     }
 
     const tipoUsuario = req.usuario.tipo_usuario.toLowerCase();
-    
+
     if (!rolesPermitidos.map(r => r.toLowerCase()).includes(tipoUsuario)) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         error: 'No tienes permisos para realizar esta acción',
         requiereRol: rolesPermitidos,
         tuRol: req.usuario.tipo_usuario
@@ -98,4 +122,3 @@ module.exports = {
   esAdmin,
   esAdminOSupervisor
 };
-
