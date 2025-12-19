@@ -1,27 +1,38 @@
 import prisma from "../../prisma/cliente";
 
-export async function capa1_ordenarPorEspecializacion(){
-    // NOTA: Si TypeScript muestra error, reinicia el TS Server:
-    // Ctrl+Shift+P -> "TypeScript: Restart TS Server"
+export function obtenerClasificacionEmpleado(totalAreas: number): string {
+    if (totalAreas === 0) return "comodín";
+    if (totalAreas === 1) return "especialista";
+    return "flexible";
+}
+
+export async function capa1_ordenarPorEspecializacion() {
     const empleados = await prisma.empleado.findMany({
         include: {
-            areas: {
-                include: {
-                    area: true  // Incluir la relación con Area dentro de EmpleadoArea
-                }
-            },
+            empleado_area: true,
             cargo: true,
         },
     });
 
-    // Contabilización de las áreas por empleado
-    const empleadosConConteo = empleados.map(empleado => ({        
-        nombre: `${empleado.nombre1} ${empleado.nombre2 ?? ""} ${empleado.apellido1} ${empleado.apellido2 ?? ""}`.trim(),
-        total_areas: empleado.areas.length,
-    }));
+    const procesados = empleados.map(empleado => {
+        const nombre = [empleado.nombre1, empleado.nombre2, empleado.apellido1, empleado.apellido2]
+            .filter(Boolean).join(" ");
+        
+        const total_areas = empleado.empleado_area.length;
+        const clasificacion = obtenerClasificacionEmpleado(total_areas);
 
-    // Ordenar los empleados por el total de áreas
-    empleadosConConteo.sort((a, b) => a.total_areas - b.total_areas);
+        return {
+            id_empleado: empleado.id_empleado,
+            nombre,
+            total_areas,
+            clasificacion
+        };
+    });
 
-    return empleadosConConteo;
+    return {
+        especialistas: procesados.filter(e => e.clasificacion === "especialista"),
+        flexibles: procesados.filter(e => e.clasificacion === "flexible"),
+        comodines: procesados.filter(e => e.clasificacion === "comodín"),
+        todos: [...procesados].sort((a, b) => a.total_areas - b.total_areas)
+    };
 }

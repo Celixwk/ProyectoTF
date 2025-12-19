@@ -28,6 +28,7 @@ model Area {
   created_at           DateTime?             @default(now()) @db.Timestamp(6)
   updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
   detalle_programacion DetalleProgramacion[]
+  empleado_area        empleado_area[]
 
   @@map("area")
 }
@@ -83,6 +84,8 @@ model Parametrizacion {
   fecha_actualizacion DateTime? @db.Date
   created_at          DateTime? @default(now()) @db.Timestamp(6)
   updated_at          DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+  valor_texto         String?
+  activo              Boolean?  @default(true)
 
   @@map("parametrizacion")
 }
@@ -101,11 +104,14 @@ model Empleado {
   id_estado        Int?              @default(1)
   created_at       DateTime?         @default(now()) @db.Timestamp(6)
   updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+  id_area          Int?
   cargo            Cargo             @relation(fields: [id_cargo], references: [id_cargo], onUpdate: NoAction)
   estados_empleado estados_empleado? @relation(fields: [id_estado], references: [id_estado], onDelete: Restrict, onUpdate: NoAction)
+  empleado_area    empleado_area[]
   labor_mes        LaborMes[]
   novedad_empleado NovedadEmpleado[]
   usuario          Usuario?
+  empleado_area empleado_area[]
 
   @@index([id_cargo], map: "idx_empleado_cargo")
   @@index([id_estado], map: "idx_empleado_estado")
@@ -273,4 +279,173 @@ model mes {
   updated_at   DateTime? @default(now()) @db.Timestamp(6)
 
   @@unique([numero_mes, anio])
+}
+
+model empleado_area {
+  id_empleado Int
+  id_area     Int
+  area        Area     @relation(fields: [id_area], references: [id_area], onDelete: Cascade, onUpdate: NoAction, map: "fk_ea_area")
+  empleado    Empleado @relation(fields: [id_empleado], references: [id_empleado], onDelete: Cascade, onUpdate: NoAction, map: "fk_ea_empleado")
+
+  @@id([id_empleado, id_area])
+}
+
+view vw_empleados_completos {
+  id_empleado      Int?
+  cedula           String?   @db.VarChar(20)
+  nombre_completo  String?
+  edad             Int?      @db.SmallInt
+  sexo             String?   @db.Char(1)
+  vehiculo         Boolean?
+  estado           Boolean?
+  id_cargo         Int?
+  nombre_cargo     String?   @db.VarChar(100)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  areas_permitidas Int[]
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+}
+
+view vw_novedades_completas {
+  id_novedad_registro Int?
+  fecha_solicitud     DateTime? @db.Date
+  fecha_registro      DateTime? @db.Date
+  fecha_vencimiento   DateTime? @db.Date
+  etapa               String?   @db.VarChar(15)
+  id_empleado         Int?
+  empleado            String?
+  cedula              String?   @db.VarChar(20)
+  nombre_cargo        String?   @db.VarChar(100)
+  id_novedad_tipo     Int?
+  codigo_novedad      String?   @db.VarChar(10)
+  tipo                String?   @db.VarChar(60)
+  afecta_pago         Boolean?
+  fecha_inicio        DateTime? @db.Date
+  cantidad            Decimal?  @db.Decimal
+  observaciones       String?
+  usuario_registro    String?   @db.VarChar
+  created_at          DateTime? @db.Timestamp(6)
+  updated_at          DateTime? @db.Timestamp(6)
+}
+
+view vw_empleados_activos_areas {
+  id_empleado      Int?
+  nombre_completo  String?
+  cedula           String?  @db.VarChar(20)
+  estado           Boolean?
+  nombre_cargo     String?  @db.VarChar(100)
+  salario_base     Decimal? @db.Decimal(10, 2)
+  areas_permitidas Int[]
+  cantidad_areas   BigInt?
+}
+
+view vw_resumen_labor_mes {
+  id_labor_mes      Int?
+  fecha_inicio      DateTime? @db.Date
+  fecha_fin         DateTime? @db.Date
+  periodo           String?
+  id_empleado       Int?
+  nombre_completo   String?
+  cedula            String?   @db.VarChar(20)
+  nombre_cargo      String?   @db.VarChar(100)
+  salario_base      Decimal?  @db.Decimal(10, 2)
+  horas_ordinarias  Decimal?  @db.Decimal
+  total_horas       Decimal?  @db.Decimal
+  total_recargos    Decimal?  @db.Decimal
+  total_turnos      BigInt?
+  total_dominicales BigInt?
+  total_festivos    BigInt?
+  created_at        DateTime? @db.Timestamp(6)
+  updated_at        DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_labor_mes {
+  id_labor_mes       Int?
+  id_empleado        Int?
+  nombre_empleado    String?
+  fecha_inicio       DateTime? @db.Date
+  fecha_fin          DateTime? @db.Date
+  horas_mes          Decimal?  @db.Decimal(6, 2)
+  estado             String?   @db.VarChar(15)
+  fecha_modificacion DateTime? @db.Timestamp(6)
+  fecha_creacion     DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_recargos {
+  id_recargo              Int?
+  id_detalle_programacion Int?
+  fecha_inicio            DateTime? @db.Date
+  fecha_fin               DateTime? @db.Date
+  total_horas             Decimal?  @db.Decimal(5, 2)
+  total_dinero            Decimal?  @db.Decimal(10, 2)
+  id_empleado             Int?
+  nombre_empleado         String?
+  fecha_modificacion      DateTime? @db.Timestamp(6)
+  fecha_creacion          DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_novedades {
+  id_novedad_registro Int?
+  id_empleado         Int?
+  nombre_empleado     String?
+  id_novedad_tipo     Int?
+  tipo_novedad        String?   @db.VarChar(60)
+  fecha_solicitud     DateTime? @db.Date
+  fecha_registro      DateTime? @db.Date
+  etapa               String?   @db.VarChar(15)
+  fecha_modificacion  DateTime? @db.Timestamp(6)
+  fecha_creacion      DateTime? @db.Timestamp(6)
+}
+
+view vw_turnos_asignados {
+  id_detalle_turno Int?
+  fecha            DateTime? @db.Date
+  dia_semana       String?
+  es_domingo       Boolean?
+  es_festivo       Boolean?
+  id_turno         Int?
+  codigo_turno     String?
+  hora_entrada     String?
+  hora_salida      String?
+  tipo_turno       String?   @db.VarChar(10)
+  thl              Decimal?  @db.Decimal(5, 2)
+  id_area          Int?
+  nombre_area      String?   @db.VarChar
+  id_labor_mes     Int?
+  id_empleado      Int?
+  nombre_completo  String?
+  cedula           String?   @db.VarChar(20)
+  nombre_cargo     String?   @db.VarChar(100)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+}
+
+view vw_recargos_completos {
+  id_recargo       Int?
+  fecha_inicio     DateTime? @db.Date
+  fecha_fin        DateTime? @db.Date
+  total_horas      Decimal?  @db.Decimal(5, 2)
+  total_dinero     Decimal?  @db.Decimal(10, 2)
+  dominicales      Int?      @db.SmallInt
+  festivos         Int?      @db.SmallInt
+  rno              Decimal?  @db.Decimal(5, 2)
+  rnf              Decimal?  @db.Decimal(5, 2)
+  heon             Decimal?  @db.Decimal(5, 2)
+  heod             Decimal?  @db.Decimal(5, 2)
+  hefd             Decimal?  @db.Decimal(5, 2)
+  hefn             Decimal?  @db.Decimal(5, 2)
+  id_detalle_turno Int?
+  fecha            DateTime? @db.Date
+  codigo_turno     String?
+  hora_entrada     String?
+  hora_salida      String?
+  nombre_area      String?   @db.VarChar
+  id_empleado      Int?
+  nombre_completo  String?
+  cedula           String?   @db.VarChar(20)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  id_labor_mes     Int?
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
 }
