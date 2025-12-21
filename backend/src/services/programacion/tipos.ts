@@ -60,10 +60,13 @@ export interface Hueco {
 }
 
 export interface Asignacion {
+  id_asignacion?: number;
   id_empleado: number;
   id_area: number;
   id_turno: number;
   fecha: Date;
+  hora_entrada?: Date;
+  hora_salida?: Date;
   nombre_empleado?: string;
   nombre_area?: string;
   codigo_turno?: string;
@@ -145,13 +148,10 @@ export interface ResultadoMotor {
   };
 }
 
-
-
-
-
-
-
-
-
-
-
+export interface Turno { 
+  id_turno: number; 
+  codigo?: string; 
+  hora_entrada: Date; 
+  hora_salida: Date; 
+  duracion_horas?: number | null; 
+}

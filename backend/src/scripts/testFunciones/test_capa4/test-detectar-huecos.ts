@@ -2,59 +2,57 @@ import { capa4_detectarHuecos } from "../../../services/programacion/capa4.gesti
 import type { Asignacion } from "../../../services/programacion/tipos";
 
 async function main() {
-    console.log("Test de detección de huecos");
+  console.log("=== 🧪 Test: capa4_detectarHuecos ===\n");
 
-    const fecha = new Date("2025-01-01");
-    
-    const areas = [
-        { id_area: 1, nombre_area: "Sala Principal" },
-        { id_area: 2, nombre_area: "Puertas y Sala" },
-        { id_area: 6, nombre_area: "Caseta de Entrada" },
-        { id_area: 7, nombre_area: "Caseta de Salida" },
-        { id_area: 9, nombre_area: "Parqueadero 1" } 
-    ];
+  const fecha = new Date("2025-01-01");
 
-    const maximosPorArea = new Map<number, number>([
-        [  areas[0].id_area, 2 ],
-        [  areas[1].id_area, 1 ],
-        [  areas[2].id_area, 1 ],
-        [  areas[3].id_area, 1 ],
-        [  areas[4].id_area, 2 ],
-    ])
+  const areas = [
+    { id_area: 1, nombre_area: "Sala Principal", prioridad: 6 },
+    { id_area: 2, nombre_area: "Puertas y Sala", prioridad: 7 },
+    { id_area: 6, nombre_area: "Caseta de Entrada", prioridad: 1 },
+    { id_area: 7, nombre_area: "Caseta de Salida", prioridad: 2 },
+    { id_area: 9, nombre_area: "Parqueadero 1", prioridad: 4 }
+  ];
 
-    const programacion: Asignacion[] = [
-        { 
-            id_empleado: 10,
-            id_area: 6,
-            fecha,
-            id_turno: 1 },
-        { 
-            id_empleado: 11, 
-            id_area: 9, 
-            fecha, 
-            id_turno: 1 }
-    ];
+  const maximosPorArea = new Map<number, number>([
+    [1, 2],
+    [2, 1],
+    [6, 1],
+    [7, 1],
+    [9, 2],
+  ]);
 
-    console.log("\n=============================="); 
-    console.log(" 📌 Programación actual"); 
-    console.log("==============================");
-    console.table(programacion)
+  const programacion: Asignacion[] = [
+    { id_empleado: 10, id_area: 6, fecha, id_turno: 1 },
+    { id_empleado: 11, id_area: 9, fecha, id_turno: 1 }
+  ];
 
-    console.log("\n=============================="); 
-    console.log(" 📌 Máximos por área"); 
-    console.log("==============================");
+  console.log("\n📌 Programación actual");
+  console.table(programacion);
 
-    console.table(Array.from(maximosPorArea.entries()).map(([id_area, maximo]) => ({
-        id_area,
-        maximo_requerido: maximo
-    })));
+  console.log("\n📌 Máximos por área");
+  console.table(
+    Array.from(maximosPorArea.entries()).map(([id_area, maximo]) => ({
+      id_area,
+      maximo_requerido: maximo
+    }))
+  );
 
-    const huecos = capa4_detectarHuecos(programacion, areas, fecha, maximosPorArea);
+  const huecos = capa4_detectarHuecos(programacion, areas, fecha, maximosPorArea);
 
-    console.log("\n=============================="); 
-    console.log(" 📌 Huecos detectados"); 
-    console.log("==============================");
-    console.table(huecos);
+  console.log("\n📌 Huecos detectados");
+  console.table(
+    huecos.map(h => ({
+      id_area: h.id_area,
+      nombre_area: h.nombre_area,
+      prioridad: h.prioridad,
+      trabajadores_actuales: h.trabajadores_actuales,
+      trabajadores_requeridos: h.trabajadores_requeridos,
+      deficit: h.deficit
+    }))
+  );
 }
 
-main();
+main().catch(err => {
+  console.error("❌ Error en test-detectar-huecos:", err);
+});
