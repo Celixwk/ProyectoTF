@@ -67,120 +67,145 @@ const calcularRecargosPorTurno = (turno, fechaStr, diasFestivosSet = new Set()) 
   }
 
   const fechaBase = new Date(`${fechaStr}T00:00:00Z`);
-  const horaEntrada = horaAMinutos(turno.hora_entrada);
-  const horaSalida = horaAMinutos(turno.hora_salida);
-
-  let minutosTrabajados = 0;
-  let cruzaMedianoche = false;
-
-  if (horaSalida > horaEntrada) {
-    minutosTrabajados = horaSalida - horaEntrada;
+  
+  // Determinar períodos a procesar (soporta horarios partidos)
+  let periodos = [];
+  if (turno.periodos && turno.periodos.length > 0) {
+    // Usar períodos definidos explícitamente
+    periodos = turno.periodos;
+  } else if (turno.hora_entrada_2 && turno.hora_salida_2) {
+    // Si tiene segundo período en BD, crear períodos
+    periodos = [
+      { hora_entrada: turno.hora_entrada, hora_salida: turno.hora_salida },
+      { hora_entrada: turno.hora_entrada_2, hora_salida: turno.hora_salida_2 }
+    ];
   } else {
-    minutosTrabajados = MINUTES_PER_DAY - horaEntrada + horaSalida;
-    cruzaMedianoche = true;
+    // Período único (compatibilidad hacia atrás)
+    periodos = [{ hora_entrada: turno.hora_entrada, hora_salida: turno.hora_salida }];
   }
 
-  const horasTrabajadas = minutosTrabajados / 60;
-  resultado.totales.THL = Math.round(horasTrabajadas * 10) / 10;
+  // Procesar cada período y sumar los resultados
+  let totalHorasTrabajadas = 0;
+  
+  for (const periodo of periodos) {
+    const horaEntrada = horaAMinutos(periodo.hora_entrada);
+    const horaSalida = horaAMinutos(periodo.hora_salida);
 
-  const limiteHorasNormales = Math.min(HORAS_ORDINARIAS_POR_TURNO, horasTrabajadas);
-  const inicioNocturno = NOCTURNO_SEGMENT.startMinutes;
-  const finNocturno = NOCTURNO_SEGMENT.endMinutes;
+    let minutosTrabajados = 0;
+    let cruzaMedianoche = false;
 
-  let minutosProcesados = 0;
-  let horasNormalesProcesadas = 0;
-
-  while (minutosProcesados < minutosTrabajados) {
-    const minutosDesdeInicio = minutosProcesados;
-    const minutosDelDia = (horaEntrada + minutosDesdeInicio) % MINUTES_PER_DAY;
-
-    let fechaActual = new Date(fechaBase);
-    if (cruzaMedianoche && minutosDelDia < horaEntrada) {
-      fechaActual = new Date(fechaActual.getTime() + MILLISECONDS_PER_DAY);
+    if (horaSalida > horaEntrada) {
+      minutosTrabajados = horaSalida - horaEntrada;
+    } else {
+      minutosTrabajados = MINUTES_PER_DAY - horaEntrada + horaSalida;
+      cruzaMedianoche = true;
     }
 
-    const fechaActualStr = formatDate(fechaActual);
-    const esDomingoActual = fechaActual.getUTCDay() === DOMINGO_DAY_INDEX;
-    const esFestivoActual = diasFestivosSet.has(fechaActualStr);
-    const esNocturno =
-      minutosDelDia >= inicioNocturno || minutosDelDia < finNocturno;
+    const horasTrabajadas = minutosTrabajados / 60;
+    totalHorasTrabajadas += horasTrabajadas;
 
-    const minutosIntervalo = Math.min(60, minutosTrabajados - minutosProcesados);
-    const horasIntervalo = minutosIntervalo / 60;
+    const limiteHorasNormales = Math.min(HORAS_ORDINARIAS_POR_TURNO, horasTrabajadas);
+    const inicioNocturno = NOCTURNO_SEGMENT.startMinutes;
+    const finNocturno = NOCTURNO_SEGMENT.endMinutes;
 
-    const horasRestantesNormales = limiteHorasNormales - horasNormalesProcesadas;
-    const esHoraNormal = horasRestantesNormales > 0;
+    let minutosProcesados = 0;
+    let horasNormalesProcesadas = 0;
 
-    const pushSegmento = (codigo, horas, esExtra = false) => {
-      if (!horas || horas <= 0) return;
-      resultado.totales[codigo] = Math.round(
-        (resultado.totales[codigo] + horas) * 10
-      ) / 10;
+    while (minutosProcesados < minutosTrabajados) {
+      const minutosDesdeInicio = minutosProcesados;
+      const minutosDelDia = (horaEntrada + minutosDesdeInicio) % MINUTES_PER_DAY;
 
-      const segmento = buildSegmento({
-        codigo,
-        horas,
-        fecha: fechaActual,
-        minutosDelDia,
-        minutosIntervalo,
-        esNocturno,
-        esDomingo: esDomingoActual,
-        esFestivo: esFestivoActual,
-        esExtra,
-      });
-      if (segmento) {
-        resultado.segmentos.push(segmento);
+      let fechaActual = new Date(fechaBase);
+      if (cruzaMedianoche && minutosDelDia < horaEntrada) {
+        fechaActual = new Date(fechaActual.getTime() + MILLISECONDS_PER_DAY);
       }
-    };
 
-    if (esHoraNormal) {
-      const horasANormal = Math.min(horasIntervalo, horasRestantesNormales);
+      const fechaActualStr = formatDate(fechaActual);
+      const esDomingoActual = fechaActual.getUTCDay() === DOMINGO_DAY_INDEX;
+      const esFestivoActual = diasFestivosSet.has(fechaActualStr);
+      const esNocturno =
+        minutosDelDia >= inicioNocturno || minutosDelDia < finNocturno;
 
-      if (esDomingoActual) {
-        pushSegmento('D', horasANormal);
-        if (esNocturno) pushSegmento('RNF', horasANormal);
-      } else if (esFestivoActual) {
-        pushSegmento('F', horasANormal);
-        if (esNocturno) pushSegmento('RNF', horasANormal);
-      } else {
-        resultado.totales.horasNormales = Math.round(
-          (resultado.totales.horasNormales + horasANormal) * 10
+      const minutosIntervalo = Math.min(60, minutosTrabajados - minutosProcesados);
+      const horasIntervalo = minutosIntervalo / 60;
+
+      const horasRestantesNormales = limiteHorasNormales - horasNormalesProcesadas;
+      const esHoraNormal = horasRestantesNormales > 0;
+
+      const pushSegmento = (codigo, horas, esExtra = false) => {
+        if (!horas || horas <= 0) return;
+        resultado.totales[codigo] = Math.round(
+          (resultado.totales[codigo] + horas) * 10
         ) / 10;
-        if (esNocturno) pushSegmento('RNO', horasANormal);
-      }
 
-      horasNormalesProcesadas += horasANormal;
-      const horasExtrasEnIntervalo = horasIntervalo - horasANormal;
+        const segmento = buildSegmento({
+          codigo,
+          horas,
+          fecha: fechaActual,
+          minutosDelDia,
+          minutosIntervalo,
+          esNocturno,
+          esDomingo: esDomingoActual,
+          esFestivo: esFestivoActual,
+          esExtra,
+        });
+        if (segmento) {
+          resultado.segmentos.push(segmento);
+        }
+      };
 
-      if (horasExtrasEnIntervalo > 0) {
+      if (esHoraNormal) {
+        const horasANormal = Math.min(horasIntervalo, horasRestantesNormales);
+
+        if (esDomingoActual) {
+          pushSegmento('D', horasANormal);
+          if (esNocturno) pushSegmento('RNF', horasANormal);
+        } else if (esFestivoActual) {
+          pushSegmento('F', horasANormal);
+          if (esNocturno) pushSegmento('RNF', horasANormal);
+        } else {
+          resultado.totales.horasNormales = Math.round(
+            (resultado.totales.horasNormales + horasANormal) * 10
+          ) / 10;
+          if (esNocturno) pushSegmento('RNO', horasANormal);
+        }
+
+        horasNormalesProcesadas += horasANormal;
+        const horasExtrasEnIntervalo = horasIntervalo - horasANormal;
+
+        if (horasExtrasEnIntervalo > 0) {
+          if (esDomingoActual || esFestivoActual) {
+            if (esNocturno) {
+              pushSegmento('HEFN', horasExtrasEnIntervalo, true);
+            } else {
+              pushSegmento('HEFD', horasExtrasEnIntervalo, true);
+            }
+          } else if (esNocturno) {
+            pushSegmento('HEON', horasExtrasEnIntervalo, true);
+          } else {
+            pushSegmento('HEOD', horasExtrasEnIntervalo, true);
+          }
+        }
+      } else {
         if (esDomingoActual || esFestivoActual) {
           if (esNocturno) {
-            pushSegmento('HEFN', horasExtrasEnIntervalo, true);
+            pushSegmento('HEFN', horasIntervalo, true);
           } else {
-            pushSegmento('HEFD', horasExtrasEnIntervalo, true);
+            pushSegmento('HEFD', horasIntervalo, true);
           }
         } else if (esNocturno) {
-          pushSegmento('HEON', horasExtrasEnIntervalo, true);
+          pushSegmento('HEON', horasIntervalo, true);
         } else {
-          pushSegmento('HEOD', horasExtrasEnIntervalo, true);
+          pushSegmento('HEOD', horasIntervalo, true);
         }
       }
-    } else {
-      if (esDomingoActual || esFestivoActual) {
-        if (esNocturno) {
-          pushSegmento('HEFN', horasIntervalo, true);
-        } else {
-          pushSegmento('HEFD', horasIntervalo, true);
-        }
-      } else if (esNocturno) {
-        pushSegmento('HEON', horasIntervalo, true);
-      } else {
-        pushSegmento('HEOD', horasIntervalo, true);
-      }
-    }
 
-    minutosProcesados += minutosIntervalo;
-  }
+      minutosProcesados += minutosIntervalo;
+    }
+  } // Fin del bucle for de períodos
+
+  // Actualizar total de horas trabajadas (suma de todos los períodos)
+  resultado.totales.THL = Math.round(totalHorasTrabajadas * 10) / 10;
 
   return resultado;
 };

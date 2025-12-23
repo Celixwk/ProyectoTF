@@ -68,6 +68,8 @@ const crearTurno = async (req, res) => {
       codigo,
       hora_entrada,
       hora_salida,
+      hora_entrada_2, // Opcional: segundo período para horarios partidos
+      hora_salida_2,  // Opcional: segundo período para horarios partidos
       tipo_turno
     } = req.body;
 
@@ -85,6 +87,13 @@ const crearTurno = async (req, res) => {
       });
     }
 
+    // Validar horarios partidos: si se proporciona hora_entrada_2, también debe haber hora_salida_2
+    if ((hora_entrada_2 && !hora_salida_2) || (!hora_entrada_2 && hora_salida_2)) {
+      return res.status(400).json({ 
+        error: 'Si se proporciona un segundo período, deben especificarse tanto hora_entrada_2 como hora_salida_2' 
+      });
+    }
+
     // Verificar si el código ya existe
     const turnoExistente = await prisma.turno.findUnique({
       where: { codigo }
@@ -96,15 +105,24 @@ const crearTurno = async (req, res) => {
       });
     }
 
+    // Preparar datos para crear turno
+    const datosTurno = {
+      codigo,
+      hora_entrada: new Date(`1970-01-01T${hora_entrada}`),
+      hora_salida: new Date(`1970-01-01T${hora_salida}`),
+      tipo_turno: tipo_turno || '', // Opcional, usar string vacío si no se proporciona
+      estado: true
+    };
+
+    // Agregar segundo período si se proporciona (horarios partidos)
+    if (hora_entrada_2 && hora_salida_2) {
+      datosTurno.hora_entrada_2 = new Date(`1970-01-01T${hora_entrada_2}`);
+      datosTurno.hora_salida_2 = new Date(`1970-01-01T${hora_salida_2}`);
+    }
+
     // Crear turno
     const turno = await prisma.turno.create({
-      data: {
-        codigo,
-        hora_entrada: new Date(`1970-01-01T${hora_entrada}`),
-        hora_salida: new Date(`1970-01-01T${hora_salida}`),
-        tipo_turno: tipo_turno || '', // Opcional, usar string vacío si no se proporciona
-        estado: true
-      }
+      data: datosTurno
     });
 
     res.status(201).json({
@@ -148,6 +166,20 @@ const actualizarTurno = async (req, res) => {
     }
     if (datos.hora_salida) {
       datosActualizacion.hora_salida = new Date(`1970-01-01T${datos.hora_salida}`);
+    }
+    // Soporte para horarios partidos (segundo período)
+    if (datos.hora_entrada_2) {
+      datosActualizacion.hora_entrada_2 = new Date(`1970-01-01T${datos.hora_entrada_2}`);
+    }
+    if (datos.hora_salida_2) {
+      datosActualizacion.hora_salida_2 = new Date(`1970-01-01T${datos.hora_salida_2}`);
+    }
+    // Permitir eliminar segundo período estableciendo null
+    if (datos.hora_entrada_2 === null || datos.hora_entrada_2 === '') {
+      datosActualizacion.hora_entrada_2 = null;
+    }
+    if (datos.hora_salida_2 === null || datos.hora_salida_2 === '') {
+      datosActualizacion.hora_salida_2 = null;
     }
 
     const turno = await prisma.turno.update({

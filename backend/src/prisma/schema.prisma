@@ -42,6 +42,8 @@ model Turno {
   estado               String?               @default("Activo") @db.VarChar(10)
   created_at           DateTime?             @default(now()) @db.Timestamp(6)
   updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  hora_entrada_2       DateTime?             @db.Time(6)
+  hora_salida_2        DateTime?             @db.Time(6)
   detalle_programacion DetalleProgramacion[]
 
   @@map("turno")
@@ -111,7 +113,6 @@ model Empleado {
   labor_mes        LaborMes[]
   novedad_empleado NovedadEmpleado[]
   usuario          Usuario?
-  empleado_area empleado_area[]
 
   @@index([id_cargo], map: "idx_empleado_cargo")
   @@index([id_estado], map: "idx_empleado_estado")

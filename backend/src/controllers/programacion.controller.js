@@ -331,10 +331,39 @@ const generarProgramacionAutomatica = async (req, res) => {
     });
 
     // Filtrar para asegurar que solo sean turnos con formato T1, T2, T11, etc. (no novedades)
-    const turnosConHorarios = turnos.filter(turno => {
+    const turnosFiltrados = turnos.filter(turno => {
       const codigo = turno.codigo.toUpperCase().trim();
       // Verificar que sea formato T seguido de números (ej: T1, T2, T11, T13)
       return /^T\d+$/.test(codigo);
+    });
+
+    // Transformar turnos de BD al formato con períodos (soporta horarios partidos)
+    const turnosConHorarios = turnosFiltrados.map(turno => {
+      const turnoFormateado = {
+        id_turno: turno.id_turno,
+        codigo: turno.codigo,
+        hora_entrada: turno.hora_entrada,
+        hora_salida: turno.hora_salida,
+        duracion_horas: turno.duracion_horas ? Number(turno.duracion_horas) : null,
+        tipo_turno: turno.tipo_turno,
+        estado: turno.estado
+      };
+
+      // Si tiene segundo período (horarios partidos), agregar períodos
+      if (turno.hora_entrada_2 && turno.hora_salida_2) {
+        turnoFormateado.periodos = [
+          {
+            hora_entrada: turno.hora_entrada,
+            hora_salida: turno.hora_salida
+          },
+          {
+            hora_entrada: turno.hora_entrada_2,
+            hora_salida: turno.hora_salida_2
+          }
+        ];
+      }
+
+      return turnoFormateado;
     });
 
     if (empleados.length === 0 || areas.length === 0 || turnosConHorarios.length === 0) {

@@ -1,4 +1,4 @@
-import type { EmpleadoOrdenado, Asignacion, Hueco } from "./tipos";
+import type { EmpleadoOrdenado, Asignacion, Hueco, Turno, PeriodoTurno } from "./tipos";
 
 export function capa4_detectarHuecos(
   programacion: Asignacion[],
@@ -35,13 +35,13 @@ export function capa4_activarComodines(
   comodines: EmpleadoOrdenado[],
   empleadosAsignados: Set<number>,
   fecha: Date,
-  turno: { id_turno: number; hora_entrada: Date; hora_salida: Date; duracion_horas?: number | null },
+  turno: Turno | { id_turno: number; hora_entrada: Date; hora_salida: Date; periodos?: PeriodoTurno[]; duracion_horas?: number | null },
   programacionExistente: Asignacion[],
   empleadosDisponiblesInfo: Array<{ id_empleado: number; disponible: boolean }>,
   validadorReglasDuras: (
     empleado: EmpleadoOrdenado,
     area: { id_area: number },
-    turno: { id_turno: number; hora_entrada: Date; hora_salida: Date; duracion_horas?: number | null },
+    turno: Turno | { id_turno: number; hora_entrada: Date; hora_salida: Date; periodos?: PeriodoTurno[]; duracion_horas?: number | null },
     fecha: Date,
     programacionExistente: Asignacion[]
   ) => { valido: boolean }

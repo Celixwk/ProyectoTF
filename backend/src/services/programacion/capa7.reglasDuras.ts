@@ -1,4 +1,4 @@
-import type { EmpleadoOrdenado, Asignacion, ValidacionReglasDuras } from "./tipos";
+import type { EmpleadoOrdenado, Asignacion, ValidacionReglasDuras, Turno, PeriodoTurno } from "./tipos";
 
 /**
  * Verifica si un turno excede las horas máximas permitidas
@@ -30,7 +30,45 @@ export function capa7_verificarHorasMaximas(
 }
 
 /**
+ * Obtiene los períodos de un turno (soporta horarios partidos)
+ */
+function obtenerPeriodosTurno(turno: Turno | { hora_entrada: Date; hora_salida: Date; periodos?: PeriodoTurno[] }): PeriodoTurno[] {
+    // Si tiene períodos definidos explícitamente, usarlos
+    if (turno.periodos && turno.periodos.length > 0) {
+        return turno.periodos;
+    }
+    
+    // Si no, usar hora_entrada/hora_salida como único período (compatibilidad hacia atrás)
+    return [{
+        hora_entrada: new Date(turno.hora_entrada),
+        hora_salida: new Date(turno.hora_salida)
+    }];
+}
+
+/**
+ * Verifica si dos períodos se solapan
+ */
+function haySolapamientoPeriodos(periodo1: PeriodoTurno, periodo2: PeriodoTurno): boolean {
+    const entrada1 = new Date(periodo1.hora_entrada);
+    const salida1 = new Date(periodo1.hora_salida);
+    const entrada2 = new Date(periodo2.hora_entrada);
+    const salida2 = new Date(periodo2.hora_salida);
+    
+    // Si el período cruza medianoche, ajustar
+    if (salida1 < entrada1) {
+        salida1.setDate(salida1.getDate() + 1);
+    }
+    if (salida2 < entrada2) {
+        salida2.setDate(salida2.getDate() + 1);
+    }
+    
+    // Verificar solapamiento: hay solapamiento si no se cumple que uno termina antes de que el otro empiece
+    return !(salida1 <= entrada2 || salida2 <= entrada1);
+}
+
+/**
  * Verifica si un empleado tiene turnos simultáneos (solapamiento)
+ * Soporta horarios partidos (múltiples períodos por turno)
  * 
  * @param empleado Empleado a verificar
  * @param turno Turno que se quiere asignar
@@ -40,7 +78,7 @@ export function capa7_verificarHorasMaximas(
  */
 export function capa7_verificarTurnosSimultaneos(
     empleado: EmpleadoOrdenado,
-    turno: { id_turno: number; hora_entrada: Date; hora_salida: Date },
+    turno: Turno | { id_turno: number; hora_entrada: Date; hora_salida: Date; periodos?: PeriodoTurno[] },
     fecha: Date,
     programacionExistente: Asignacion[]
 ): ValidacionReglasDuras {
@@ -54,28 +92,33 @@ export function capa7_verificarTurnosSimultaneos(
         return { valido: true };
     }
 
-    // Normalizar horas del turno a comparar
-    const horaEntrada = new Date(turno.hora_entrada);
-    const horaSalida = new Date(turno.hora_salida);
-    
-    // Si el turno cruza medianoche, ajustar hora_salida al día siguiente
-    if (horaSalida < horaEntrada) {
-        horaSalida.setDate(horaSalida.getDate() + 1);
-    }
+    // Obtener períodos del turno que se quiere asignar
+    const periodosTurnoNuevo = obtenerPeriodosTurno(turno);
 
     // Verificar solapamiento con cada asignación existente
     for (const asignacion of asignacionesDelDia) {
-        // Necesitamos las horas del turno asignado
-        // Por ahora asumimos que tenemos acceso a la información del turno
-        // En la implementación real, necesitaríamos obtener el turno de la asignación
-        
-        // Si encontramos una asignación en el mismo día, hay potencial solapamiento
-        // La validación completa requeriría comparar las horas exactas
-        // Por ahora retornamos válido y dejamos que la lógica de negocio lo maneje
+        // Obtener períodos del turno asignado
+        const periodosTurnoAsignado = obtenerPeriodosTurno({
+            hora_entrada: asignacion.hora_entrada || new Date(0),
+            hora_salida: asignacion.hora_salida || new Date(0),
+            periodos: asignacion.periodos
+        });
+
+        // Comparar cada período del turno nuevo con cada período del turno asignado
+        for (const periodoNuevo of periodosTurnoNuevo) {
+            for (const periodoAsignado of periodosTurnoAsignado) {
+                if (haySolapamientoPeriodos(periodoNuevo, periodoAsignado)) {
+                    return {
+                        valido: false,
+                        razon: `El turno se solapa con otro turno asignado el mismo día`,
+                        codigo: 'TURNOS_SOLAPADOS'
+                    };
+                }
+            }
+        }
     }
 
-    // Si llegamos aquí, no hay solapamiento obvio
-    // Nota: Esta función debería mejorarse para comparar horas exactas
+    // Si llegamos aquí, no hay solapamiento
     return { valido: true };
 }
 
@@ -98,10 +141,11 @@ export function capa7_verificarTurnosSimultaneos(
 export function capa7_validarReglasDuras(
     empleado: EmpleadoOrdenado,
     area: { id_area: number },
-    turno: { 
+    turno: Turno | { 
         id_turno: number; 
         hora_entrada: Date; 
         hora_salida: Date;
+        periodos?: PeriodoTurno[];
         duracion_horas?: number | null;
     },
     fecha: Date,

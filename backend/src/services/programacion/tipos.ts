@@ -65,8 +65,9 @@ export interface Asignacion {
   id_area: number;
   id_turno: number;
   fecha: Date;
-  hora_entrada?: Date;
-  hora_salida?: Date;
+  hora_entrada?: Date; // Mantener para compatibilidad (primer período)
+  hora_salida?: Date; // Mantener para compatibilidad (último período)
+  periodos?: PeriodoTurno[]; // Soporte para horarios partidos
   nombre_empleado?: string;
   nombre_area?: string;
   codigo_turno?: string;
@@ -121,8 +122,9 @@ export interface ParamsGenerarAsignaciones {
   turnos: Array<{
     id_turno: number;
     codigo?: string;
-    hora_entrada: Date;
-    hora_salida: Date;
+    hora_entrada: Date; // Mantener para compatibilidad
+    hora_salida: Date; // Mantener para compatibilidad
+    periodos?: PeriodoTurno[]; // Soporte para horarios partidos
     duracion_horas?: number;
   }>;
   maximosPorArea: Map<number, number>;
@@ -148,10 +150,19 @@ export interface ResultadoMotor {
   };
 }
 
+export interface PeriodoTurno {
+  hora_entrada: Date;
+  hora_salida: Date;
+}
+
 export interface Turno { 
   id_turno: number; 
   codigo?: string; 
-  hora_entrada: Date; 
-  hora_salida: Date; 
+  hora_entrada: Date; // Mantener para compatibilidad hacia atrás
+  hora_salida: Date; // Mantener para compatibilidad hacia atrás
+  // NUEVO: Soporte para horarios partidos (múltiples períodos)
+  periodos?: PeriodoTurno[];
   duracion_horas?: number | null; 
+  hora_entrada_2?: Date; // Mantener para compatibilidad hacia atrás
+  hora_salida_2?: Date; // Mantener para compatibilidad hacia atrás
 }
