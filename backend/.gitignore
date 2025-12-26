@@ -7,4 +7,5 @@ logs/
 *.log
 .DS_Store
 package-lock.json
-
+node_modules/
+node_modules/electron/

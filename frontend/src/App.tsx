@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 
 // Pages
@@ -11,6 +12,7 @@ import Recargos from './pages/Recargos/Recargos';
 import Novedades from './pages/Novedades/Novedades';
 import Configuracion from './pages/Configuracion/Configuracion';
 import ConfiguracionProgramacion from './pages/ConfiguracionProgramacion/ConfiguracionProgramacion';
+import ProgramacionAreas from './pages/ProgramacionAreas/ProgramacionAreas';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -18,21 +20,37 @@ import Layout from './components/layout/Layout';
 // Protected Route Component
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
+
+  // BYPASS LOGIN - TEMPORAL
+  // if (!isAuthenticated) {
+  //   return <Navigate to="/login" replace />;
+  // }
+
   return <>{children}</>;
 }
 
 function App() {
+  const { login, isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    // Si no hay sesión, iniciar sesión falsa automáticamente
+    if (!isAuthenticated) {
+      login('mock_token', {
+        id_usuario: 999,
+        usuario: 'admin',
+        nombre_completo: 'Admin Temporal',
+        tipo_usuario: 'admin',
+        empleado: null
+      });
+    }
+  }, []);
+
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Ruta pública */}
         <Route path="/login" element={<Login />} />
-        
+
         {/* Rutas protegidas */}
         <Route
           path="/"
@@ -51,6 +69,7 @@ function App() {
           <Route path="novedades" element={<Novedades />} />
           <Route path="configuracion" element={<Configuracion />} />
           <Route path="configuracion-programacion" element={<ConfiguracionProgramacion />} />
+          <Route path="programacion-areas" element={<ProgramacionAreas />} />
         </Route>
 
         {/* Ruta por defecto */}
