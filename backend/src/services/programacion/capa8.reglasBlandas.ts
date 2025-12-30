@@ -1,28 +1,24 @@
-import type { 
-  EmpleadoOrdenado, 
-  EmpleadoDisponible,
-  Asignacion, 
+import type {
+  EmpleadoOrdenado,
+  Asignacion,
   ValidacionReglasBlandas,
   Turno
 } from "./tipos";
 
-/**
- * CAPA 8: Reglas Blandas (se pueden violar, pero generan advertencias)
- * 
- * Estas reglas son recomendaciones que pueden ser ignoradas si es necesario,
- * pero el sistema debe alertar cuando se violan.
- */
+const MS_POR_DIA = 86400000;
 
-/**
- * Verifica si un empleado ha trabajado días consecutivos en la misma área
- * 
- * @param empleado Empleado a verificar
- * @param area Área a verificar
- * @param fecha Fecha de la asignación propuesta
- * @param programacionExistente Programación histórica
- * @param maxDias Máximo de días consecutivos permitidos (por defecto 3)
- * @returns true si excede el máximo, false si está dentro del límite
- */
+function toDate(v: any): Date | null {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fechaSoloDiaMs(d: Date | string): number | null {
+  const dt = toDate(d);
+  if (!dt) return null;
+  return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+}
+
 export function capa8_verificarRepeticionArea(
   empleado: EmpleadoOrdenado,
   area: { id_area: number },
@@ -30,30 +26,33 @@ export function capa8_verificarRepeticionArea(
   programacionExistente: Asignacion[],
   maxDias: number = 3
 ): { viola: boolean; diasConsecutivos: number; mensaje?: string } {
-  let diasConsecutivos = 0;
-  
-  // Contar días consecutivos hacia atrás
-  for (let d = 1; d <= maxDias; d++) {
-    const fechaAnterior = new Date(fecha);
-    fechaAnterior.setDate(fecha.getDate() - d);
-    fechaAnterior.setHours(0, 0, 0, 0);
-    
-    const trabajoEseDia = programacionExistente.some(p => {
-      const fechaAsig = new Date(p.fecha);
-      fechaAsig.setHours(0, 0, 0, 0);
-      
-      return p.id_empleado === empleado.id_empleado &&
-             p.id_area === area.id_area &&
-             fechaAsig.getTime() === fechaAnterior.getTime();
-    });
-    
-    if (trabajoEseDia) {
-      diasConsecutivos++;
-    } else {
-      break; // Si no trabajó ese día, rompe la racha
+  const idEmp = empleado?.id_empleado;
+  const idArea = area?.id_area;
+  const fechaRefMs = fechaSoloDiaMs(fecha);
+
+  if (!idEmp || !idArea || fechaRefMs === null) return { viola: false, diasConsecutivos: 0 };
+
+  const fechaLimiteLookback = fechaRefMs - (30 * MS_POR_DIA);
+
+  const historicoReciente = programacionExistente.filter(p => {
+    if (!p) return false;
+    const pMs = fechaSoloDiaMs(p.fecha);
+    if (pMs === null) {
+      console.error(`[Capa 8] Fecha inválida en asignación: ${p.id_asignacion}`);
+      return false;
     }
+    return p.id_empleado === idEmp && p.id_area === idArea && pMs >= fechaLimiteLookback;
+  });
+
+  let diasConsecutivos = 0;
+  for (let d = 1; d <= maxDias; d++) {
+    const fechaTargetMs = fechaRefMs - (d * MS_POR_DIA);
+    const trabajoEseDia = historicoReciente.some(p => fechaSoloDiaMs(p.fecha) === fechaTargetMs);
+
+    if (trabajoEseDia) diasConsecutivos++;
+    else break;
   }
-  
+
   if (diasConsecutivos >= maxDias) {
     return {
       viola: true,
@@ -61,92 +60,58 @@ export function capa8_verificarRepeticionArea(
       mensaje: `Empleado ha trabajado ${diasConsecutivos} días consecutivos en esta área (máximo recomendado: ${maxDias})`
     };
   }
-  
-  return {
-    viola: false,
-    diasConsecutivos
-  };
+
+  return { viola: false, diasConsecutivos };
 }
 
-/**
- * Verifica si se está usando un empleado refuerzo cuando no debería
- * 
- * @param empleado Empleado a verificar
- * @param opciones Opciones adicionales
- * @returns true si es refuerzo y no debería usarse, false en caso contrario
- */
 export function capa8_verificarUsoRefuerzos(
   empleado: EmpleadoOrdenado,
   opciones?: { evitarRefuerzos?: boolean }
 ): { viola: boolean; mensaje?: string } {
-  // Por ahora, no hay un campo específico para identificar refuerzos
-  // Se puede implementar en el futuro basándose en alguna lógica de negocio
-  // Por ejemplo, empleados con clasificación especial o un campo en la BD
-  
-  // Si la opción está deshabilitada, no verificar
-  if (opciones?.evitarRefuerzos === false) {
-    return { viola: false };
+  if (opciones?.evitarRefuerzos === false || !empleado) return { viola: false };
+
+  if (empleado.clasificacion === 'comodin') {
+    return {
+      viola: true,
+      mensaje: `Se está usando un empleado con clasificación comodín (refuerzo)`
+    };
   }
-  
-  // Por defecto, no viola (implementación futura)
+
   return { viola: false };
 }
 
-/**
- * Verifica si un empleado debería tener descanso en la fecha indicada
- * 
- * @param empleado Empleado a verificar
- * @param fecha Fecha a verificar
- * @param descansosProgramados Mapa de descansos: id_empleado -> [días del mes]
- * @returns true si debería tener descanso, false en caso contrario
- */
 export function capa8_verificarDescansos(
   empleado: EmpleadoOrdenado,
   fecha: Date,
   descansosProgramados?: Map<number, number[]>
 ): { viola: boolean; mensaje?: string } {
-  if (!descansosProgramados) {
-    return { viola: false };
-  }
-  
-  const descansos = descansosProgramados.get(empleado.id_empleado);
-  if (!descansos || descansos.length === 0) {
-    return { viola: false };
-  }
-  
-  const diaDelMes = fecha.getDate();
+  const dt = toDate(fecha);
+  const idEmp = empleado?.id_empleado;
+  if (!descansosProgramados || !dt || !idEmp) return { viola: false };
+
+  const descansos = descansosProgramados.get(idEmp);
+  if (!descansos || descansos.length === 0) return { viola: false };
+
+  const diaDelMes = dt.getUTCDate();
   if (descansos.includes(diaDelMes)) {
-    return {
-      viola: true,
-      mensaje: `Empleado tiene descanso programado para este día`
-    };
+    return { viola: true, mensaje: `Empleado tiene descanso programado para este día` };
   }
-  
+
   return { viola: false };
 }
 
-/**
- * Verifica la distribución equitativa de asignaciones
- * 
- * @param empleado Empleado a verificar
- * @param programacionExistente Programación histórica
- * @param promedioAsignaciones Promedio de asignaciones por empleado
- * @returns true si tiene muchas más asignaciones que el promedio
- */
 export function capa8_verificarDistribucionEquitativa(
   empleado: EmpleadoOrdenado,
   programacionExistente: Asignacion[],
   promedioAsignaciones: number
 ): { viola: boolean; mensaje?: string; diferencia?: number } {
-  const asignacionesEmpleado = programacionExistente.filter(
-    p => p.id_empleado === empleado.id_empleado
-  ).length;
-  
+  const idEmp = empleado?.id_empleado;
+  if (!idEmp || promedioAsignaciones <= 0) return { viola: false, diferencia: 0 };
+
+  const asignacionesEmpleado = programacionExistente.filter(p => p?.id_empleado === idEmp).length;
   const diferencia = asignacionesEmpleado - promedioAsignaciones;
-  
-  // Si tiene más del 20% de asignaciones adicionales que el promedio, es una violación
   const umbral = promedioAsignaciones * 0.2;
-  
+
   if (diferencia > umbral) {
     return {
       viola: true,
@@ -154,30 +119,10 @@ export function capa8_verificarDistribucionEquitativa(
       mensaje: `Empleado tiene ${asignacionesEmpleado} asignaciones vs promedio de ${promedioAsignaciones.toFixed(1)} (diferencia: +${diferencia.toFixed(1)})`
     };
   }
-  
-  return {
-    viola: false,
-    diferencia
-  };
+
+  return { viola: false, diferencia };
 }
 
-/**
- * CAPA 8: Validar reglas blandas (se pueden violar, pero generan advertencias)
- * 
- * Reglas blandas:
- * - ⚠️ Evitar refuerzos cuando hay empleados regulares disponibles
- * - ⚠️ Evitar repetición de área varios días seguidos (máximo 3)
- * - ⚠️ Distribución equitativa de asignaciones
- * - ⚠️ Respetar descansos programados
- * 
- * @param empleado Empleado a validar
- * @param area Área a asignar
- * @param turno Turno a asignar
- * @param fecha Fecha de la asignación
- * @param programacionExistente Programación histórica
- * @param opciones Opciones adicionales
- * @returns Resultado de la validación con violaciones y advertencias
- */
 export function capa8_validarReglasBlandas(
   empleado: EmpleadoOrdenado,
   area: { id_area: number },
@@ -192,70 +137,24 @@ export function capa8_validarReglasBlandas(
     promedioAsignaciones?: number;
   }
 ): ValidacionReglasBlandas {
+  if (opciones?.ignorarReglasBlandas || !empleado) return { violaciones: [], advertencias: [] };
+
   const violaciones: string[] = [];
   const advertencias: string[] = [];
-  
-  // Si se ignoran las reglas blandas, retornar sin validaciones
-  if (opciones?.ignorarReglasBlandas) {
-    return { violaciones: [], advertencias: [] };
-  }
-  
-  // Verificar repetición de área
-  const maxDias = opciones?.maxDiasConsecutivos ?? 3;
-  const repeticion = capa8_verificarRepeticionArea(
-    empleado,
-    area,
-    fecha,
-    programacionExistente,
-    maxDias
-  );
-  
-  if (repeticion.viola) {
-    violaciones.push(repeticion.mensaje || `Repetición de área excede ${maxDias} días`);
-  }
-  
-  // Verificar uso de refuerzos
-  const refuerzos = capa8_verificarUsoRefuerzos(empleado, {
-    evitarRefuerzos: opciones?.evitarRefuerzos
-  });
-  
-  if (refuerzos.viola) {
-    advertencias.push(refuerzos.mensaje || 'Se está usando un empleado refuerzo');
-  }
-  
-  // Verificar descansos
-  const descansos = capa8_verificarDescansos(
-    empleado,
-    fecha,
-    opciones?.descansosProgramados
-  );
-  
-  if (descansos.viola) {
-    advertencias.push(descansos.mensaje || 'Empleado tiene descanso programado');
-  }
-  
-  // Verificar distribución equitativa
+
+  const repeticion = capa8_verificarRepeticionArea(empleado, area, fecha, programacionExistente, opciones?.maxDiasConsecutivos ?? 3);
+  if (repeticion.viola) violaciones.push(repeticion.mensaje!);
+
+  const refuerzos = capa8_verificarUsoRefuerzos(empleado, { evitarRefuerzos: opciones?.evitarRefuerzos });
+  if (refuerzos.viola) advertencias.push(refuerzos.mensaje!);
+
+  const descansos = capa8_verificarDescansos(empleado, fecha, opciones?.descansosProgramados);
+  if (descansos.viola) advertencias.push(descansos.mensaje!);
+
   if (opciones?.promedioAsignaciones !== undefined) {
-    const distribucion = capa8_verificarDistribucionEquitativa(
-      empleado,
-      programacionExistente,
-      opciones.promedioAsignaciones
-    );
-    
-    if (distribucion.viola) {
-      advertencias.push(distribucion.mensaje || 'Distribución de asignaciones no es equitativa');
-    }
+    const distribucion = capa8_verificarDistribucionEquitativa(empleado, programacionExistente, opciones.promedioAsignaciones);
+    if (distribucion.viola) advertencias.push(distribucion.mensaje!);
   }
-  
-  return {
-    violaciones,
-    advertencias
-  };
+
+  return { violaciones, advertencias };
 }
-
-
-
-
-
-
-

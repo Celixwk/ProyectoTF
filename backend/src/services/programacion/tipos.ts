@@ -74,13 +74,20 @@ export interface Asignacion {
 }
 
 export interface Alerta {
+  alert_id?: string;
+  timestamp?: string;
   tipo: 'error' | 'advertencia' | 'info';
+  codigo?: string;
   mensaje: string;
   area?: number;
   empleado?: number;
   fecha?: Date;
-  codigo?: string; // Código único para identificar el tipo de alerta
+  detalles?: any;
+  acciones_sugeridas?: string[];
+  empleados_sugeridos?: { id: number; nombre: string }[];
+  audit_id?: string;
 }
+
 
 export interface ProgramacionDia {
   fecha: Date;
@@ -155,14 +162,14 @@ export interface PeriodoTurno {
   hora_salida: Date;
 }
 
-export interface Turno { 
-  id_turno: number; 
-  codigo?: string; 
+export interface Turno {
+  id_turno: number;
+  codigo?: string;
   hora_entrada: Date; // Mantener para compatibilidad hacia atrás
   hora_salida: Date; // Mantener para compatibilidad hacia atrás
   // NUEVO: Soporte para horarios partidos (múltiples períodos)
   periodos?: PeriodoTurno[];
-  duracion_horas?: number | null; 
+  duracion_horas?: number | null;
   hora_entrada_2?: Date; // Mantener para compatibilidad hacia atrás
   hora_salida_2?: Date; // Mantener para compatibilidad hacia atrás
 }

@@ -1,317 +1,18 @@
-import type { 
-  Asignacion, 
-  Alerta, 
-  EmpleadoDisponible,
-  Hueco
-} from "./tipos";
 import { capa4_detectarHuecos } from "./capa4.gestionHuecos";
+import type { Asignacion, Alerta, EmpleadoDisponible, EmpleadoOrdenado } from "./tipos";
 
-/**
- * CAPA 9: Detección de Problemas y Alertas
- * 
- * Analiza la programación generada y detecta problemas que requieren atención,
- * generando alertas claras y accionables para el supervisor.
- */
+const MS_POR_DIA = 86400000;
 
-/**
- * Detecta áreas sin suficiente personal capacitado
- * 
- * @param programacion Programación generada
- * @param areas Áreas requeridas
- * @param maximosPorArea Máximos de trabajadores por área
- * @returns Array de alertas
- */
-export function capa9_detectarFaltaPersonal(
-  programacion: Asignacion[],
-  areas: Array<{ id_area: number; nombre_area: string }>,
-  maximosPorArea: Map<number, number>
-): Alerta[] {
-  const alertas: Alerta[] = [];
-  
-  // Contar asignaciones por área
-  const asignacionesPorArea = new Map<number, number>();
-  programacion.forEach(asig => {
-    asignacionesPorArea.set(
-      asig.id_area,
-      (asignacionesPorArea.get(asig.id_area) || 0) + 1
-    );
-  });
-  
-  // Verificar cada área
-  areas.forEach(area => {
-    const asignados = asignacionesPorArea.get(area.id_area) || 0;
-    const requeridos = maximosPorArea.get(area.id_area) || 0;
-    const deficit = requeridos - asignados;
-    
-    if (deficit > 0) {
-      if (asignados === 0) {
-        // Error crítico: no hay nadie asignado
-        alertas.push({
-          tipo: 'error',
-          mensaje: `Área "${area.nombre_area}" no tiene personal asignado (requeridos: ${requeridos})`,
-          area: area.id_area,
-          codigo: 'AREA_SIN_PERSONAL'
-        });
-      } else {
-        // Advertencia: hay déficit pero se puede cubrir
-        alertas.push({
-          tipo: 'advertencia',
-          mensaje: `Área "${area.nombre_area}" tiene déficit de personal (${asignados}/${requeridos} trabajadores)`,
-          area: area.id_area,
-          codigo: 'AREA_DEFICIT_PERSONAL'
-        });
-      }
-    }
-  });
-  
-  return alertas;
-}
+const toDateSafe = (v: any) => {
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
 
-/**
- * Detecta empleados con más de X días consecutivos en la misma área
- * 
- * @param programacion Programación generada
- * @param maxDias Máximo de días consecutivos permitidos (por defecto 3)
- * @returns Array de alertas
- */
-export function capa9_detectarDiasConsecutivos(
-  programacion: Asignacion[],
-  maxDias: number = 3
-): Alerta[] {
-  const alertas: Alerta[] = [];
-  
-  // Agrupar asignaciones por empleado y área
-  const asignacionesPorEmpleadoArea = new Map<string, Asignacion[]>();
-  
-  programacion.forEach(asig => {
-    const key = `${asig.id_empleado}-${asig.id_area}`;
-    if (!asignacionesPorEmpleadoArea.has(key)) {
-      asignacionesPorEmpleadoArea.set(key, []);
-    }
-    asignacionesPorEmpleadoArea.get(key)!.push(asig);
-  });
-  
-  // Verificar cada combinación empleado-área
-  asignacionesPorEmpleadoArea.forEach((asignaciones, key) => {
-    // Ordenar por fecha
-    const asignacionesOrdenadas = [...asignaciones].sort((a, b) => 
-      a.fecha.getTime() - b.fecha.getTime()
-    );
-    
-    // Buscar secuencias consecutivas
-    let secuenciaActual: Asignacion[] = [];
-    
-    for (let i = 0; i < asignacionesOrdenadas.length; i++) {
-      const asignacion = asignacionesOrdenadas[i];
-      
-      if (secuenciaActual.length === 0) {
-        secuenciaActual.push(asignacion);
-      } else {
-        const ultimaFecha = new Date(secuenciaActual[secuenciaActual.length - 1].fecha);
-        ultimaFecha.setHours(0, 0, 0, 0);
-        
-        const fechaActual = new Date(asignacion.fecha);
-        fechaActual.setHours(0, 0, 0, 0);
-        
-        const diasDiferencia = Math.floor(
-          (fechaActual.getTime() - ultimaFecha.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        
-        if (diasDiferencia === 1) {
-          // Día consecutivo
-          secuenciaActual.push(asignacion);
-        } else {
-          // Rompe la secuencia, verificar si excede el máximo
-          if (secuenciaActual.length > maxDias) {
-            const [idEmpleado, idArea] = key.split('-').map(Number);
-            alertas.push({
-              tipo: 'advertencia',
-              mensaje: `Empleado ${asignaciones[0].nombre_empleado || idEmpleado} ha trabajado ${secuenciaActual.length} días consecutivos en área "${asignaciones[0].nombre_area || idArea}" (máximo recomendado: ${maxDias})`,
-              empleado: idEmpleado,
-              area: idArea,
-              fecha: secuenciaActual[secuenciaActual.length - 1].fecha,
-              codigo: 'DIAS_CONSECUTIVOS_EXCEDIDOS'
-            });
-          }
-          // Reiniciar secuencia
-          secuenciaActual = [asignacion];
-        }
-      }
-    }
-    
-    // Verificar la última secuencia
-    if (secuenciaActual.length > maxDias) {
-      const [idEmpleado, idArea] = key.split('-').map(Number);
-      alertas.push({
-        tipo: 'advertencia',
-        mensaje: `Empleado ${asignaciones[0].nombre_empleado || idEmpleado} ha trabajado ${secuenciaActual.length} días consecutivos en área "${asignaciones[0].nombre_area || idArea}" (máximo recomendado: ${maxDias})`,
-        empleado: idEmpleado,
-        area: idArea,
-        fecha: secuenciaActual[secuenciaActual.length - 1].fecha,
-        codigo: 'DIAS_CONSECUTIVOS_EXCEDIDOS'
-      });
-    }
-  });
-  
-  return alertas;
-}
+const fechaSoloDiaMsUTC = (d: any) => {
+  const dt = toDateSafe(d);
+  return dt ? Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) : null;
+};
 
-/**
- * Detecta empleados disponibles que no recibieron asignación
- * 
- * @param empleadosDisponibles Empleados que estaban disponibles
- * @param programacion Programación generada
- * @returns Array de alertas
- */
-export function capa9_detectarEmpleadosSinAsignacion(
-  empleadosDisponibles: EmpleadoDisponible[],
-  programacion: Asignacion[]
-): Alerta[] {
-  const alertas: Alerta[] = [];
-  
-  // Obtener IDs de empleados asignados
-  const empleadosAsignados = new Set(
-    programacion.map(asig => asig.id_empleado)
-  );
-  
-  // Encontrar empleados disponibles sin asignación
-  const empleadosSinAsignacion = empleadosDisponibles.filter(
-    emp => emp.disponible && !empleadosAsignados.has(emp.id_empleado)
-  );
-  
-  if (empleadosSinAsignacion.length > 0) {
-    if (empleadosSinAsignacion.length === 1) {
-      const emp = empleadosSinAsignacion[0];
-      alertas.push({
-        tipo: 'info',
-        mensaje: `Empleado "${emp.nombre_completo}" está disponible pero no recibió asignación`,
-        empleado: emp.id_empleado,
-        codigo: 'EMPLEADO_SIN_ASIGNACION'
-      });
-    } else {
-      alertas.push({
-        tipo: 'advertencia',
-        mensaje: `${empleadosSinAsignacion.length} empleados disponibles no recibieron asignación: ${empleadosSinAsignacion.map(e => e.nombre_completo).join(', ')}`,
-        codigo: 'MULTIPLES_EMPLEADOS_SIN_ASIGNACION'
-      });
-    }
-  }
-  
-  return alertas;
-}
-
-/**
- * Detecta si algún empleado no está cumpliendo con días de descanso
- * 
- * @param empleados Lista de empleados
- * @param programacion Programación generada
- * @param fecha Fecha de la programación
- * @param descansosRequeridos Mapa de descansos requeridos: id_empleado -> número de descansos requeridos
- * @returns Array de alertas
- */
-export function capa9_detectarDescansosFaltantes(
-  empleados: Array<{ id_empleado: number; nombre_completo?: string }>,
-  programacion: Asignacion[],
-  fecha: Date,
-  descansosRequeridos?: Map<number, number>
-): Alerta[] {
-  const alertas: Alerta[] = [];
-  
-  if (!descansosRequeridos) {
-    return alertas;
-  }
-  
-  // Contar asignaciones por empleado en el mes
-  const asignacionesPorEmpleado = new Map<number, number>();
-  programacion.forEach(asig => {
-    asignacionesPorEmpleado.set(
-      asig.id_empleado,
-      (asignacionesPorEmpleado.get(asig.id_empleado) || 0) + 1
-    );
-  });
-  
-  // Verificar cada empleado
-  empleados.forEach(empleado => {
-    const requeridos = descansosRequeridos.get(empleado.id_empleado);
-    if (requeridos === undefined) {
-      return; // No hay requisito de descanso para este empleado
-    }
-    
-    const asignados = asignacionesPorEmpleado.get(empleado.id_empleado) || 0;
-    const diasMes = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0).getDate();
-    const descansosEsperados = diasMes - asignados;
-    
-    if (descansosEsperados < requeridos) {
-      alertas.push({
-        tipo: 'advertencia',
-        mensaje: `Empleado "${empleado.nombre_completo || empleado.id_empleado}" no está cumpliendo con días de descanso requeridos (tiene ${descansosEsperados} días libres, requiere ${requeridos})`,
-        empleado: empleado.id_empleado,
-        fecha,
-        codigo: 'DESCANSOS_FALTANTES'
-      });
-    }
-  });
-  
-  return alertas;
-}
-
-/**
- * Detecta huecos en la programación usando CAPA 4
- * 
- * @param programacion Programación generada
- * @param areas Áreas requeridas
- * @param maximosPorArea Máximos de trabajadores por área
- * @param fecha Fecha de la programación
- * @returns Array de alertas
- */
-export function capa9_detectarHuecos(
-  programacion: Asignacion[],
-  areas: Array<{ id_area: number; nombre_area: string; prioridad?: number }>,
-  maximosPorArea: Map<number, number>,
-  fecha: Date
-): Alerta[] {
-  const alertas: Alerta[] = [];
-  
-  const huecos = capa4_detectarHuecos(
-    programacion,
-    areas,
-    fecha,
-    maximosPorArea
-  );
-  
-  huecos.forEach(hueco => {
-    if (hueco.deficit > 0) {
-      const tipoAlerta = hueco.prioridad <= 3 ? 'error' : 'advertencia';
-      
-      alertas.push({
-        tipo: tipoAlerta,
-        mensaje: `Hueco detectado en área "${hueco.nombre_area}": ${hueco.deficit} trabajador(es) faltante(s) (${hueco.trabajadores_actuales}/${hueco.trabajadores_requeridos})`,
-        area: hueco.id_area,
-        fecha,
-        codigo: 'HUECO_DETECTADO'
-      });
-    }
-  });
-  
-  return alertas;
-}
-
-/**
- * CAPA 9: Detectar problemas en la programación generada
- * 
- * Analiza la programación y genera alertas de diferentes tipos:
- * - error: Problemas críticos que requieren atención inmediata
- * - advertencia: Problemas que pueden resolverse o que requieren revisión
- * - info: Información relevante para el supervisor
- * 
- * @param programacion Programación generada
- * @param areas Áreas requeridas
- * @param empleadosDisponibles Empleados que estaban disponibles
- * @param maximosPorArea Máximos de trabajadores por área
- * @param fecha Fecha de la programación
- * @param opciones Opciones adicionales
- * @returns Array de alertas detectadas
- */
 export function capa9_detectarProblemas(
   programacion: Asignacion[],
   areas: Array<{ id_area: number; nombre_area: string; prioridad?: number }>,
@@ -321,60 +22,137 @@ export function capa9_detectarProblemas(
   opciones?: {
     maxDiasConsecutivos?: number;
     descansosRequeridos?: Map<number, number>;
-    empleados?: Array<{ id_empleado: number; nombre_completo?: string }>;
+    empleados?: EmpleadoOrdenado[];
   }
 ): Alerta[] {
   const alertas: Alerta[] = [];
-  
-  // 1. Detectar falta de personal
-  const alertasFaltaPersonal = capa9_detectarFaltaPersonal(
-    programacion,
-    areas,
-    maximosPorArea
-  );
-  alertas.push(...alertasFaltaPersonal);
-  
-  // 2. Detectar días consecutivos excedidos
-  const maxDias = opciones?.maxDiasConsecutivos ?? 3;
-  const alertasDiasConsecutivos = capa9_detectarDiasConsecutivos(
-    programacion,
-    maxDias
-  );
-  alertas.push(...alertasDiasConsecutivos);
-  
-  // 3. Detectar empleados sin asignación
-  const alertasSinAsignacion = capa9_detectarEmpleadosSinAsignacion(
-    empleadosDisponibles,
-    programacion
-  );
-  alertas.push(...alertasSinAsignacion);
-  
-  // 4. Detectar descansos faltantes
-  if (opciones?.empleados && opciones?.descansosRequeridos) {
-    const alertasDescansos = capa9_detectarDescansosFaltantes(
-      opciones.empleados,
-      programacion,
-      fecha,
-      opciones.descansosRequeridos
-    );
+  const corruptas: any[] = [];
+
+  const idsAsignados = new Set(programacion.map(p => p.id_empleado));
+  const sinAsignar = empleadosDisponibles.filter(e => e.disponible && !idsAsignados.has(e.id_empleado));
+
+  if (sinAsignar.length > 0) {
+    alertas.push({
+      tipo: 'info',
+      codigo: 'EMPLEADOS_SIN_ASIGNACION',
+      mensaje: `${sinAsignar.length} empleados disponibles no recibieron turno: ${sinAsignar.map(e => e.nombre_completo).join(', ')}`,
+      detalles: sinAsignar.map(e => e.id_empleado)
+    });
+  }
+
+  const huecos = capa4_detectarHuecos(programacion, areas, fecha, maximosPorArea);
+  huecos.forEach(h => {
+    if (h.deficit > 0) {
+      alertas.push({
+        tipo: h.prioridad && h.prioridad <= 3 ? 'error' : 'advertencia',
+        codigo: h.trabajadores_actuales === 0 ? 'AREA_SIN_PERSONAL' : 'AREA_DEFICIT_PERSONAL',
+        mensaje: `Área "${h.nombre_area}" tiene déficit: ${h.trabajadores_actuales}/${h.trabajadores_requeridos}`,
+        area: h.id_area,
+        acciones_sugeridas: sinAsignar.length > 0 ? ['Asignar Personal Disponible'] : ['Revisar disponibilidad'],
+        empleados_sugeridos: sinAsignar.slice(0, 3).map(e => ({ id: e.id_empleado, nombre: e.nombre_completo }))
+      });
+    }
+  });
+
+  const alertasRacha = detectarRachasUTC(programacion, opciones?.maxDiasConsecutivos ?? 3, corruptas);
+  alertas.push(...alertasRacha);
+
+  if (opciones?.descansosRequeridos && opciones?.empleados) {
+    const alertasDescansos = detectarDescansosFaltantes(programacion, opciones.empleados, opciones.descansosRequeridos, fecha);
     alertas.push(...alertasDescansos);
   }
-  
-  // 5. Detectar huecos
-  const alertasHuecos = capa9_detectarHuecos(
-    programacion,
-    areas,
-    maximosPorArea,
-    fecha
-  );
-  alertas.push(...alertasHuecos);
-  
+
+  if (corruptas.length > 0) {
+    console.error(`[Capa 9] Se encontraron ${corruptas.length} registros con fechas inválidas.`);
+  }
+
   return alertas;
 }
 
+function detectarRachasUTC(programacion: Asignacion[], max: number, corruptas: any[]): Alerta[] {
+  const alertas: Alerta[] = [];
+  const grupos = new Map<string, Asignacion[]>();
 
+  programacion.forEach(a => {
+    const key = `${a.id_empleado}-${a.id_area}`;
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key)!.push(a);
+  });
 
+  grupos.forEach((asigs, key) => {
+    const [idEmp, idArea] = key.split('-').map(Number);
+    const ordenadas = asigs
+      .map(a => ({ ...a, ms: fechaSoloDiaMsUTC(a.fecha) }))
+      .filter(a => {
+        if (!a.ms) { corruptas.push(a); return false; }
+        return true;
+      })
+      .sort((a, b) => (a.ms as number) - (b.ms as number));
 
+    let racha = 1;
+    for (let i = 0; i < ordenadas.length - 1; i++) {
+      if ((ordenadas[i + 1].ms! - ordenadas[i].ms!) === MS_POR_DIA) {
+        racha++;
+      } else {
+        if (racha > max) {
+          alertas.push(crearAlertaRacha(ordenadas[i], racha, max, idEmp, idArea));
+        }
+        racha = 1;
+      }
+    }
+    if (racha > max) {
+      alertas.push(crearAlertaRacha(ordenadas[ordenadas.length - 1], racha, max, idEmp, idArea));
+    }
+  });
+  return alertas;
+}
 
+function crearAlertaRacha(asig: any, racha: number, max: number, idEmp: number, idArea: number): Alerta {
+  return {
+    tipo: 'advertencia',
+    codigo: 'DIAS_CONSECUTIVOS_EXCEDIDOS',
+    mensaje: `Empleado ${asig.nombre_empleado || idEmp} trabajó ${racha} días seguidos en ${asig.nombre_area || idArea}`,
+    empleado: idEmp,
+    area: idArea
+  };
+}
 
+function detectarDescansosFaltantes(prog: Asignacion[], emps: EmpleadoOrdenado[], reqs: Map<number, number>, fecha: Date): Alerta[] {
+  const alertas: Alerta[] = [];
+  const diasMes = new Date(fecha.getUTCFullYear(), fecha.getUTCMonth() + 1, 0).getUTCDate();
 
+  const mapeoDiasTrabajados = new Map<number, Set<number>>();
+  prog.forEach(a => {
+    if (!mapeoDiasTrabajados.has(a.id_empleado)) {
+      mapeoDiasTrabajados.set(a.id_empleado, new Set());
+    }
+    const d = new Date(a.fecha);
+    mapeoDiasTrabajados.get(a.id_empleado)!.add(d.getUTCDate());
+  });
+
+  emps.forEach(e => {
+    const req = reqs.get(e.id_empleado);
+    if (!req) return;
+
+    const diasTrabajados = mapeoDiasTrabajados.get(e.id_empleado)?.size || 0;
+    const diasLibresRestantesPosibles = diasMes - diasTrabajados;
+
+    if (diasLibresRestantesPosibles < req) {
+      alertas.push({
+        tipo: 'error',
+        codigo: 'DESCANSOS_FALTANTES',
+        mensaje: `${e.nombre_completo}: Solo quedan ${diasLibresRestantesPosibles} días libres en el mes y requiere ${req}.`,
+        empleado: e.id_empleado
+      });
+    }
+    else if (diasTrabajados >= (diasMes * 0.5)) {
+      alertas.push({
+        tipo: 'info',
+        codigo: 'DESCANSOS_ADVERTENCIA_PROGRESIVA',
+        mensaje: `${e.nombre_completo} ha trabajado el 50% o más del mes (${diasTrabajados}/${diasMes} días).`,
+        empleado: e.id_empleado
+      });
+    }
+  });
+  return alertas;
+}

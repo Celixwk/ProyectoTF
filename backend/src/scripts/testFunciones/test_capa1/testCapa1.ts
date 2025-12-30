@@ -1,4 +1,4 @@
-import { capa1_ordenarPorEspecializacion } from "../../services/programacion/capa1.especializacion";
+import { capa1_ordenarPorEspecializacion } from "../../../services/programacion/capa1.especializacion";
 
 async function main() {
   const resultado = await capa1_ordenarPorEspecializacion();
