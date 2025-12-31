@@ -1,47 +1,55 @@
 import { capa6_generarProgramacionDia } from "../../../services/programacion/capa6.integracion";
 
 async function testMotor() {
-  console.log("INICIO DE PRUEBA: Validación de Motor Multi-Turno (T1 y T2)");
-  console.log("--------------------------------------------------------------");
-
   try {
     const fechaPrueba = new Date();
     fechaPrueba.setHours(0, 0, 0, 0);
 
     const resultado = await capa6_generarProgramacionDia(fechaPrueba);
 
-    console.log("\nRESUMEN DE RESULTADOS:");
+    console.log("\nESTADO DE PERSISTENCIA:");
+    console.table([resultado.guardado || { realizado: false, razon: "No definido" }]);
+
+    console.log("\nRESUMEN DE EJECUCIÓN:");
     console.table([{
-      "Total Asignaciones": resultado.asignaciones.length,
-      "Total Alertas": resultado.alertas.length,
-      "Áreas Evaluadas": resultado.resumen.total_areas,
-      "Fecha": resultado.fecha.toLocaleDateString()
+      "Asignaciones": resultado.asignaciones.length,
+      "Alertas Totales": resultado.alertas.length,
+      "Áreas": resultado.resumen.total_areas,
+      "Fecha": resultado.fecha.toISOString().split('T')[0]
     }]);
 
     if (resultado.alertas.length > 0) {
-      console.log("\n⚠️ ALERTAS DE COBERTURA (Huecos detectados):");
+      console.log("\n⚠️ ALERTAS Y VALIDACIONES (CAPA 9):");
       resultado.alertas.forEach((a, i) => {
-        console.log(`  ${i + 1}. ${a.mensaje}`);
+        const prefijo = a.tipo === 'error' ? '❌ ERROR' : '⚠️ ADVERTENCIA';
+        console.log(`  ${i + 1}. [${prefijo}] ${a.mensaje}`);
       });
     }
 
     if (resultado.asignaciones.length > 0) {
       console.log("\nDETALLE DE ASIGNACIONES:");
       const vistaTabla = resultado.asignaciones.map(a => ({
-        Turno: a.codigo_turno || "S/T",
-        Area: a.nombre_area || "S/A",
-        Empleado: a.nombre_empleado || "S/N",
-        ID_Emp: a.id_empleado
+        Turno: a.codigo_turno,
+        Area: a.nombre_area,
+        Empleado: a.nombre_empleado,
+        Cedula: a.cedula,
+        ID: a.id_empleado
       }));
 
-      console.table(vistaTabla.sort((a, b) => (a.Turno ?? "").localeCompare(b.Turno ?? "")));
+      console.table(vistaTabla.sort((a, b) =>
+        (a.Turno || "").localeCompare(b.Turno || "") ||
+        (a.Area || "").localeCompare(b.Area || "")
+      ));
     }
 
-    console.log("\n--------------------------------------------------");
-    console.log("RESULTADO FINAL: MOTOR EVALUADO EXITOSAMENTE");
+    if (resultado.guardado?.realizado) {
+      console.log("\n✅ ÉXITO: Los datos se han sincronizado con la base de datos.");
+    } else {
+      console.log(`\n❌ AVISO: Los datos NO se guardaron. Razón: ${resultado.guardado?.razon}`);
+    }
 
   } catch (error) {
-    console.error("\n❌ ERROR CRÍTICO DURANTE LA PRUEBA:");
+    console.error("\n❌ ERROR CRÍTICO EN EL TEST:");
     console.error(error);
   }
 }

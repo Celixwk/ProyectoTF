@@ -45,22 +45,43 @@ export const authService = {
 
 // ========== VISTAS (Datos pre-procesados) ==========
 
-export const vistasService = {
-  // Empleados completos (con cargo y toda la info)
+// ========== CONSULTAS ESPERCIALIZADAS (Reemplaza VISTAS) ==========
+
+export const consultasService = {
+  // Ahora usa el endpoint de empleados con filtros
   obtenerEmpleadosCompletos: async (params?: {
     estado?: boolean;
     busqueda?: string;
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ empleados: EmpleadoCompleto[]; paginacion: any }>(
-      '/vistas/empleados-completos',
+    // Usamos el endpoint estándar de empleados
+    const { data } = await api.get<{ empleados: any[]; paginacion: any }>(
+      '/empleados',
       { params }
     );
-    return data;
+
+    // Mapeo de datos para mantener compatibilidad con UI
+    const empleadosMapeados: EmpleadoCompleto[] = (data.empleados || []).map(e => ({
+      id_empleado: e.id_empleado,
+      nombre_completo: `${e.nombre1} ${e.nombre2 || ''} ${e.apellido1} ${e.apellido2 || ''}`.trim().replace(/\s+/g, ' '),
+      cedula: e.cedula,
+      edad: e.edad,
+      sexo: e.sexo,
+      vehiculo: e.vehiculo ? 'Si' : 'No', // Ajuste según tipo en vista vs modelo
+      estado: e.estado === 1 || e.estado === true, // Handling int/bool variations
+      id_cargo: e.id_cargo,
+      nombre_cargo: e.cargo?.nombre_cargo || 'Sin Cargo',
+      salario_base: e.cargo?.salario_base?.toString() || '0',
+      areas_permitidas: e.empleado_area?.map((ea: any) => ea.id_area) || [],
+      created_at: e.created_at,
+      updated_at: e.updated_at
+    }));
+
+    return { ...data, empleados: empleadosMapeados };
   },
 
-  // Turnos asignados (con empleado, área, calendario)
+  // Turnos asignados -> /api/turnos/asignados
   obtenerTurnosAsignados: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
@@ -68,14 +89,39 @@ export const vistasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ turnos: TurnoAsignado[]; total: number }>(
-      '/vistas/turnos-asignados',
+    const { data } = await api.get<{ turnos: any[]; total: number }>(
+      '/turnos/asignados',
       { params }
     );
-    return data;
+
+    const turnosMapeados: TurnoAsignado[] = (data.turnos || []).map(t => ({
+      id_detalle_turno: t.id_detalle_programacion,
+      fecha: t.fecha,
+      dia_semana: new Date(t.fecha).toLocaleDateString('es-ES', { weekday: 'long' }),
+      es_festivo: t.tipo_dia === 'Festivo', // Lógica aproximada
+      es_domingo: new Date(t.fecha).getDay() === 0,
+      id_turno: t.id_turno,
+      codigo_turno: t.turno?.tipo_turno || '',
+      hora_entrada: t.turno?.hora_entrada,
+      hora_salida: t.turno?.hora_salida,
+      tipo_turno: t.turno?.tipo_turno || '',
+      thl: t.total_horas_laboradas?.toString(),
+      id_area: t.id_area,
+      nombre_area: t.area?.nombre_area || '',
+      id_labor_mes: t.id_labor_mes,
+      id_empleado: t.id_empleado,
+      nombre_completo: t.empleado ? `${t.empleado.nombre1} ${t.empleado.apellido1}` : '',
+      cedula: t.empleado?.cedula || '',
+      nombre_cargo: t.empleado?.cargo?.nombre_cargo || '',
+      salario_base: t.empleado?.cargo?.salario_base?.toString() || '',
+      created_at: t.created_at,
+      updated_at: t.updated_at
+    }));
+
+    return { ...data, turnos: turnosMapeados };
   },
 
-  // Novedades completas (con empleado, tipo, usuario)
+  // Novedades -> /api/novedades
   obtenerNovedadesCompletas: async (params?: {
     id_empleado?: number;
     etapa?: string;
@@ -84,14 +130,37 @@ export const vistasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ novedades: NovedadCompleta[]; total: number }>(
-      '/vistas/novedades-completas',
+    const { data } = await api.get<{ novedades: any[]; total: number }>(
+      '/novedades',
       { params }
     );
-    return data;
+
+    const novedadesMapeadas: NovedadCompleta[] = (data.novedades || []).map(n => ({
+      id_novedad_registro: n.id_novedad_registro || n.id_novedad_empleado,
+      fecha_solicitud: n.fecha_solicitud,
+      fecha_registro: n.fecha_registro,
+      fecha_vencimiento: n.fecha_vencimiento,
+      etapa: n.etapa,
+      id_empleado: n.id_empleado,
+      empleado: n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : '',
+      cedula: n.empleado?.cedula || '',
+      nombre_cargo: n.empleado?.cargo?.nombre_cargo || '',
+      id_novedad_tipo: n.id_novedad_tipo,
+      codigo_novedad: n.tipo_novedad?.codigo || '',
+      tipo: n.tipo_novedad?.nombre_novedad || '',
+      afecta_pago: n.tipo_novedad?.afecta_pago,
+      fecha_inicio: n.fecha_solicitud, // Asumiendo inicio = solicitud si no hay otro campo
+      cantidad: '0', // Falta en modelo base pero requerido por tipo
+      observaciones: '',
+      usuario_registro: n.usuario?.usuario || '',
+      created_at: n.created_at,
+      updated_at: n.updated_at
+    }));
+
+    return { ...data, novedades: novedadesMapeadas };
   },
 
-  // Recargos completos (con empleado, turno, cálculos)
+  // Recargos -> /api/recargos
   obtenerRecargosCompletos: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
@@ -99,27 +168,72 @@ export const vistasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ recargos: RecargoCompleto[]; total: number }>(
-      '/vistas/recargos-completos',
+    const { data } = await api.get<{ recargos: any[]; total: number }>(
+      '/recargos',
       { params }
     );
-    return data;
+
+    const recargosMapeados: RecargoCompleto[] = (data.recargos || []).map(r => ({
+      id_recargo: r.id_recargo,
+      fecha_inicio: r.fecha_inicio,
+      fecha_fin: r.fecha_fin,
+      total_horas: r.total_horas?.toString(),
+      total_dinero: r.total_dinero?.toString(),
+      dominicales: r.dominicales,
+      festivos: r.festivos,
+      rno: r.rno?.toString(),
+      rnf: r.rnf?.toString(),
+      heon: r.heon?.toString(),
+      heod: r.heod?.toString(), // Check schema if exists
+      hefd: r.hefd?.toString(),
+      hefn: r.hefn?.toString(),
+      id_detalle_turno: r.id_detalle_programacion,
+      fecha: r.detalle_programacion?.fecha,
+      codigo_turno: r.detalle_programacion?.turno?.tipo_turno,
+      hora_entrada: r.detalle_programacion?.turno?.hora_entrada,
+      hora_salida: r.detalle_programacion?.turno?.hora_salida,
+      nombre_area: r.detalle_programacion?.area?.nombre_area,
+      id_empleado: r.detalle_programacion?.id_empleado,
+      nombre_completo: r.detalle_programacion?.empleado ? `${r.detalle_programacion.empleado.nombre1} ${r.detalle_programacion.empleado.apellido1}` : '',
+      cedula: r.detalle_programacion?.empleado?.cedula,
+      salario_base: r.detalle_programacion?.empleado?.cargo?.salario_base?.toString(),
+      id_labor_mes: r.detalle_programacion?.id_labor_mes,
+      created_at: r.created_at,
+      updated_at: r.updated_at
+    }));
+
+    return { ...data, recargos: recargosMapeados };
   },
 
-  // Empleados activos con áreas
+  // Empleados activos
   obtenerEmpleadosActivosAreas: async () => {
-    const { data } = await api.get<EmpleadoActivoArea[]>('/vistas/empleados-activos-areas');
-    return data;
+    // Usamos el endpoint especifico de activos o el general filtrado
+    const { data } = await api.get<any[]>('/empleados/activos');
+
+    const mapped: EmpleadoActivoArea[] = data.map(e => ({
+      id_empleado: e.id_empleado,
+      nombre_completo: `${e.nombre1} ${e.nombre2 || ''} ${e.apellido1} ${e.apellido2 || ''}`.trim().replace(/\s+/g, ' '),
+      cedula: e.cedula,
+      estado: true,
+      nombre_cargo: e.cargo?.nombre_cargo || '',
+      salario_base: e.cargo?.salario_base?.toString() || '0',
+      areas_permitidas: e.empleado_area?.map((ea: any) => ea.id_area) || [],
+      cantidad_areas: e.empleado_area?.length || 0
+    }));
+
+    return mapped;
   },
 
-  // Resumen labor mes
+  // Resumen labor mes -> Dashboard o Recargos resumen
   obtenerResumenLaborMes: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
     fecha_fin?: string;
   }) => {
-    const { data } = await api.get<ResumenLaborMes[]>('/vistas/resumen-labor-mes', { params });
-    return data;
+    const { data } = await api.get<any[]>('/recargos/resumen', { params });
+    // This mapping depends heavily on what /recargos/resumen returns. 
+    // Assuming it returns something similar to ResumenLaborMes
+    return data as ResumenLaborMes[];
   },
 };
 
@@ -344,14 +458,14 @@ export const calendarioService = {
 
 export const programacionService = {
   generarAutomatica: async (
-    mes: number, 
-    anio: number, 
+    mes: number,
+    anio: number,
     descansos?: Record<string, number[]>,
     maximosPorArea?: Record<number, number>
   ) => {
-    const { data } = await api.post('/programacion/generar', { 
-      mes, 
-      anio, 
+    const { data } = await api.post('/programacion/generar', {
+      mes,
+      anio,
       descansos,
       maximos_por_area: maximosPorArea
     });

@@ -62,12 +62,13 @@ export interface Hueco {
 export interface Asignacion {
   id_asignacion?: number;
   id_empleado: number;
+  cedula?: string;
   id_area: number;
   id_turno: number;
   fecha: Date;
-  hora_entrada?: Date; // Mantener para compatibilidad (primer período)
-  hora_salida?: Date; // Mantener para compatibilidad (último período)
-  periodos?: PeriodoTurno[]; // Soporte para horarios partidos
+  hora_entrada?: Date;
+  hora_salida?: Date;
+  periodos?: PeriodoTurno[];
   nombre_empleado?: string;
   nombre_area?: string;
   codigo_turno?: string;
@@ -99,6 +100,12 @@ export interface ProgramacionDia {
     total_areas: number;
     huecos: Hueco[];
   };
+  guardado?: {
+    realizado: boolean;
+    razon?: string;
+    guardadas?: number;
+    errores?: number;
+  };
 }
 
 export interface ValidacionReglasDuras {
@@ -113,10 +120,12 @@ export interface ValidacionReglasBlandas {
 }
 
 export interface OpcionesGeneracion {
-  rotacionForzada?: boolean; // Deshabilitar reglas temporalmente
+  rotacionForzada?: boolean;
   priorizarEspecialistas?: boolean;
   ignorarReglasBlandas?: boolean;
-  maxDiasConsecutivosArea?: number; // Por defecto 3
+  maxDiasConsecutivosArea?: number;
+  maxDiasConsecutivos?: number;
+  descansosRequeridos?: Map<number, number>;
 }
 
 export interface ParamsGenerarAsignaciones {
