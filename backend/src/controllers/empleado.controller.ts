@@ -1,0 +1,100 @@
+import { Request, Response } from 'express';
+import prisma from '../prisma/cliente';
+
+export const empleadoController = {
+    async listar(req: Request, res: Response) {
+        try {
+            const empleados = await prisma.empleado.findMany({
+                include: { cargo: true }
+            });
+            res.status(200).json({ success: true, data: empleados });
+        } catch (error: any) {
+            res.status(500).json({ success: false, data: [], error: error.message });
+        }
+    },
+
+    async obtenerPorId(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            const empleado = await prisma.empleado.findUnique({
+                where: { id_empleado: Number(id) },
+                include: {
+                    cargo: true,
+                    empleado_area: { include: { area: true } }
+                }
+            });
+            res.status(200).json({ success: true, data: empleado });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
+};
+
+export const vistasController = {
+    async obtenerEmpleadosCompletos(req: Request, res: Response) {
+        try {
+            const { busqueda, estado, page = 1, limit = 20 } = req.query;
+            const skip = (Number(page) - 1) * Number(limit);
+
+            const where: any = {
+                AND: [
+                    estado !== undefined && estado !== 'undefined'
+                        ? { id_estado: estado === 'true' ? 1 : 0 }
+                        : {},
+                    busqueda ? {
+                        OR: [
+                            { nombre1: { contains: String(busqueda), mode: 'insensitive' } },
+                            { apellido1: { contains: String(busqueda), mode: 'insensitive' } },
+                            { cedula: { contains: String(busqueda) } }
+                        ]
+                    } : {}
+                ]
+            };
+
+            const [total, empleadosRaw] = await Promise.all([
+                prisma.empleado.count({ where }),
+                prisma.empleado.findMany({
+                    where,
+                    skip: Number(skip),
+                    take: Number(limit),
+                    include: {
+                        cargo: true,
+                        empleado_area: { include: { area: true } }
+                    },
+                    orderBy: { apellido1: 'asc' }
+                })
+            ]);
+
+            const empleadosProcesados = empleadosRaw.map(emp => ({
+                id_empleado: emp.id_empleado,
+                cedula: emp.cedula,
+                nombre_completo: `${emp.nombre1} ${emp.nombre2 || ''} ${emp.apellido1} ${emp.apellido2 || ''}`.replace(/\s+/g, ' ').trim(),
+                nombre_cargo: emp.cargo?.nombre_cargo || 'Sin Cargo',
+                salario_base: emp.cargo?.salario_base || 0,
+                estado: emp.id_estado === 1,
+                sexo: emp.sexo?.trim(),
+                vehiculo: emp.vehiculo,
+                areas: emp.empleado_area.map(ea => ea.area.nombre_area).join(', ')
+            }));
+
+            res.status(200).json({
+                success: true,
+                data: {
+                    empleados: empleadosProcesados,
+                    paginacion: {
+                        total,
+                        totalPaginas: Math.ceil(total / Number(limit)),
+                        paginaActual: Number(page),
+                        limite: Number(limit)
+                    }
+                }
+            });
+        } catch (error: any) {
+            res.status(500).json({
+                success: false,
+                data: { empleados: [], paginacion: { total: 0, totalPaginas: 0, paginaActual: 1, limite: 20 } },
+                error: error.message
+            });
+        }
+    }
+};
