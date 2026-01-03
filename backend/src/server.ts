@@ -7,6 +7,7 @@ import configuracionRoutes from './routes/configuracion.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import empleadosRoutes from './routes/empleados.routes';
 import vistasRoutes from './routes/vista.routes';
+import turnosRoutes from './routes/turnos.routes';
 import cargosRoutes from './routes/cargos.routes';
 import areasRoutes from './routes/areas.routes';
 
@@ -23,6 +24,7 @@ app.use('/api/configuracion', configuracionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/empleados', empleadosRoutes);
 app.use('/api/vistas', vistasRoutes);
+app.use('/api/turnos', turnosRoutes);
 app.use('/api/cargos', cargosRoutes);
 app.use('/api/areas', areasRoutes);
 
