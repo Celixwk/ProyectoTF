@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vistasService, turnosService, areasService, programacionService, calendarioService } from '@/services/api.service';
+import { consultasService, turnosService, areasService, programacionService, calendarioService } from '@/services/api.service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -47,7 +47,7 @@ export default function Programacion() {
     fecha: string;
     nombre_empleado: string;
   } | null>(null);
-  
+
   // Calcular fechas de inicio y fin del mes (solo el mes actual, no días del mes anterior)
   const fechaInicio = useMemo(() => {
     // Primer día del mes seleccionado (día 1 del mes)
@@ -55,7 +55,7 @@ export default function Programacion() {
     const mesNum = mes; // mes ya viene como 1-12
     return `${año}-${String(mesNum).padStart(2, '0')}-01`;
   }, [anio, mes]);
-  
+
   const fechaFin = useMemo(() => {
     // Último día del mes seleccionado
     // Crear fecha del primer día del siguiente mes y restar 1 día
@@ -64,14 +64,14 @@ export default function Programacion() {
     const ultimoDia = new Date(año, mesNum, 0).getDate(); // El día 0 del mes siguiente = último día del mes actual
     return `${año}-${String(mesNum).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
   }, [anio, mes]);
-  
+
   // Obtener turnos asignados usando la VISTA vw_turnos_asignados
   // IMPORTANTE: Solo consultar turnos del mes actual (fechaInicio a fechaFin)
   const { data: turnosData, isLoading: turnosLoading, error: turnosError } = useQuery({
     queryKey: ['turnos-asignados', fechaInicio, fechaFin, mes, anio],
     queryFn: () => {
       console.log('🔍 Consultando turnos asignados SOLO del mes actual:', { fechaInicio, fechaFin, mes, anio });
-      return vistasService.obtenerTurnosAsignados({
+      return consultasService.obtenerTurnosAsignados({
         fecha_inicio: fechaInicio, // Solo primer día del mes
         fecha_fin: fechaFin, // Solo último día del mes
         limit: 1000, // Obtener todos los turnos del mes
@@ -80,7 +80,7 @@ export default function Programacion() {
     // Refrescar cuando cambie el mes o año
     refetchOnWindowFocus: false,
   });
-  
+
   // Debug: Log para ver qué datos se están recibiendo
   if (turnosData) {
     console.log('✅ Datos de turnos recibidos:', {
@@ -89,17 +89,17 @@ export default function Programacion() {
       primerTurno: turnosData.turnos?.[0] || null
     });
   }
-  
+
   if (turnosError) {
     console.error('❌ Error al obtener turnos:', turnosError);
   }
-  
+
   // Obtener empleados activos para mostrar en la tabla
   const { data: empleados, isLoading: empleadosLoading } = useQuery({
     queryKey: ['empleados-activos-areas'],
     queryFn: () => vistasService.obtenerEmpleadosActivosAreas(),
   });
-  
+
   // Obtener áreas para agrupar empleados
   const { data: areas, isLoading: areasLoading } = useQuery({
     queryKey: ['areas'],
@@ -115,7 +115,7 @@ export default function Programacion() {
     },
     staleTime: 1000 * 60 * 60, // 1 hora
   });
-  
+
   // Logging del calendario
   useEffect(() => {
     if (calendarioMes) {
@@ -125,7 +125,7 @@ export default function Programacion() {
       console.error('❌ Error al obtener calendario:', calendarioError);
     }
   }, [calendarioMes, calendarioError]);
-  
+
   // Obtener turnos disponibles para asignar
   const { data: turnos, isLoading: turnosDisponiblesLoading } = useQuery({
     queryKey: ['turnos'],
@@ -141,13 +141,13 @@ export default function Programacion() {
       etapa: undefined, // Obtener todas las etapas, pero filtrar solo aprobadas/completadas en el frontend
     }),
   });
-  
+
   // Estado del formulario de asignación
   const [formData, setFormData] = useState({
     id_turno: '',
     id_area: '',
   });
-  
+
   // Mutación para asignar turno
   const asignarTurnoMutation = useMutation({
     mutationFn: async (data: {
@@ -178,7 +178,7 @@ export default function Programacion() {
       toast.error(error.response?.data?.error || 'Error al asignar turno');
     },
   });
-  
+
   const handleAsignarTurno = (data: {
     id_empleado: number;
     fecha: string;
@@ -186,35 +186,35 @@ export default function Programacion() {
     id_area: number;
   }) => {
     const empleado = empleados?.find((e: any) => e.id_empleado === data.id_empleado);
-    
+
     if (!empleado) return;
-    
+
     // Si ya hay un turno asignado, precargar los valores
     const turnoExistente = turnosAsignados.find(
       (t: TurnoAsignado) =>
         t.id_empleado === data.id_empleado && t.fecha === data.fecha
     );
-    
+
     setAsignacionActual({
       id_empleado: data.id_empleado,
       fecha: data.fecha,
       nombre_empleado: empleado.nombre_completo,
     });
-    
+
     setFormData({
       id_turno: turnoExistente ? turnoExistente.id_turno.toString() : '',
       id_area: turnoExistente ? turnoExistente.id_area.toString() : '',
     });
-    
+
     setDialogOpen(true);
   };
-  
+
   const handleSubmitAsignacion = () => {
     if (!asignacionActual || !formData.id_turno || !formData.id_area) {
       toast.error('Por favor complete todos los campos');
       return;
     }
-    
+
     asignarTurnoMutation.mutate({
       id_empleado: asignacionActual.id_empleado,
       fecha: asignacionActual.fecha,
@@ -222,7 +222,7 @@ export default function Programacion() {
       id_area: parseInt(formData.id_area),
     });
   };
-  
+
   const handleMesAnterior = () => {
     if (mes === 1) {
       setMes(12);
@@ -234,7 +234,7 @@ export default function Programacion() {
     queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
     queryClient.invalidateQueries({ queryKey: ['calendario'] });
   };
-  
+
   const handleMesSiguiente = () => {
     if (mes === 12) {
       setMes(1);
@@ -251,7 +251,7 @@ export default function Programacion() {
   const obtenerDescansosMes = (mes: number, anio: number): Record<string, number[]> => {
     const descansos: Record<string, number[]> = {};
     const prefix = `descanso_`;
-    
+
     // Recorrer todos los items de localStorage
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -271,7 +271,7 @@ export default function Programacion() {
         }
       }
     }
-    
+
     return descansos;
   };
 
@@ -280,14 +280,14 @@ export default function Programacion() {
   const descansosMap = useMemo(() => {
     const map = new Map<string, boolean>();
     const descansos = obtenerDescansosMes(mes, anio);
-    
+
     Object.entries(descansos).forEach(([idEmpleado, dias]) => {
       dias.forEach(dia => {
         const key = `${idEmpleado}-${dia}`;
         map.set(key, true);
       });
     });
-    
+
     return map;
   }, [mes, anio]);
 
@@ -353,7 +353,7 @@ export default function Programacion() {
   const turnosList = turnos || [];
   const calendarioMap = useMemo(() => {
     const map = new Map<string, { es_festivo: boolean; es_domingo: boolean; nombre_festivo: string | null }>();
-    
+
     // No mostrar warning si el calendario aún se está cargando (isLoading)
     if (!calendarioMes || !Array.isArray(calendarioMes)) {
       // Solo mostrar warning si ya se intentó cargar y falló, no si está cargando
@@ -364,11 +364,11 @@ export default function Programacion() {
       // Si es undefined, significa que aún se está cargando, no mostrar warning
       return map;
     }
-    
+
     calendarioMes.forEach((dia: any) => {
       // Normalizar fecha: puede venir como Date object, ISO string, o YYYY-MM-DD
       let fechaStr = '';
-      
+
       // Manejar diferentes formatos de fecha
       if (dia.fecha) {
         if (dia.fecha instanceof Date) {
@@ -391,23 +391,23 @@ export default function Programacion() {
           }
         }
       }
-      
+
       // Validar formato YYYY-MM-DD
       if (fechaStr && /^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
         // Asegurar que los valores booleanos se conviertan correctamente
         // Conversión robusta para manejar diferentes formatos del backend
         const esFestivoValue: any = dia.es_festivo;
         const esDomingoValue: any = dia.es_domingo;
-        
+
         const esFestivo = esFestivoValue === true || esFestivoValue === 1 || esFestivoValue === 'true' || esFestivoValue === '1' || (typeof esFestivoValue === 'string' && esFestivoValue.toLowerCase() === 'true');
         const esDomingo = esDomingoValue === true || esDomingoValue === 1 || esDomingoValue === 'true' || esDomingoValue === '1' || (typeof esDomingoValue === 'string' && esDomingoValue.toLowerCase() === 'true');
-        
+
         map.set(fechaStr, {
           es_festivo: Boolean(esFestivo),
           es_domingo: Boolean(esDomingo),
           nombre_festivo: dia.nombre_festivo || null,
         });
-        
+
         // Log para festivos y domingos
         if (esFestivo) {
           console.log(`🎉 Festivo encontrado en calendario: ${fechaStr} - ${dia.nombre_festivo || 'Sin nombre'}`);
@@ -419,7 +419,7 @@ export default function Programacion() {
         console.warn(`⚠️ Fecha inválida en calendario:`, dia.fecha, `(fechaStr: ${fechaStr})`);
       }
     });
-    
+
     // Log resumen de festivos y domingos cargados
     const festivosCargados = Array.from(map.entries()).filter(([_, info]) => info.es_festivo);
     const domingosCargados = Array.from(map.entries()).filter(([_, info]) => info.es_domingo);
@@ -430,24 +430,24 @@ export default function Programacion() {
       console.log(`📅 Total domingos cargados: ${domingosCargados.length}`);
     }
     console.log(`📅 Calendario total: ${map.size} días mapeados`);
-    
+
     console.log(`📅 Calendario cargado: ${map.size} días registrados`);
-    
+
     // Log detallado de los primeros días para debugging
     if (map.size > 0) {
       const primerosDias = Array.from(map.entries()).slice(0, 5);
-      console.log(`📅 Primeros días del calendario:`, primerosDias.map(([fecha, info]) => 
+      console.log(`📅 Primeros días del calendario:`, primerosDias.map(([fecha, info]) =>
         `${fecha}: festivo=${info.es_festivo}, domingo=${info.es_domingo}`
       ).join(', '));
     }
-    
+
     return map;
   }, [calendarioMes]);
-  
+
   // Verificar si hay programación para el mes actual (filtrar solo turnos del mes seleccionado)
   const tieneProgramacion = useMemo(() => {
     if (turnosAsignados.length === 0) return false;
-    
+
     // Filtrar turnos que pertenecen al mes seleccionado
     const turnosDelMes = turnosAsignados.filter((turno: any) => {
       if (!turno.fecha) return false;
@@ -456,24 +456,24 @@ export default function Programacion() {
       const mesTurno = fechaTurno.getMonth() + 1;
       return añoTurno === anio && mesTurno === mes;
     });
-    
+
     return turnosDelMes.length > 0;
   }, [turnosAsignados, anio, mes]);
-  
+
   // Filtrar novedades activas (aprobadas o completadas) y crear un mapa por empleado y fecha
   // La vista vw_novedades_completas devuelve una fila por cada detalle_novedad
   const novedadesActivas = novedadesData?.novedades?.filter(
-    (novedad: any) => 
+    (novedad: any) =>
       (novedad.etapa === 'aprobada' || novedad.etapa === 'completada') &&
-      novedad.fecha_inicio && 
+      novedad.fecha_inicio &&
       novedad.codigo_novedad
   ) || [];
-  
+
   const novedadesMap = new Map<string, any>();
   novedadesActivas.forEach((novedad: any) => {
     // fecha_inicio es la fecha del detalle_novedad (fecha específica de la novedad)
-    const fechaStr = novedad.fecha_inicio.includes('T') 
-      ? novedad.fecha_inicio.split('T')[0] 
+    const fechaStr = novedad.fecha_inicio.includes('T')
+      ? novedad.fecha_inicio.split('T')[0]
       : novedad.fecha_inicio;
     const key = `${novedad.id_empleado}-${fechaStr}`;
     // Si ya hay una novedad para esta fecha, mantener la primera (puede haber múltiples novedades en la misma fecha)
@@ -481,7 +481,7 @@ export default function Programacion() {
       novedadesMap.set(key, novedad);
     }
   });
-  
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -522,29 +522,29 @@ export default function Programacion() {
                       : 'Eliminar Programación'}
                   </Button>
                 </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Eliminar programación del mes?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Esta acción eliminará toda la programación de{' '}
-                        {new Date(anio, mes - 1).toLocaleDateString('es-ES', {
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                        . Esta acción no se puede deshacer.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => eliminarProgramacionMutation.mutate()}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      >
-                        Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar programación del mes?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta acción eliminará toda la programación de{' '}
+                      {new Date(anio, mes - 1).toLocaleDateString('es-ES', {
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                      . Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => eliminarProgramacionMutation.mutate()}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Eliminar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -591,7 +591,7 @@ export default function Programacion() {
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Navegación de Mes */}
       <Card>
         <CardContent className="pt-6">
@@ -629,17 +629,17 @@ export default function Programacion() {
           </div>
         </CardContent>
       </Card>
-      
+
       {/* Debug info - remover después */}
       {import.meta.env.DEV && (
         <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
-          Debug: Turnos asignados = {turnosAsignados.length} | 
-          Fecha inicio = {fechaInicio} | 
+          Debug: Turnos asignados = {turnosAsignados.length} |
+          Fecha inicio = {fechaInicio} |
           Fecha fin = {fechaFin}
           {turnosError && <span className="text-red-500"> | Error: {turnosError.message}</span>}
         </div>
       )}
-      
+
       {/* Tabla de Programación */}
       <ProgramacionTable
         turnosAsignados={turnosAsignados}
@@ -662,7 +662,7 @@ export default function Programacion() {
         descansosMap={descansosMap}
         calendarioMap={calendarioMap}
       />
-      
+
       {/* Dialog para asignar turno */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -679,7 +679,7 @@ export default function Programacion() {
                 })}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="turno">Turno</Label>
@@ -700,7 +700,7 @@ export default function Programacion() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="area">Área</Label>
               <Select
@@ -720,7 +720,7 @@ export default function Programacion() {
               </Select>
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar

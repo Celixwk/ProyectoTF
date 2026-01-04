@@ -2,37 +2,49 @@
   "compilerOptions": {
     /* Objetivo de compilación */
     "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    /* Configuración de JSX - ESTO SOLUCIONA TUS ERRORES */
+    "jsx": "react-jsx",
     /* Módulos y resolución */
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler", /* Cambiado a bundler para mejor soporte de herramientas actuales */
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
-
     /* Iteradores y compatibilidad */
     "downlevelIteration": true,
     "useDefineForClassFields": true,
-
     /* Salida y aislamiento */
     "isolatedModules": true,
     "noEmit": true,
     "skipLibCheck": true,
-
     /* Linting estricto */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-
-    /* Paths */
+    /* Paths (Alias) */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

@@ -1,39 +1,28 @@
-/**
- * SERVICIO DE API - Consumo de endpoints usando las VISTAS
- * Las vistas ya tienen JOINs y datos pre-procesados
- */
-
 import api from '../config/api.config';
 import type {
   EmpleadoCompleto,
   TurnoAsignado,
   NovedadCompleta,
   RecargoCompleto,
-  EmpleadoActivoArea,
   ResumenLaborMes,
   LoginResponse,
-  DashboardEstadisticas,
   Cargo,
   Area,
   Turno,
-  TipoNovedad,
-  TipoRecargo,
-  CalendarioDia,
+  ResultadoProgramacion,
+  OpcionesProgramacion,
+  AlertaMotor,
 } from '../types/api.types';
-
-// ========== AUTENTICACIÓN ==========
 
 export const authService = {
   login: async (usuario: string, contrasenia: string): Promise<LoginResponse> => {
     const { data } = await api.post<LoginResponse>('/auth/login', { usuario, contrasenia });
     return data;
   },
-
   obtenerPerfil: async () => {
     const { data } = await api.get('/auth/perfil');
     return data;
   },
-
   cambiarContrasenia: async (contraseniaActual: string, contraseniaNueva: string) => {
     const { data } = await api.put('/auth/cambiar-contrasenia', {
       contraseniaActual,
@@ -43,45 +32,44 @@ export const authService = {
   },
 };
 
-// ========== VISTAS (Datos pre-procesados) ==========
-
-// ========== CONSULTAS ESPERCIALIZADAS (Reemplaza VISTAS) ==========
-
 export const consultasService = {
-  // Ahora usa el endpoint de empleados con filtros
   obtenerEmpleadosCompletos: async (params?: {
     estado?: boolean;
     busqueda?: string;
     page?: number;
     limit?: number;
   }) => {
-    // Usamos el endpoint estándar de empleados
-    const { data } = await api.get<{ empleados: any[]; paginacion: any }>(
-      '/empleados',
-      { params }
-    );
+    const response = await api.get<{ success: boolean, data: { empleados: any[]; paginacion: any } }>('/vistas/empleados-completos', { params });
+    const content = response.data.data;
 
-    // Mapeo de datos para mantener compatibilidad con UI
-    const empleadosMapeados: EmpleadoCompleto[] = (data.empleados || []).map(e => ({
-      id_empleado: e.id_empleado,
-      nombre_completo: `${e.nombre1} ${e.nombre2 || ''} ${e.apellido1} ${e.apellido2 || ''}`.trim().replace(/\s+/g, ' '),
-      cedula: e.cedula,
-      edad: e.edad,
-      sexo: e.sexo,
-      vehiculo: e.vehiculo ? 'Si' : 'No', // Ajuste según tipo en vista vs modelo
-      estado: e.estado === 1 || e.estado === true, // Handling int/bool variations
-      id_cargo: e.id_cargo,
-      nombre_cargo: e.cargo?.nombre_cargo || 'Sin Cargo',
-      salario_base: e.cargo?.salario_base?.toString() || '0',
-      areas_permitidas: e.empleado_area?.map((ea: any) => ea.id_area) || [],
-      created_at: e.created_at,
-      updated_at: e.updated_at
-    }));
+    const empleadosMapeados: EmpleadoCompleto[] = (content.empleados || []).map(e => {
+      let areasPermitidas: number[] = [];
+      if (Array.isArray(e.areas_permitidas)) {
+        areasPermitidas = e.areas_permitidas;
+      } else if (typeof e.areas === 'string' && e.areas) {
+        areasPermitidas = [];
+      }
 
-    return { ...data, empleados: empleadosMapeados };
+      return {
+        id_empleado: e.id_empleado,
+        nombre_completo: e.nombre_completo,
+        cedula: e.cedula,
+        edad: e.edad,
+        sexo: e.sexo,
+        vehiculo: e.vehiculo,
+        estado: e.estado,
+        id_cargo: e.id_cargo,
+        nombre_cargo: e.nombre_cargo,
+        salario_base: e.salario_base?.toString() || '0',
+        areas_permitidas: areasPermitidas,
+        created_at: e.created_at,
+        updated_at: e.updated_at
+      };
+    });
+
+    return { ...content, empleados: empleadosMapeados };
   },
 
-  // Turnos asignados -> /api/turnos/asignados
   obtenerTurnosAsignados: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
@@ -89,16 +77,13 @@ export const consultasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ turnos: any[]; total: number }>(
-      '/turnos/asignados',
-      { params }
-    );
-
-    const turnosMapeados: TurnoAsignado[] = (data.turnos || []).map(t => ({
+    const { data } = await api.get<any>('/turnos/asignados', { params });
+    const content = data.data || data;
+    const turnosMapeados: TurnoAsignado[] = (content.turnos || []).map((t: any) => ({
       id_detalle_turno: t.id_detalle_programacion,
       fecha: t.fecha,
       dia_semana: new Date(t.fecha).toLocaleDateString('es-ES', { weekday: 'long' }),
-      es_festivo: t.tipo_dia === 'Festivo', // Lógica aproximada
+      es_festivo: t.tipo_dia === 'Festivo',
       es_domingo: new Date(t.fecha).getDay() === 0,
       id_turno: t.id_turno,
       codigo_turno: t.turno?.tipo_turno || '',
@@ -117,11 +102,9 @@ export const consultasService = {
       created_at: t.created_at,
       updated_at: t.updated_at
     }));
-
-    return { ...data, turnos: turnosMapeados };
+    return { ...content, turnos: turnosMapeados };
   },
 
-  // Novedades -> /api/novedades
   obtenerNovedadesCompletas: async (params?: {
     id_empleado?: number;
     etapa?: string;
@@ -130,12 +113,9 @@ export const consultasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ novedades: any[]; total: number }>(
-      '/novedades',
-      { params }
-    );
-
-    const novedadesMapeadas: NovedadCompleta[] = (data.novedades || []).map(n => ({
+    const { data } = await api.get<any>('/novedades', { params });
+    const content = data.data || data;
+    const novedadesMapeadas: NovedadCompleta[] = (content.novedades || []).map((n: any) => ({
       id_novedad_registro: n.id_novedad_registro || n.id_novedad_empleado,
       fecha_solicitud: n.fecha_solicitud,
       fecha_registro: n.fecha_registro,
@@ -149,18 +129,16 @@ export const consultasService = {
       codigo_novedad: n.tipo_novedad?.codigo || '',
       tipo: n.tipo_novedad?.nombre_novedad || '',
       afecta_pago: n.tipo_novedad?.afecta_pago,
-      fecha_inicio: n.fecha_solicitud, // Asumiendo inicio = solicitud si no hay otro campo
-      cantidad: '0', // Falta en modelo base pero requerido por tipo
+      fecha_inicio: n.fecha_solicitud,
+      cantidad: '0',
       observaciones: '',
       usuario_registro: n.usuario?.usuario || '',
       created_at: n.created_at,
       updated_at: n.updated_at
     }));
-
-    return { ...data, novedades: novedadesMapeadas };
+    return { ...content, novedades: novedadesMapeadas };
   },
 
-  // Recargos -> /api/recargos
   obtenerRecargosCompletos: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
@@ -168,12 +146,9 @@ export const consultasService = {
     page?: number;
     limit?: number;
   }) => {
-    const { data } = await api.get<{ recargos: any[]; total: number }>(
-      '/recargos',
-      { params }
-    );
-
-    const recargosMapeados: RecargoCompleto[] = (data.recargos || []).map(r => ({
+    const { data } = await api.get<any>('/recargos', { params });
+    const content = data.data || data;
+    const recargosMapeados: RecargoCompleto[] = (content.recargos || []).map((r: any) => ({
       id_recargo: r.id_recargo,
       fecha_inicio: r.fecha_inicio,
       fecha_fin: r.fecha_fin,
@@ -184,7 +159,7 @@ export const consultasService = {
       rno: r.rno?.toString(),
       rnf: r.rnf?.toString(),
       heon: r.heon?.toString(),
-      heod: r.heod?.toString(), // Check schema if exists
+      heod: r.heod?.toString(),
       hefd: r.hefd?.toString(),
       hefn: r.hefn?.toString(),
       id_detalle_turno: r.id_detalle_programacion,
@@ -201,92 +176,78 @@ export const consultasService = {
       created_at: r.created_at,
       updated_at: r.updated_at
     }));
-
-    return { ...data, recargos: recargosMapeados };
+    return { ...content, recargos: recargosMapeados };
   },
 
-  // Empleados activos
   obtenerEmpleadosActivosAreas: async () => {
-    // Usamos el endpoint especifico de activos o el general filtrado
-    const { data } = await api.get<any[]>('/empleados/activos');
-
-    const mapped: EmpleadoActivoArea[] = data.map(e => ({
+    const { data } = await api.get<any>('/dashboard/empleados-activos');
+    const content = data.data || data;
+    return content.map((e: any) => ({
       id_empleado: e.id_empleado,
-      nombre_completo: `${e.nombre1} ${e.nombre2 || ''} ${e.apellido1} ${e.apellido2 || ''}`.trim().replace(/\s+/g, ' '),
+      nombre_completo: e.nombre_completo,
       cedula: e.cedula,
       estado: true,
-      nombre_cargo: e.cargo?.nombre_cargo || '',
-      salario_base: e.cargo?.salario_base?.toString() || '0',
-      areas_permitidas: e.empleado_area?.map((ea: any) => ea.id_area) || [],
-      cantidad_areas: e.empleado_area?.length || 0
+      nombre_cargo: e.nombre_cargo || '',
+      salario_base: e.salario_base?.toString() || '0',
+      areas_permitidas: e.areas ? e.areas.split(', ').map(Number) : [],
+      cantidad_areas: e.areas ? e.areas.split(', ').length : 0
     }));
-
-    return mapped;
   },
 
-  // Resumen labor mes -> Dashboard o Recargos resumen
-  obtenerResumenLaborMes: async (params?: {
-    id_empleado?: number;
-    fecha_inicio?: string;
-    fecha_fin?: string;
-  }) => {
-    const { data } = await api.get<any[]>('/recargos/resumen', { params });
-    // This mapping depends heavily on what /recargos/resumen returns. 
-    // Assuming it returns something similar to ResumenLaborMes
-    return data as ResumenLaborMes[];
+  obtenerResumenLaborMes: async (params?: { id_empleado?: number; fecha_inicio?: string; fecha_fin?: string; }) => {
+    const { data } = await api.get<any>('/recargos/resumen', { params });
+    return (data.data || data) as ResumenLaborMes[];
   },
 };
 
-// ========== CRUD NORMAL ==========
+export const vistasService = {
+  obtenerEmpleadosCompletos: consultasService.obtenerEmpleadosCompletos,
+};
 
 export const empleadosService = {
   listar: async (params?: any) => {
     const { data } = await api.get('/empleados', { params });
-    return data;
+    return data.data || data;
   },
-
   obtener: async (id: number) => {
     const { data } = await api.get(`/empleados/${id}`);
-    return data;
+    const res = data.data || data;
+    return {
+      ...res,
+      areas_permitidas: res.areas_permitidas ? res.areas_permitidas.map((a: any) => typeof a === 'object' ? a.id_area : a) : []
+    };
   },
-
   crear: async (empleado: any) => {
     const { data } = await api.post('/empleados', empleado);
     return data;
   },
-
   actualizar: async (id: number, empleado: any) => {
     const { data } = await api.put(`/empleados/${id}`, empleado);
     return data;
   },
-
   eliminar: async (id: number) => {
     const { data } = await api.delete(`/empleados/${id}`);
     return data;
   },
-
   obtenerActivos: async () => {
     const { data } = await api.get('/empleados/activos');
-    return data;
+    return data.data || data;
   },
 };
 
 export const cargosService = {
   listar: async () => {
-    const { data } = await api.get<Cargo[]>('/cargos');
-    return data;
+    const { data } = await api.get<{ success: boolean; data: Cargo[] }>('/cargos');
+    return data.data;
   },
-
   crear: async (cargo: Partial<Cargo>) => {
     const { data } = await api.post('/cargos', cargo);
     return data;
   },
-
   actualizar: async (id: number, cargo: Partial<Cargo>) => {
     const { data } = await api.put(`/cargos/${id}`, cargo);
     return data;
   },
-
   eliminar: async (id: number) => {
     const { data } = await api.delete(`/cargos/${id}`);
     return data;
@@ -295,20 +256,17 @@ export const cargosService = {
 
 export const areasService = {
   listar: async () => {
-    const { data } = await api.get<Area[]>('/areas');
-    return data;
+    const { data } = await api.get<{ success: boolean; data: Area[] }>('/areas');
+    return data.data;
   },
-
   crear: async (area: Partial<Area>) => {
     const { data } = await api.post('/areas', area);
     return data;
   },
-
   actualizar: async (id: number, area: Partial<Area>) => {
     const { data } = await api.put(`/areas/${id}`, area);
     return data;
   },
-
   eliminar: async (id: number) => {
     const { data } = await api.delete(`/areas/${id}`);
     return data;
@@ -317,32 +275,33 @@ export const areasService = {
 
 export const turnosService = {
   listar: async (params?: { estado?: boolean }) => {
-    const { data } = await api.get<Turno[]>('/turnos', { params });
-    return data;
+    const { data } = await api.get<any>('/turnos', { params });
+    const content = data.data || data;
+    return content.map((t: any) => ({
+      id_turno: t.id_turno,
+      tipo_turno: t.tipo_turno || '',
+      hora_entrada: t.hora_entrada || null,
+      hora_salida: t.hora_salida || null,
+      hora_entrada_2: t.hora_entrada_2 || null,
+      hora_salida_2: t.hora_salida_2 || null,
+      duracion_horas: t.duracion_horas,
+      estado: t.estado,
+      created_at: t.created_at,
+      updated_at: t.updated_at
+    }));
   },
-
   crear: async (turno: Partial<Turno>) => {
     const { data } = await api.post('/turnos', turno);
     return data;
   },
-
-  asignar: async (asignacion: {
-    id_empleado: number;
-    id_turno: number;
-    id_area: number;
-    fecha: string;
-    fecha_inicio: string;
-    fecha_fin: string;
-  }) => {
+  asignar: async (asignacion: any) => {
     const { data } = await api.post('/turnos/asignar', asignacion);
     return data;
   },
-
   actualizar: async (id: number, turno: Partial<Turno>) => {
     const { data } = await api.put(`/turnos/${id}`, turno);
     return data;
   },
-
   eliminar: async (id: number) => {
     const { data } = await api.delete(`/turnos/${id}`);
     return data;
@@ -351,35 +310,29 @@ export const turnosService = {
 
 export const novedadesService = {
   listarTipos: async () => {
-    const { data } = await api.get<TipoNovedad[]>('/novedades/tipos');
-    return data;
+    const { data } = await api.get<any>('/novedades/tipos');
+    return data.data || data;
   },
-
-  crearTipo: async (tipo: { codigo: string; nombre_novedad: string; afecta_pago: boolean }) => {
+  crearTipo: async (tipo: any) => {
     const { data } = await api.post('/novedades/tipos', tipo);
     return data;
   },
-
-  actualizarTipo: async (id: number, tipo: { nombre_novedad?: string; afecta_pago?: boolean }) => {
+  actualizarTipo: async (id: number, tipo: any) => {
     const { data } = await api.put(`/novedades/tipos/${id}`, tipo);
     return data;
   },
-
   eliminarTipo: async (id: number) => {
     const { data } = await api.delete(`/novedades/tipos/${id}`);
     return data;
   },
-
   crear: async (novedad: any) => {
     const { data } = await api.post('/novedades', novedad);
     return data;
   },
-
   actualizarEstado: async (id: number, etapa: string) => {
     const { data } = await api.put(`/novedades/${id}/estado`, { etapa });
     return data;
   },
-
   eliminar: async (id: number) => {
     const { data } = await api.delete(`/novedades/${id}`);
     return data;
@@ -388,68 +341,61 @@ export const novedadesService = {
 
 export const recargosService = {
   listarTipos: async () => {
-    const { data } = await api.get<TipoRecargo[]>('/recargos/tipos');
-    return data;
+    const { data } = await api.get<any>('/recargos/tipos');
+    return data.data || data;
   },
-
   calcular: async (idDetalleTurno: number) => {
     const { data } = await api.post(`/recargos/calcular/${idDetalleTurno}`);
     return data;
   },
-
   obtenerResumen: async (idEmpleado: number, fechaInicio: string, fechaFin: string) => {
     const { data } = await api.get('/recargos/resumen', {
       params: { id_empleado: idEmpleado, fecha_inicio: fechaInicio, fecha_fin: fechaFin },
     });
-    return data;
+    return data.data || data;
   },
 };
 
 export const dashboardService = {
-  obtenerEstadisticas: async () => {
-    const { data } = await api.get<DashboardEstadisticas>('/dashboard/estadisticas');
-    return data;
+  obtenerEstadisticas: async (): Promise<any> => {
+    const { data } = await api.get('/dashboard/estadisticas');
+    return data.data;
   },
-
-  obtenerTurnosHoy: async () => {
+  obtenerTurnosHoy: async (): Promise<any[]> => {
     const { data } = await api.get('/dashboard/turnos-hoy');
-    return data;
+    return data.data || [];
   },
-
-  obtenerRecargosPorMes: async (anio?: number) => {
-    const { data } = await api.get('/dashboard/recargos-por-mes', {
-      params: { anio },
-    });
-    return data;
+  obtenerRecargosPorMes: async (anio?: number): Promise<any[]> => {
+    const { data } = await api.get('/dashboard/recargos-por-mes', { params: { anio } });
+    return data.data || [];
   },
-
-  obtenerEmpleadosActivos: async (params?: { limite?: number; mes?: number; anio?: number }) => {
+  obtenerEmpleadosActivos: async (params: { limite: number }): Promise<any[]> => {
     const { data } = await api.get('/dashboard/empleados-activos', { params });
-    return data;
-  },
-
-  obtenerDistribucionAreas: async (params?: { mes?: number; anio?: number }) => {
-    const { data } = await api.get('/dashboard/distribucion-areas', { params });
-    return data;
+    return data.data || [];
   },
 };
 
+export const configuracionApi = {
+  obtenerMaestros: () => api.get('/configuracion/maestros'),
+  guardarMaximos: (configs: any) => api.post('/configuracion/areas/maximos', { configs }),
+  guardarDescansos: (data: any) => api.post('/configuracion/descansos', data),
+  obtenerDescansoEmpleado: (id: number, mes: number, anio: number) =>
+    api.get(`/configuracion/descanso-individual?id_empleado=${id}&mes=${mes}&anio=${anio}`)
+};
+
 export const calendarioService = {
-  listar: async (params?: { anio?: number; mes?: number; es_festivo?: boolean }) => {
-    const { data } = await api.get<CalendarioDia[]>('/calendario', { params });
-    return data;
+  listar: async (params?: any) => {
+    const { data } = await api.get<any>('/calendario', { params });
+    return data.data || data;
   },
-
   obtenerFestivos: async (anio: number) => {
-    const { data } = await api.get<CalendarioDia[]>(`/calendario/festivos/${anio}`);
-    return data;
+    const { data } = await api.get<any>(`/calendario/festivos/${anio}`);
+    return data.data || data;
   },
-
-  crearFestivo: async (festivo: { fecha: string; nombre_festivo: string; tipo_festivo?: string }) => {
+  crearFestivo: async (festivo: any) => {
     const { data } = await api.post('/calendario/festivos', festivo);
     return data;
   },
-
   sincronizarDomingos: async (anio: number) => {
     const { data } = await api.post('/calendario/sincronizar-domingos', { anio });
     return data;
@@ -457,23 +403,36 @@ export const calendarioService = {
 };
 
 export const programacionService = {
-  generarAutomatica: async (
-    mes: number,
-    anio: number,
-    descansos?: Record<string, number[]>,
-    maximosPorArea?: Record<number, number>
-  ) => {
-    const { data } = await api.post('/programacion/generar', {
-      mes,
-      anio,
-      descansos,
-      maximos_por_area: maximosPorArea
-    });
+  generarAutomatica: async (payload: any) => {
+    const { data } = await api.post('/programacion/automatica', payload);
     return data;
   },
+  validarDia: async (fecha: string): Promise<AlertaMotor[]> => {
+    const { data } = await api.get<any>('/programacion/validar', {
+      params: { fecha }
+    });
+    return data.data || data;
+  },
   eliminarMes: async (mes: number, anio: number) => {
-    const { data } = await api.delete('/programacion/eliminar', { params: { mes, anio } });
+    const { data } = await api.delete('/programacion/eliminar', {
+      params: { mes, anio }
+    });
     return data;
   },
 };
 
+export default {
+  authService,
+  consultasService,
+  vistasService,
+  empleadosService,
+  cargosService,
+  areasService,
+  turnosService,
+  novedadesService,
+  recargosService,
+  dashboardService,
+  configuracionApi,
+  calendarioService,
+  programacionService
+};

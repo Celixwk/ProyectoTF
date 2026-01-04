@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Esquema de validación para Empleado
 export const empleadoSchema = z.object({
   nombre1: z.string().min(1, 'El primer nombre es requerido').max(50),
   nombre2: z.string().max(50).optional().or(z.literal('')),
@@ -16,7 +15,6 @@ export const empleadoSchema = z.object({
 
 export type EmpleadoFormData = z.infer<typeof empleadoSchema>;
 
-// Esquema de validación para Cargo
 export const cargoSchema = z.object({
   nombre_cargo: z.string().min(1, 'El nombre del cargo es requerido').max(100),
   salario_base: z.coerce.number().min(0, 'El salario debe ser mayor o igual a 0'),
@@ -25,14 +23,12 @@ export const cargoSchema = z.object({
 
 export type CargoFormData = z.infer<typeof cargoSchema>;
 
-// Esquema de validación para Área
 export const areaSchema = z.object({
   nombre_area: z.string().min(1, 'El nombre del área es requerido').max(100),
 });
 
 export type AreaFormData = z.infer<typeof areaSchema>;
 
-// Esquema de validación para Turno
 export const turnoSchema = z.object({
   codigo: z.string().min(1, 'El código del turno es requerido').max(20).regex(/^T\d+$/, 'El código debe empezar con T seguido de números (ej: T1, T2, T11)'),
   tipo_turno: z.string().max(50).optional().or(z.literal('')),
@@ -43,7 +39,6 @@ export const turnoSchema = z.object({
 
 export type TurnoFormData = z.infer<typeof turnoSchema>;
 
-// Esquema de validación para Tipo de Novedad
 export const tipoNovedadSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(20),
   nombre_novedad: z.string().min(1, 'El nombre es requerido').max(100),
@@ -51,4 +46,3 @@ export const tipoNovedadSchema = z.object({
 });
 
 export type TipoNovedadFormData = z.infer<typeof tipoNovedadSchema>;
-

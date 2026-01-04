@@ -1,9 +1,3 @@
-/**
- * TIPOS TYPESCRIPT BASADOS EN LAS VISTAS DE LA BASE DE DATOS
- * Estos tipos representan exactamente la estructura de las vistas SQL
- */
-
-// ========== VISTA: vw_empleados_completos ==========
 export interface EmpleadoCompleto {
   id_empleado: number;
   nombre_completo: string;
@@ -14,13 +8,12 @@ export interface EmpleadoCompleto {
   estado: boolean;
   id_cargo: number;
   nombre_cargo: string;
-  salario_base: string; // Decimal as string
-  areas_permitidas: number[] | null;
+  salario_base: string;
+  areas_permitidas: number[];
   created_at: string;
   updated_at: string;
 }
 
-// ========== VISTA: vw_turnos_asignados ==========
 export interface TurnoAsignado {
   id_detalle_turno: number;
   fecha: string;
@@ -32,7 +25,7 @@ export interface TurnoAsignado {
   hora_entrada: string;
   hora_salida: string;
   tipo_turno: string;
-  thl: string | null; // Total horas laboradas
+  thl: string | null;
   id_area: number;
   nombre_area: string;
   id_labor_mes: number;
@@ -54,7 +47,6 @@ export interface CalendarioDia {
   tipo_festivo: string | null;
 }
 
-// ========== VISTA: vw_novedades_completas ==========
 export interface NovedadCompleta {
   id_novedad_registro: number;
   fecha_solicitud: string;
@@ -77,7 +69,6 @@ export interface NovedadCompleta {
   updated_at: string;
 }
 
-// ========== VISTA: vw_recargos_completos ==========
 export interface RecargoCompleto {
   id_recargo: number;
   fecha_inicio: string;
@@ -86,12 +77,12 @@ export interface RecargoCompleto {
   total_dinero: string;
   dominicales: number;
   festivos: number;
-  rno: string; // Recargo Nocturno Ordinario
-  rnf: string; // Recargo Nocturno Festivo
-  heon: string; // HE Ordinaria Nocturna
-  heod: string; // HE Ordinaria Diurna
-  hefd: string; // HE Festiva Diurna
-  hefn: string; // HE Festiva Nocturna
+  rno: string;
+  rnf: string;
+  heon: string;
+  heod: string;
+  hefd: string;
+  hefn: string;
   id_detalle_turno: number;
   fecha: string;
   codigo_turno: string;
@@ -107,7 +98,6 @@ export interface RecargoCompleto {
   updated_at: string;
 }
 
-// ========== VISTA: vw_empleados_activos_areas ==========
 export interface EmpleadoActivoArea {
   id_empleado: number;
   nombre_completo: string;
@@ -115,11 +105,10 @@ export interface EmpleadoActivoArea {
   estado: boolean;
   nombre_cargo: string;
   salario_base: string;
-  areas_permitidas: number[] | null;
+  areas_permitidas: number[];
   cantidad_areas: number;
 }
 
-// ========== VISTA: vw_resumen_labor_mes ==========
 export interface ResumenLaborMes {
   id_labor_mes: number;
   fecha_inicio: string;
@@ -139,8 +128,6 @@ export interface ResumenLaborMes {
   created_at: string;
   updated_at: string;
 }
-
-// ========== MODELOS PRINCIPALES (para CRUD) ==========
 
 export interface Empleado {
   id_empleado: number;
@@ -177,13 +164,15 @@ export interface Area {
 
 export interface Turno {
   id_turno: number;
-  codigo: string;
   hora_entrada: string;
   hora_salida: string;
   tipo_turno: string;
+  duracion_horas?: number;
   estado: boolean;
   created_at: string;
   updated_at: string;
+  hora_entrada_2?: string | null;
+  hora_salida_2?: string | null;
 }
 
 export interface TipoNovedad {
@@ -232,7 +221,45 @@ export interface DashboardEstadisticas {
   };
 }
 
-// ========== RESPUESTAS DE API ==========
+export interface AlertaMotor {
+  tipo: 'error' | 'advertencia' | 'info';
+  codigo:
+  | 'EMPLEADOS_SIN_ASIGNACION'
+  | 'AREA_SIN_PERSONAL'
+  | 'AREA_DEFICIT_PERSONAL'
+  | 'DIAS_CONSECUTIVOS_EXCEDIDOS'
+  | 'DESCANSOS_FALTANTES'
+  | 'DESCANSOS_ADVERTENCIA_PROGRESIVA';
+  mensaje: string;
+  area?: number;
+  empleado?: number;
+  acciones_sugeridas?: string[];
+  empleados_sugeridos?: { id: number; nombre: string }[];
+}
+
+export interface ResultadoProgramacion {
+  exito: boolean;
+  fecha: string;
+  asignaciones_realizadas: number;
+  huecos_pendientes: number;
+  alertas: AlertaMotor[];
+  detalles_asignacion?: {
+    id_empleado: number;
+    nombre_empleado: string;
+    id_area: number;
+    nombre_area: string;
+    codigo_turno: string;
+  }[];
+}
+
+export interface OpcionesProgramacion {
+  maxDiasConsecutivos?: number;
+  evitarRefuerzos?: boolean;
+  ignorarReglasBlandas?: boolean;
+  prioridadesAreas?: Record<number, number>;
+  promedioAsignaciones?: number;
+  descansosProgramados?: Record<number, number[]>;
+}
 
 export interface LoginResponse {
   mensaje: string;
@@ -261,4 +288,3 @@ export interface ApiError {
     valor: any;
   }>;
 }
-
