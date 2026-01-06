@@ -114,13 +114,19 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   let todasLasAsignaciones: Asignacion[] = [];
   const poolTrabajo = [...candidatos];
 
-  const turnosAProcesar = turnosBD;
+  for (const tPrisma of turnosBD) {
+    const areasFiltradas = areasPriorizadas.filter(area => {
+      if (!opciones?.configuracion) return true;
+      const config = opciones.configuracion[area.id_area];
+      return config ? config.turnosIds.includes(tPrisma.id_turno) : false;
+    });
 
-  for (const tPrisma of turnosAProcesar) {
+    if (areasFiltradas.length === 0) continue;
+
     const resultadoTurno = capa5_generarAsignacionesDia(
       [],
       poolTrabajo,
-      areasPriorizadas,
+      areasFiltradas,
       necesidadesPorArea,
       tPrisma as unknown as Turno,
       fechaNormalizada,

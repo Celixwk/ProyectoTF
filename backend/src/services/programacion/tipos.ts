@@ -1,7 +1,3 @@
-/**
- * Tipos TypeScript compartidos para el sistema de programación por capas
- */
-
 export type TipoClasificacion = 'especialista' | 'flexible' | 'comodin';
 
 export interface EmpleadoOrdenado {
@@ -26,13 +22,13 @@ export interface EmpleadosClasificados {
   especialistas: EmpleadoOrdenado[];
   flexibles: EmpleadoOrdenado[];
   comodines: EmpleadoOrdenado[];
-  todos: EmpleadoOrdenado[]; // Ordenados: especialistas primero, luego flexibles, luego comodines
+  todos: EmpleadoOrdenado[];
 }
 
 export interface EmpleadoDisponible extends EmpleadoOrdenado {
   disponible: boolean;
   razonNoDisponible?: string;
-  tipoNovedad?: string; // 'INCAP', 'LIC', 'AUS', etc.
+  tipoNovedad?: string;
   id_labor_mes?: number;
 }
 
@@ -91,7 +87,6 @@ export interface Alerta {
   audit_id?: string;
 }
 
-
 export interface ProgramacionDia {
   fecha: Date;
   asignaciones: Asignacion[];
@@ -129,6 +124,7 @@ export interface OpcionesGeneracion {
   maxDiasConsecutivos?: number;
   descansosRequeridos?: Map<number, number>;
   idUsuario?: number;
+  configuracion?: Record<number, { turnosIds: number[] }>;
 }
 
 export interface ParamsGenerarAsignaciones {
@@ -141,14 +137,14 @@ export interface ParamsGenerarAsignaciones {
   turnos: Array<{
     id_turno: number;
     codigo?: string;
-    hora_entrada: Date; // Mantener para compatibilidad
-    hora_salida: Date; // Mantener para compatibilidad
-    periodos?: PeriodoTurno[]; // Soporte para horarios partidos
+    hora_entrada: Date;
+    hora_salida: Date;
+    periodos?: PeriodoTurno[];
     duracion_horas?: number;
   }>;
   maximosPorArea: Map<number, number>;
-  descansos?: Map<number, number[]>; // id_empleado -> [días del mes]
-  programacionAnterior?: Asignacion[]; // Para verificar días consecutivos
+  descansos?: Map<number, number[]>;
+  programacionAnterior?: Asignacion[];
   opciones?: OpcionesGeneracion;
 }
 
@@ -177,11 +173,10 @@ export interface PeriodoTurno {
 export interface Turno {
   id_turno: number;
   codigo?: string;
-  hora_entrada: Date; // Mantener para compatibilidad hacia atrás
-  hora_salida: Date; // Mantener para compatibilidad hacia atrás
-  // NUEVO: Soporte para horarios partidos (múltiples períodos)
+  hora_entrada: Date;
+  hora_salida: Date;
   periodos?: PeriodoTurno[];
   duracion_horas?: number | null;
-  hora_entrada_2?: Date; // Mantener para compatibilidad hacia atrás
-  hora_salida_2?: Date; // Mantener para compatibilidad hacia atrás
+  hora_entrada_2?: Date;
+  hora_salida_2?: Date;
 }

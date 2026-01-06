@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { capa6_generarProgramacionDia } from './services/programacion/capa6.integracion';
 import configuracionRoutes from './routes/configuracion.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import empleadosRoutes from './routes/empleados.routes';
@@ -12,6 +11,7 @@ import cargosRoutes from './routes/cargos.routes';
 import areasRoutes from './routes/areas.routes';
 import calendarioRoutes from './routes/calendario.routes';
 import novedadesRoutes from './routes/novedades.routes';
+import programacionRoutes from './routes/programacion.routes';
 
 dotenv.config();
 
@@ -31,17 +31,7 @@ app.use('/api/cargos', cargosRoutes);
 app.use('/api/areas', areasRoutes);
 app.use('/api/calendario', calendarioRoutes);
 app.use('/api/novedades', novedadesRoutes);
-
-app.post('/api/programacion/generar', async (req, res) => {
-  try {
-    const { fecha } = req.body;
-    if (!fecha) return res.status(400).json({ error: "Falta la fecha" });
-    const resultado = await capa6_generarProgramacionDia(new Date(fecha));
-    res.json(resultado);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+app.use('/api/programacion', programacionRoutes);
 
 app.get('/health', (req, res) => res.send('Backend operativo ✅'));
 
