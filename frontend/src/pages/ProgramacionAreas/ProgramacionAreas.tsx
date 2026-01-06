@@ -2,40 +2,29 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { areasService, turnosService, programacionService } from '@/services/api.service';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, ArrowRight, CheckCircle2, Users, CalendarDays } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Area, Turno } from '@/types/api.types';
-
-const useNovedadesMock = (fechaInicio: string, fechaFin: string) => {
-    return {
-        data: {
-            novedades: [
-                { id_empleado: 1, nombre: 'Juan Pérez', tipo: 'Incapacidad', dias: 3, fecha_inicio: '2024-05-10' },
-                { id_empleado: 2, nombre: 'Ana Gómez', tipo: 'Licencia', dias: 5, fecha_inicio: '2024-05-12' }
-            ]
-        },
-        isLoading: false
-    };
-};
 
 export default function ProgramacionAreas() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const hoy = new Date();
+
     const [mes, setMes] = useState(hoy.getMonth() + 1);
     const [anio, setAnio] = useState(hoy.getFullYear());
-    const [paso, setPaso] = useState<'inicio' | 'configuracion'>('inicio');
+    const [paso, setPaso] = useState<'inicio' | 'configuracion' | 'resultado'>('inicio');
     const [mostrarDialogoNovedades, setMostrarDialogoNovedades] = useState(false);
-    const [configAreas, setConfigAreas] = useState<Record<number, { max: number; turnosIds: number[] }>>({});
+    const [configAreas, setConfigAreas] = useState<Record<number, { turnosIds: number[] }>>({});
+    const [programacionGenerada, setProgramacionGenerada] = useState<any[]>([]);
 
-    const { data: areas, isLoading: areasLoading } = useQuery<Area[]>({
+    const { data: areasRaw, isLoading: areasLoading } = useQuery<Area[]>({
         queryKey: ['areas'],
         queryFn: () => areasService.listar()
     });
@@ -45,82 +34,116 @@ export default function ProgramacionAreas() {
         queryFn: () => turnosService.listar({ estado: true })
     });
 
+    const { data: novedadesData, isLoading: novedadesLoading } = useQuery({
+        queryKey: ['novedades-periodo', mes, anio],
+        queryFn: () => programacionService.obtenerNovedades(mes, anio),
+        enabled: paso === 'inicio'
+    });
+
+    const areas = useMemo(() => {
+        if (!areasRaw) return [];
+        return areasRaw.filter(a => !a.nombre_area.toLowerCase().includes('refuerzo'));
+    }, [areasRaw]);
+
     const turnos = useMemo(() => {
         if (!turnosRaw) return [];
-        return turnosRaw.filter(t => t.id_turno !== 1 && t.id_turno !== 2 && t.id_turno !== 3);
+        return turnosRaw.filter(t => ![1, 2, 3].includes(t.id_turno));
     }, [turnosRaw]);
+
+    const infoDias = useMemo(() => {
+        const total = new Date(anio, mes, 0).getDate();
+        return Array.from({ length: total }, (_, i) => {
+            const fecha = new Date(anio, mes - 1, i + 1);
+            return {
+                numero: i + 1,
+                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase(),
+                fechaISO: fecha.toISOString().split('T')[0]
+            };
+        });
+    }, [mes, anio]);
 
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() + i);
 
     useEffect(() => {
-        if (areas && turnos.length >= 2 && Object.keys(configAreas).length === 0) {
-            const initialConfig: Record<number, { max: number; turnosIds: number[] }> = {};
-            const defaultTurnosIds = turnos.slice(0, 2).map(t => t.id_turno);
-            areas.forEach((area: Area) => {
-                initialConfig[area.id_area] = { max: 5, turnosIds: defaultTurnosIds };
+        if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0) {
+            const initialConfig: Record<number, { turnosIds: number[] }> = {};
+            const tIds = { T1: 5, T2: 6, T3: 7, T5: 8, T6: 9, T8: 11, T11: 14, T13: 15 };
+
+            areas.forEach((area) => {
+                let idsSeleccionados: number[] = [];
+                switch (area.id_area) {
+                    case 1: idsSeleccionados = [tIds.T1, tIds.T11]; break;
+                    case 2: idsSeleccionados = [tIds.T3, tIds.T5, tIds.T11, tIds.T13]; break;
+                    case 3: idsSeleccionados = [tIds.T5, tIds.T6, tIds.T11]; break;
+                    case 4: idsSeleccionados = [tIds.T3, tIds.T5]; break;
+                    case 5: idsSeleccionados = [tIds.T1, tIds.T5, tIds.T11]; break;
+                    case 6: idsSeleccionados = [tIds.T5, tIds.T11, tIds.T13]; break;
+                    case 7: idsSeleccionados = [tIds.T5, tIds.T11, tIds.T13]; break;
+                    case 8: idsSeleccionados = [tIds.T5, tIds.T6, tIds.T11]; break;
+                    case 9: idsSeleccionados = [tIds.T5, tIds.T11, tIds.T13]; break;
+                    case 10: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    case 11: idsSeleccionados = [tIds.T2, tIds.T5, tIds.T6, tIds.T8, tIds.T11]; break;
+                    case 12: idsSeleccionados = [tIds.T2, tIds.T3, tIds.T5, tIds.T6, tIds.T11]; break;
+                    default: idsSeleccionados = [tIds.T5, tIds.T11];
+                }
+                initialConfig[area.id_area] = { turnosIds: idsSeleccionados.filter(id => id !== undefined) };
             });
             setConfigAreas(initialConfig);
         }
-    }, [areas, turnos]);
+    }, [areas, turnos, configAreas]);
+
+    const formatTime = (time: string | null | undefined): string => {
+        if (!time) return '--:--';
+        const formatted = time.includes('T') ? time.split('T')[1] : time;
+        return formatted.substring(0, 5);
+    };
 
     const generarMutation = useMutation({
         mutationFn: async () => {
-            return programacionService.generarAutomatica({ mes, anio, configuracion: configAreas });
+            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
+
+            await programacionService.generarAutomatica({
+                mes,
+                anio,
+                configuracion: configAreas
+            });
+
+            return programacionService.listarPorPeriodo(inicio, fin);
         },
-        onSuccess: () => {
-            toast.success('Programación generada correctamente');
+        onSuccess: (data: any) => {
+            setProgramacionGenerada(Array.isArray(data) ? data : (data.data || []));
+            setPaso('resultado');
+            toast.success('Programación generada exitosamente');
             queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
-            navigate('/programacion');
         },
         onError: () => toast.error('Error al generar la programación')
     });
 
-    const formatTime = (time?: string | null | Date): string => {
-        if (!time) return '';
-        if (time instanceof Date && !isNaN(time.getTime())) {
-            const hh = String(time.getHours()).padStart(2, '0');
-            const mm = String(time.getMinutes()).padStart(2, '0');
-            return `${hh}:${mm}`;
-        }
-        const str = String(time).trim();
-        const isoMatch = str.match(/T?(\d{1,2}):(\d{2})/);
-        if (isoMatch) {
-            const hh = isoMatch[1].padStart(2, '0');
-            const mm = isoMatch[2].padStart(2, '0');
-            return `${hh}:${mm}`;
-        }
-        const timeMatch = str.match(/^(\d{1,2}):(\d{2})/);
-        if (timeMatch) {
-            const hh = timeMatch[1].padStart(2, '0');
-            const mm = timeMatch[2];
-            return `${hh}:${mm}`;
-        }
-        return '';
-    };
-
-    const fechaInicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
-    const fechaFin = `${anio}-${String(mes).padStart(2, '0')}-28`;
-    const { data: novedadesData } = useNovedadesMock(fechaInicio, fechaFin);
-
     const handleIniciarProceso = () => {
-        if (novedadesData?.novedades && novedadesData.novedades.length > 0) setMostrarDialogoNovedades(true);
-        else setPaso('configuracion');
+        if (novedadesData && novedadesData.length > 0) {
+            setMostrarDialogoNovedades(true);
+        } else {
+            setPaso('configuracion');
+        }
     };
 
-    if (areasLoading || turnosLoading) return <div className="p-8 text-center text-muted-foreground">Cargando configuración...</div>;
+    if (areasLoading || turnosLoading) return <div className="p-8 text-center text-slate-500">Cargando parámetros del sistema...</div>;
 
     return (
-        <div className="space-y-6 max-w-5xl mx-auto pb-20">
+        <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Generador de Programación</h1>
-                <p className="text-gray-500">
-                    {paso === 'inicio' ? 'Seleccione el periodo y configure los parámetros iniciales.' : 'Defina los cupos y turnos permitidos por cada área.'}
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Motor de Programación</h1>
+                <p className="text-slate-500">
+                    {paso === 'inicio' && 'Defina el periodo de tiempo a programar.'}
+                    {paso === 'configuracion' && 'Seleccione los turnos habilitados por cada área de trabajo.'}
+                    {paso === 'resultado' && 'Revise la distribución del personal asignado automáticamente.'}
                 </p>
             </div>
 
-            {paso === 'inicio' ? (
-                <div className="space-y-6 animate-in fade-in duration-500">
+            {paso === 'inicio' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
                     <Card className="bg-slate-50 border-none shadow-sm">
                         <CardContent className="pt-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -128,152 +151,198 @@ export default function ProgramacionAreas() {
                                     <Label>Mes de Programación</Label>
                                     <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
                                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                                        <SelectContent>{meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+                                        <SelectContent>
+                                            {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                                        </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Año</Label>
                                     <Select value={String(anio)} onValueChange={(v) => setAnio(parseInt(v))}>
                                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                                        <SelectContent>{anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
+                                        <SelectContent>
+                                            {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                                        </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-dashed border-2 bg-white">
+                    <Card className="border-dashed border-2 bg-white hover:border-indigo-200 transition-colors">
                         <CardContent className="pt-6 flex flex-col items-center justify-center text-center py-12 gap-4">
                             <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center">
                                 <CalendarDays className="h-8 w-8 text-indigo-600" />
                             </div>
-                            <div className="space-y-2 max-w-md">
-                                <h3 className="text-xl font-semibold">Iniciar Nueva Programación</h3>
-                                <p className="text-muted-foreground">Se generará la programación para <strong>{meses[mes - 1]} de {anio}</strong>.</p>
+                            <div className="space-y-1">
+                                <h3 className="text-xl font-semibold">Configurar Distribución</h3>
+                                <p className="text-sm text-slate-500">Se validarán novedades antes de proceder</p>
                             </div>
-                            <Button size="lg" onClick={handleIniciarProceso} className="mt-4 px-8">
-                                Comenzar Configuración <ArrowRight className="ml-2 h-4 w-4" />
+                            <Button size="lg" onClick={handleIniciarProceso} disabled={novedadesLoading} className="px-8">
+                                {novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'} <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </CardContent>
                     </Card>
                 </div>
-            ) : (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            )}
+
+            {paso === 'configuracion' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
                     <div className="flex items-center justify-between bg-white p-4 border rounded-lg shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-indigo-100 p-2 rounded-full"><Users className="h-5 w-5 text-indigo-600" /></div>
-                            <div>
-                                <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Periodo Seleccionado</p>
-                                <p className="font-bold text-gray-900">{meses[mes - 1]} {anio}</p>
-                            </div>
+                        <div className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                            Periodo: {meses[mes - 1]} {anio}
                         </div>
                         <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Periodo</Button>
                     </div>
 
                     <div className="grid gap-4">
-                        {areas?.map((area) => (
-                            <Card key={area.id_area} className="overflow-hidden border-l-4 border-l-indigo-500 shadow-sm">
-                                <CardHeader className="bg-gray-50/50 pb-3">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <CardTitle className="text-lg">{area.nombre_area}</CardTitle>
-                                            <CardDescription>Configuración de cupos y horarios</CardDescription>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-white p-2 rounded-md border shadow-sm">
-                                            <Label className="text-xs font-semibold text-gray-500 uppercase">Máx. Personas</Label>
-                                            <Input
-                                                type="number"
-                                                className="w-20 h-8 text-right font-bold"
-                                                value={configAreas[area.id_area]?.max ?? 0}
-                                                onChange={(e) => setConfigAreas(prev => ({ ...prev, [area.id_area]: { ...prev[area.id_area], max: parseInt(e.target.value || '0') } }))}
-                                            />
-                                        </div>
-                                    </div>
+                        {areas.map((area) => (
+                            <Card key={area.id_area} className="border-l-4 border-l-indigo-500 overflow-hidden shadow-sm">
+                                <CardHeader className="pb-3 bg-slate-50/50">
+                                    <CardTitle className="text-lg text-slate-800">{area.nombre_area}</CardTitle>
                                 </CardHeader>
-
                                 <CardContent className="pt-4">
-                                    <div className="grid md:grid-cols-[1fr_200px] gap-6">
-                                        <div className="space-y-3">
-                                            <Label className="text-sm text-muted-foreground">Turnos permitidos:</Label>
-                                            <div className="flex flex-wrap gap-2">
-                                                {turnos.map((turno: Turno) => {
-                                                    const isSelected = configAreas[area.id_area]?.turnosIds?.includes(turno.id_turno);
-                                                    const h1 = formatTime(turno.hora_entrada);
-                                                    const s1 = formatTime(turno.hora_salida);
-                                                    const h2 = formatTime(turno.hora_entrada_2 ?? null);
-                                                    const s2 = formatTime(turno.hora_salida_2 ?? null);
-                                                    const horarioPrincipal = (h1 && s1) ? `${h1}-${s1}` : 'Horario no definido';
-                                                    const horarioSecundario = (h2 && s2) ? ` / ${h2}-${s2}` : '';
-
-                                                    return (
-                                                        <div
-                                                            key={turno.id_turno}
-                                                            onClick={() => {
-                                                                const currentIds = configAreas[area.id_area]?.turnosIds || [];
-                                                                const newIds = isSelected ? currentIds.filter(id => id !== turno.id_turno) : [...currentIds, turno.id_turno];
-                                                                setConfigAreas(prev => ({ ...prev, [area.id_area]: { ...prev[area.id_area], turnosIds: newIds } }));
-                                                            }}
-                                                            className={`cursor-pointer select-none px-3 py-2 rounded-md border text-sm flex items-center gap-2 transition-all ${isSelected ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-medium ring-1 ring-indigo-200' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                                                        >
-                                                            <Checkbox checked={Boolean(isSelected)} onCheckedChange={() => { }} />
-                                                            <div className="flex flex-col items-start">
-                                                                <span className="font-bold leading-none">{turno.tipo_turno}</span>
-                                                                <span className="text-[10px] opacity-70 mt-1 uppercase">
-                                                                    {horarioPrincipal}{horarioSecundario}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <div className="hidden md:block border-l pl-6 space-y-2">
-                                            <p className="text-xs font-medium text-gray-400 uppercase">Estado</p>
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <Users className="h-4 w-4" />
-                                                <span>{configAreas[area.id_area]?.max ?? 0} Cupos</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                                                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                                <span>{configAreas[area.id_area]?.turnosIds?.length ?? 0} Activos</span>
-                                            </div>
-                                        </div>
+                                    <div className="flex flex-wrap gap-3">
+                                        {turnos.map((turno) => {
+                                            const isSelected = configAreas[area.id_area]?.turnosIds?.includes(turno.id_turno);
+                                            return (
+                                                <div
+                                                    key={turno.id_turno}
+                                                    onClick={() => {
+                                                        const currentIds = configAreas[area.id_area]?.turnosIds || [];
+                                                        const newIds = isSelected
+                                                            ? currentIds.filter(id => id !== turno.id_turno)
+                                                            : [...currentIds, turno.id_turno];
+                                                        setConfigAreas(prev => ({ ...prev, [area.id_area]: { turnosIds: newIds } }));
+                                                    }}
+                                                    className={`cursor-pointer px-4 py-3 rounded-lg border text-sm flex items-center gap-3 transition-all ${isSelected ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200' : 'bg-white hover:border-slate-300'
+                                                        }`}
+                                                >
+                                                    <Checkbox checked={Boolean(isSelected)} onCheckedChange={() => { }} />
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700">{turno.tipo_turno}</span>
+                                                        <span className="text-[11px] text-slate-500">{formatTime(turno.hora_entrada)} - {formatTime(turno.hora_salida)}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </CardContent>
                             </Card>
                         ))}
                     </div>
 
-                    <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-xl flex justify-between items-center mt-8">
-                        <div className="text-sm font-medium text-gray-600">Periodo: <span className="text-indigo-600">{meses[mes - 1]} {anio}</span></div>
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={() => setPaso('inicio')}>Cancelar</Button>
-                            <Button size="lg" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 px-8">
-                                {generarMutation.isPending ? 'Procesando...' : 'Generar Programación'}
-                            </Button>
-                        </div>
+                    <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-2xl flex justify-end gap-3 z-50">
+                        <Button variant="outline" onClick={() => setPaso('inicio')}>Atrás</Button>
+                        <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
+                            {generarMutation.isPending ? 'Generando...' : 'Generar Programación'}
+                        </Button>
                     </div>
                 </div>
             )}
 
+            {paso === 'resultado' && (
+                <div className="space-y-8">
+                    <div className="flex items-center justify-between bg-emerald-50 p-6 border border-emerald-200 rounded-xl">
+                        <div className="flex items-center gap-4">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                            <div>
+                                <h2 className="text-xl font-bold text-emerald-900">Proceso Finalizado</h2>
+                                <p className="text-emerald-700 text-sm">La programación ha sido generada y guardada para {meses[mes - 1]} {anio}.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <Button variant="outline" className="bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100" onClick={() => setPaso('configuracion')}>
+                                <RotateCcw className="h-4 w-4 mr-2" /> Re-ajustar
+                            </Button>
+                            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => navigate('/programacion')}>
+                                Ir al Calendario
+                            </Button>
+                        </div>
+                    </div>
+
+                    {areas.map((area) => (
+                        <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                            <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
+                                {area.nombre_area}
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50">
+                                            <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
+                                            {infoDias.map((dia) => (
+                                                <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-slate-500">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-indigo-600 font-bold">{dia.nombreDia}</span>
+                                                        <span>{dia.numero} de {meses[mes - 1].substring(0, 3)}</span>
+                                                    </div>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {configAreas[area.id_area]?.turnosIds.map((tId) => {
+                                            const turnoInfo = turnos.find(t => t.id_turno === tId);
+                                            return (
+                                                <tr key={tId} className="hover:bg-slate-50/50">
+                                                    <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                                        {turnoInfo?.tipo_turno}
+                                                    </td>
+                                                    {infoDias.map((dia) => {
+                                                        const asignados = programacionGenerada.filter(p =>
+                                                            Number(p.id_area) === area.id_area &&
+                                                            Number(p.id_turno) === tId &&
+                                                            p.fecha.split('T')[0] === dia.fechaISO
+                                                        );
+                                                        return (
+                                                            <td key={dia.fechaISO} className="border p-2 min-h-[60px]">
+                                                                <div className="flex flex-col gap-1">
+                                                                    {asignados.length > 0 ? asignados.map((asig, idx) => (
+                                                                        <div key={idx} className="px-1.5 py-1 border border-slate-200 rounded text-[9px] leading-tight bg-slate-50 text-slate-700 font-medium truncate">
+                                                                            {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
+                                                                        </div>
+                                                                    )) : <span className="text-slate-200 text-center text-xs">-</span>}
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <Dialog open={mostrarDialogoNovedades} onOpenChange={setMostrarDialogoNovedades}>
-                <DialogContent>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle className="h-5 w-5" /> Atención: Novedades</DialogTitle>
-                        <DialogDescription>Los siguientes empleados no serán asignados durante sus fechas de novedad.</DialogDescription>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600">
+                            <CalendarDays className="h-5 w-5" />
+                            Novedades en el Periodo
+                        </DialogTitle>
                     </DialogHeader>
-                    <div className="h-[200px] w-full rounded-md border p-4 bg-gray-50 overflow-y-auto">
-                        {novedadesData?.novedades?.map((nov: any, i: number) => (
-                            <div key={i} className="flex justify-between items-center py-2 border-b last:border-0 text-sm">
-                                <span className="font-medium text-gray-700">{nov.nombre}</span>
-                                <span className="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-semibold">{nov.tipo}</span>
+                    <div className="text-sm text-slate-500 mb-2">
+                        Se detectaron bloqueos o novedades para {meses[mes - 1]}. El motor los excluirá de la asignación.
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto border rounded-md bg-slate-50">
+                        {novedadesData?.map((nov: any, i: number) => (
+                            <div key={i} className="flex justify-between items-center p-3 border-b last:border-0">
+                                <div className="flex flex-col">
+                                    <span className="font-semibold text-slate-800 text-xs">{nov.nombre_completo || nov.nombre}</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-tighter">{nov.tipo || 'Novedad registrada'}</span>
+                                </div>
                             </div>
                         ))}
                     </div>
-                    <DialogFooter className="sm:justify-between flex gap-2">
-                        <Button variant="ghost" onClick={() => navigate('/configuracion-programacion')}>Revisar Empleados</Button>
-                        <Button onClick={() => { setMostrarDialogoNovedades(false); setPaso('configuracion'); }}>Entendido, Continuar</Button>
+                    <DialogFooter className="mt-4 gap-2">
+                        <Button variant="ghost" onClick={() => navigate('/novedades')}>Ver en detalle</Button>
+                        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => { setMostrarDialogoNovedades(false); setPaso('configuracion'); }}>Entendido, Continuar</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

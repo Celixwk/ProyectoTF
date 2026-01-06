@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 
 // Pages
@@ -22,28 +21,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
 
   // BYPASS LOGIN - TEMPORAL
-  // if (!isAuthenticated) {
-  //   return <Navigate to="/login" replace />;
-  // }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   return <>{children}</>;
 }
 
 function App() {
-  const { login, isAuthenticated } = useAuthStore();
 
-  useEffect(() => {
-    // Si no hay sesión, iniciar sesión falsa automáticamente
-    if (!isAuthenticated) {
-      login('mock_token', {
-        id_usuario: 999,
-        usuario: 'admin',
-        nombre_completo: 'Admin Temporal',
-        tipo_usuario: 'admin',
-        empleado: null
-      });
-    }
-  }, []);
+  // Efecto removido para evitar auto-login inseguro
+  // useEffect(() => { ... }, []);
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

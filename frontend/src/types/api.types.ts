@@ -47,24 +47,33 @@ export interface CalendarioDia {
   tipo_festivo: string | null;
 }
 
+export interface DetalleNovedad {
+  id_detalle_novedad: number;
+  id_novedad_empleado: number;
+  fecha: string;
+  cantidad: number;
+  observaciones: string | null;
+}
+
 export interface NovedadCompleta {
-  id_novedad_registro: number;
+  id_novedad_empleado: number;
+  id_empleado: number;
+  id_novedad_tipo: number;
   fecha_solicitud: string;
   fecha_registro: string;
   fecha_vencimiento: string | null;
-  etapa: 'pendiente' | 'aprobada' | 'rechazada' | 'completada';
-  id_empleado: number;
-  empleado: string;
+  etapa: 'Solicitada' | 'En Revision' | 'Aprobada' | 'Rechazada';
+  nombre_completo: string;
   cedula: string;
   nombre_cargo: string;
-  id_novedad_tipo: number | null;
-  codigo_novedad: string | null;
-  tipo: string | null;
-  afecta_pago: boolean | null;
+  tipo: string;
+  codigo_novedad: string;
+  afecta_pago: boolean;
   fecha_inicio: string | null;
-  cantidad: string | null;
-  observaciones: string | null;
-  usuario_registro: string;
+  fecha_fin: string | null;
+  detalle_novedad?: DetalleNovedad[];
+  observaciones?: string;
+  usuario_registro?: string;
   created_at: string;
   updated_at: string;
 }
@@ -158,6 +167,7 @@ export interface Cargo {
 export interface Area {
   id_area: number;
   nombre_area: string;
+  max_trabajadores: number;
   created_at: string;
   updated_at: string;
 }
@@ -275,7 +285,7 @@ export interface PaginacionResponse<T> {
   paginacion: {
     total: number;
     pagina: number;
-    limite: number;
+    limit: number;
     totalPaginas: number;
   };
 }

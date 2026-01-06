@@ -4,7 +4,7 @@ import { turnosService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Edit, Trash2, Clock, Moon, Sun, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Clock, Sun, Loader2 } from 'lucide-react';
 import type { Turno } from '@/types/api.types';
 import { GestionTurno } from '@/components/turnos/GestionTurno';
 import { toast } from 'sonner';
@@ -34,9 +34,13 @@ export default function Turnos() {
 
   const turnosFiltrados = listaTurnos.filter((turno: any) => {
     if (busqueda === '') return true;
-    // Usamos tipo_turno que es el nombre real en tu BD
     return turno.tipo_turno?.toLowerCase().includes(busqueda.toLowerCase());
   });
+
+  const formatTime = (timeStr: string | null) => {
+    if (!timeStr) return null;
+    return timeStr.includes('T') ? timeStr.split('T')[1].substring(0, 5) : timeStr.substring(0, 5);
+  };
 
   return (
     <div className="space-y-6">
@@ -103,8 +107,17 @@ export default function Turnos() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">{turno.hora_entrada.split('T')[1]?.substring(0, 5) || turno.hora_entrada} - {turno.hora_salida.split('T')[1]?.substring(0, 5) || turno.hora_salida}</div>
-                        <div className="text-xs text-gray-500">{turno.duracion_horas} horas</div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {formatTime(turno.hora_entrada)} - {formatTime(turno.hora_salida)}
+                          </span>
+                          {turno.hora_entrada_2 && (
+                            <span className="text-[11px] text-indigo-600 font-bold">
+                              + {formatTime(turno.hora_entrada_2)} - {formatTime(turno.hora_salida_2)}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-gray-400 mt-0.5">{turno.duracion_horas} horas totales</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${turno.estado === 'Activo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>

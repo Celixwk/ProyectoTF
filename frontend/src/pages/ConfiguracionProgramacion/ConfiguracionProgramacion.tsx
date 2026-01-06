@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { consultasService, empleadosService, areasService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, Users, Info, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle } from 'lucide-react';
+import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2 } from 'lucide-react';
 import { format, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -29,6 +29,9 @@ export default function ConfiguracionProgramacion() {
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
 
+
+  const isSaving = useRef(false);
+
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-01'));
   const [fechaFin, setFechaFin] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), 'yyyy-MM-dd'));
 
@@ -40,6 +43,12 @@ export default function ConfiguracionProgramacion() {
   const { data: areas } = useQuery({
     queryKey: ['areas'],
     queryFn: () => areasService.listar(),
+  });
+
+  const { data: novedadesMes } = useQuery({
+    queryKey: ['novedades-mes', fechaInicio, fechaFin],
+    queryFn: () => consultasService.listarNovedades({ inicio: fechaInicio, fin: fechaFin }),
+    enabled: !!fechaInicio && !!fechaFin
   });
 
   const empleados = empleadosData?.empleados || [];
@@ -57,17 +66,37 @@ export default function ConfiguracionProgramacion() {
     if (areas?.length) {
       const maximos: Record<number, string> = {};
       areas.forEach(area => {
-        maximos[area.id_area] = localStorage.getItem(`max_trabajadores_${area.id_area}`) || '5';
+        maximos[area.id_area] = area.max_trabajadores?.toString() || '0';
       });
       setMaxTrabajadoresPorArea(maximos);
     }
   }, [areas]);
 
   useEffect(() => {
-    if (idEmpleadoSeleccionado && empleadoSeleccionado) {
-      setAreasPermitidas(empleadoSeleccionado.areas_permitidas || []);
+    if (!idEmpleadoSeleccionado) {
+      setNovedades([]);
+      setAreasPermitidas([]);
+      return;
     }
-  }, [idEmpleadoSeleccionado, empleadoSeleccionado]);
+
+
+    if (isSaving.current) return;
+
+    if (empleadoSeleccionado) {
+      setAreasPermitidas(empleadoSeleccionado.areas_permitidas || []);
+
+      const actualesEnDb = novedadesMes?.success
+        ? novedadesMes.data
+          .filter((n: any) => n.id_empleado === idEmpleadoSeleccionado)
+          .flatMap((n: any) => n.detalle_novedad.map((d: any) => ({
+            fecha: parseISO(d.fecha),
+            id_tipo: n.id_novedad_tipo
+          })))
+        : [];
+
+      setNovedades(actualesEnDb);
+    }
+  }, [idEmpleadoSeleccionado, empleadoSeleccionado, novedadesMes]);
 
   const handleDiaToggle = (fecha: Date) => {
     setNovedades(prev => {
@@ -85,32 +114,43 @@ export default function ConfiguracionProgramacion() {
     setMaxTrabajadoresPorArea(prev => ({ ...prev, [id_area]: numericValue }));
   };
 
-  const guardarCapacidadesGlobales = () => {
-    const ids = Object.keys(maxTrabajadoresPorArea);
-    for (const id of ids) {
-      const val = maxTrabajadoresPorArea[Number(id)];
-      if (!val || parseInt(val) <= 0) {
-        toast.error("Capacidad no válida", {
-          description: "Todas las áreas deben tener una capacidad mínima de 1 trabajador."
-        });
-        return;
-      }
+  const guardarCapacidadesGlobales = async () => {
+    const entries = Object.entries(maxTrabajadoresPorArea);
+    try {
+      const promesas = entries.map(([id, val]) =>
+        areasService.actualizar(Number(id), { max_trabajadores: parseInt(val) || 0 })
+      );
+      await Promise.all(promesas);
+      queryClient.invalidateQueries({ queryKey: ['areas'] });
+      toast.success("Capacidades actualizadas");
+    } catch {
+      toast.error("Error al actualizar capacidades");
     }
-
-    Object.entries(maxTrabajadoresPorArea).forEach(([id, val]) => {
-      localStorage.setItem(`max_trabajadores_${id}`, val);
-    });
-    toast.success("Capacidades de área actualizadas correctamente");
   };
 
   const guardarTodoMutation = useMutation({
-    mutationFn: async (payload: any) => {
+    mutationFn: async (payload: { idEmpleado: number, areas: number[], novedades: any[] }) => {
+      isSaving.current = true;
       await empleadosService.actualizar(payload.idEmpleado, { areas_permitidas: payload.areas });
-      localStorage.setItem(`nov_${payload.idEmpleado}_${fechaInicio}`, JSON.stringify(payload.novedades));
+      await consultasService.guardarNovedadesMasivas({
+        id_empleado: payload.idEmpleado,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        novedades: payload.novedades.map(n => ({
+          fecha: format(n.fecha, 'yyyy-MM-dd'),
+          id_tipo: n.id_tipo
+        }))
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
-      toast.success('Configuración guardada exitosamente');
+      queryClient.invalidateQueries({ queryKey: ['novedades-mes'] });
+      toast.success('Configuración sincronizada con éxito');
+      setTimeout(() => { isSaving.current = false; }, 500);
+    },
+    onError: () => {
+      isSaving.current = false;
+      toast.error('Error al guardar configuración');
     }
   });
 
@@ -119,23 +159,23 @@ export default function ConfiguracionProgramacion() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Programación Técnica</h1>
-          <p className="text-slate-500 font-medium">Gestión de periodos, áreas y novedades</p>
+          <p className="text-slate-500 font-medium">Gestión de disponibilidad y capacidades</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-2xl border shadow-sm">
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase font-bold text-slate-400">Inicio</Label>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block px-1">Inicio</span>
               <Input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="h-9 text-xs" />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase font-bold text-slate-400">Fin</Label>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block px-1">Fin</span>
               <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="h-9 text-xs" />
             </div>
           </div>
           <div className="hidden sm:block text-slate-300"><ArrowRight className="h-5 w-5" /></div>
           <div className="bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 min-w-[140px] text-center">
-            <p className="text-[10px] font-black text-indigo-400 uppercase">Días Totales</p>
+            <p className="text-[10px] font-black text-indigo-400 uppercase">Días en Rango</p>
             <p className="text-lg font-black text-indigo-700">{diasEnRango.length}</p>
           </div>
         </div>
@@ -144,11 +184,17 @@ export default function ConfiguracionProgramacion() {
       <div className="bg-white p-6 rounded-2xl border shadow-sm border-slate-200">
         <div className="max-w-md space-y-2">
           <Label className="font-bold text-slate-700 flex items-center gap-2">
-            <Users className="h-4 w-4 text-indigo-500" /> Colaborador a Gestionar
+            <Users className="h-4 w-4 text-indigo-500" /> Colaborador
           </Label>
-          <Select value={idEmpleadoSeleccionado?.toString()} onValueChange={v => setIdEmpleadoSeleccionado(parseInt(v))}>
-            <SelectTrigger className="h-12 bg-slate-50 border-slate-200 focus:ring-indigo-500">
-              <SelectValue placeholder="Busque por nombre o cargo..." />
+          <Select
+            value={idEmpleadoSeleccionado?.toString() || ""}
+            onValueChange={v => {
+              isSaving.current = false;
+              setIdEmpleadoSeleccionado(parseInt(v));
+            }}
+          >
+            <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
+              <SelectValue placeholder="Seleccione un empleado..." />
             </SelectTrigger>
             <SelectContent>
               {empleados.map((e: EmpleadoCompleto) => (
@@ -164,7 +210,7 @@ export default function ConfiguracionProgramacion() {
           <Card className="lg:col-span-1 shadow-lg border-slate-200 rounded-2xl overflow-hidden">
             <CardHeader className="bg-slate-50/80 border-b py-4">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700">
-                <Settings2 className="h-4 w-4" /> Áreas Permitidas
+                <Settings2 className="h-4 w-4" /> Áreas de Cobertura
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 bg-white">
@@ -172,10 +218,10 @@ export default function ConfiguracionProgramacion() {
                 {areas?.map((area: Area) => (
                   <div
                     key={area.id_area}
-                    className={`flex items-center space-x-3 p-4 rounded-xl border transition-all cursor-pointer ${areasPermitidas.includes(area.id_area) ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-50' : 'hover:bg-slate-50 border-slate-100 opacity-70'}`}
+                    className={`flex items-center space-x-3 p-4 rounded-xl border transition-all cursor-pointer ${areasPermitidas.includes(area.id_area) ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-50' : 'hover:bg-slate-50 border-slate-100'}`}
                     onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}
                   >
-                    <Checkbox checked={areasPermitidas.includes(area.id_area)} className="h-5 w-5 rounded-md border-slate-300 data-[state=checked]:bg-indigo-600" />
+                    <Checkbox checked={areasPermitidas.includes(area.id_area)} className="h-5 w-5 rounded-md" />
                     <span className={`text-sm font-bold ${areasPermitidas.includes(area.id_area) ? 'text-indigo-900' : 'text-slate-500'}`}>{area.nombre_area}</span>
                   </div>
                 ))}
@@ -185,7 +231,17 @@ export default function ConfiguracionProgramacion() {
 
           <Card className="lg:col-span-2 shadow-lg border-slate-200 rounded-2xl overflow-hidden">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/80 border-b gap-4 py-3">
-              <CardTitle className="text-sm font-bold text-slate-700">Calendario de Novedades</CardTitle>
+              <div className="flex items-center gap-4">
+                <CardTitle className="text-sm font-bold text-slate-700">Calendario de Disponibilidad</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setNovedades([])}
+                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 font-bold text-xs uppercase"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-1 bg-white p-1 rounded-full border shadow-sm">
                 {TIPOS_NOVEDAD.map(t => (
                   <button
@@ -217,8 +273,12 @@ export default function ConfiguracionProgramacion() {
                 })}
               </div>
               <div className="mt-8 pt-6 border-t">
-                <Button className="w-full h-14 text-lg font-black bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xl shadow-indigo-200" onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado, areas: areasPermitidas, novedades })}>
-                  <Save className="h-6 w-6 mr-3" /> GUARDAR CAMBIOS DEL EMPLEADO
+                <Button
+                  className="w-full h-14 text-lg font-black bg-indigo-600 hover:bg-indigo-700 rounded-xl"
+                  onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado, areas: areasPermitidas, novedades })}
+                  disabled={guardarTodoMutation.isPending}
+                >
+                  <Save className="h-6 w-6 mr-3" /> {guardarTodoMutation.isPending ? 'SINCRONIZANDO...' : 'GUARDAR CAMBIOS DEL EMPLEADO'}
                 </Button>
               </div>
             </CardContent>
@@ -228,10 +288,10 @@ export default function ConfiguracionProgramacion() {
         <div className="h-80 flex flex-col items-center justify-center border-4 border-dashed rounded-3xl text-slate-300 bg-slate-50/30">
           <CalendarIcon className="h-12 w-12 mb-4 opacity-20 text-indigo-600" />
           <p className="font-bold text-lg">Seleccione un colaborador para configurar</p>
-          <p className="text-sm font-medium">Defina el rango de fechas arriba antes de empezar</p>
         </div>
       )}
 
+      {/* Capacidades */}
       <Card className="border-indigo-100 bg-indigo-50/30 rounded-2xl overflow-hidden mt-6 shadow-md">
         <CardHeader className="py-4 border-b border-indigo-100 bg-white/50 flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-black text-indigo-900 flex items-center gap-2 tracking-widest uppercase">
@@ -260,10 +320,6 @@ export default function ConfiguracionProgramacion() {
                 </div>
               </div>
             ))}
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-[10px] font-medium text-slate-500 bg-white/50 p-3 rounded-xl border border-dashed border-slate-200">
-            <Info className="h-4 w-4 text-indigo-400" />
-            <span>Nota: Los cambios en esta sección son globales y afectan al algoritmo de asignación para todas las áreas.</span>
           </div>
         </CardContent>
       </Card>

@@ -1,160 +1,200 @@
-import type {
-  EmpleadoOrdenado,
+import prisma from "../../prisma/cliente";
+import { capa3_obtenerPrioridadAreas } from "./capa3.reglasArea";
+import { capa5_generarAsignacionesDia } from "./capa5.GeneracionAsignacion";
+import { capa9_detectarProblemas } from "./capa9.deteccionProblemas";
+import {
   Asignacion,
-  ValidacionReglasBlandas,
+  OpcionesGeneracion,
+  ProgramacionDia,
+  EmpleadoDisponible,
+  AreaPriorizada,
   Turno
 } from "./tipos";
 
-const MS_POR_DIA = 86400000;
+export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUsuario?: number): Promise<{ guardadas: number; errores: number }> {
+  let guardadas = 0;
+  let errores = 0;
 
-function toDate(v: any): Date | null {
-  if (!v) return null;
-  const d = v instanceof Date ? v : new Date(v);
-  return isNaN(d.getTime()) ? null : d;
+  try {
+    await prisma.$transaction(
+      asignaciones.map((asig) =>
+        prisma.detalleProgramacion.upsert({
+          where: {
+            uq_empleado_fecha: {
+              id_empleado: asig.id_empleado,
+              fecha: asig.fecha
+            }
+          },
+          update: {
+            id_area: asig.id_area,
+            id_turno: asig.id_turno,
+            updated_at: new Date(),
+            tipo_dia: "Laborado",
+            id_usuario_registro: idUsuario,
+            origen_registro: "Automatico",
+            id_labor_mes: asig.id_labor_mes
+          },
+          create: {
+            id_empleado: asig.id_empleado,
+            fecha: asig.fecha,
+            id_area: asig.id_area,
+            id_turno: asig.id_turno,
+            id_labor_mes: asig.id_labor_mes,
+            tipo_dia: "Laborado",
+            estado: "Activo",
+            id_usuario_registro: idUsuario,
+            origen_registro: "Automatico"
+          },
+        })
+      )
+    );
+    guardadas = asignaciones.length;
+  } catch (error) {
+    console.error("❌ Error en persistencia Capa 6:", error);
+    errores = asignaciones.length;
+  }
+  return { guardadas, errores };
 }
 
-function fechaSoloDiaMs(d: Date | string): number | null {
-  const dt = toDate(d);
-  if (!dt) return null;
-  return Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
-}
+export async function capa6_generarProgramacionDia(fecha: Date, opciones?: OpcionesGeneracion): Promise<ProgramacionDia> {
+  const fechaNormalizada = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
 
-export function capa8_verificarRepeticionArea(
-  empleado: EmpleadoOrdenado,
-  area: { id_area: number },
-  fecha: Date,
-  programacionExistente: Asignacion[],
-  maxDias: number = 3
-): { viola: boolean; diasConsecutivos: number; mensaje?: string } {
-  const idEmp = empleado?.id_empleado;
-  const idArea = area?.id_area;
-  const fechaRefMs = fechaSoloDiaMs(fecha);
+  const [empleadosBD, areasBD, turnosBD, novedades] = await Promise.all([
+    prisma.empleado.findMany({
+      where: {
+        id_estado: 1
+      },
+      include: {
+        empleado_area: { include: { area: true } },
+        labor_mes: {
+          where: {
+            fecha_inicio: { lte: fechaNormalizada },
+            fecha_fin: { gte: fechaNormalizada }
+          }
+        }
+      }
+    }),
+    prisma.area.findMany(),
+    prisma.turno.findMany({ where: { estado: "Activo" } }),
+    prisma.detalleNovedad.findMany({
+      where: { fecha: fechaNormalizada },
+      include: { novedad_empleado: true }
+    })
+  ]);
 
-  if (!idEmp || !idArea || fechaRefMs === null) return { viola: false, diasConsecutivos: 0 };
+  const idsEnNovedad = new Set(novedades.map(n => n.novedad_empleado.id_empleado));
 
-  const fechaLimiteLookback = fechaRefMs - (30 * MS_POR_DIA);
+  const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => ({
+    id_empleado: emp.id_empleado,
+    cedula: emp.cedula,
+    nombre_completo: `${emp.nombre1} ${emp.apellido1 || ''}`.trim(),
+    total_areas: emp.empleado_area.length,
+    clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
+    areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
+    disponible: !idsEnNovedad.has(emp.id_empleado),
+    razonNoDisponible: idsEnNovedad.has(emp.id_empleado) ? "Tiene Novedad/Ausencia" : undefined,
+    id_labor_mes: emp.labor_mes[0]?.id_labor_mes || null
+  }));
 
-  const historicoReciente = programacionExistente.filter(p => {
-    if (!p) return false;
-    const pMs = fechaSoloDiaMs(p.fecha);
-    if (pMs === null) {
-      console.error(`[Capa 8] Fecha inválida en asignación: ${p.id_asignacion}`);
-      return false;
-    }
-    return p.id_empleado === idEmp && p.id_area === idArea && pMs >= fechaLimiteLookback;
+  const areasPriorizadas: AreaPriorizada[] = await capa3_obtenerPrioridadAreas(
+    areasBD.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area }))
+  );
+
+  const necesidadesPorArea = new Map<number, number>();
+  areasBD.forEach(a => necesidadesPorArea.set(a.id_area, a.max_trabajadores));
+
+  let todasLasAsignaciones: Asignacion[] = [];
+  const poolTrabajo = [...candidatos];
+
+  const turnosOrdenados = [...turnosBD].sort((a, b) => {
+    const horaA = a.hora_entrada ? a.hora_entrada.toString() : "00:00";
+    const horaB = b.hora_entrada ? b.hora_entrada.toString() : "00:00";
+    return horaA.localeCompare(horaB);
   });
 
-  let diasConsecutivos = 0;
-  for (let d = 1; d <= maxDias; d++) {
-    const fechaTargetMs = fechaRefMs - (d * MS_POR_DIA);
-    const trabajoEseDia = historicoReciente.some(p => fechaSoloDiaMs(p.fecha) === fechaTargetMs);
+  for (const tPrisma of turnosOrdenados) {
+    const areasFiltradas = areasPriorizadas.filter(area => {
+      if (!opciones?.configuracion) return true;
+      const config = opciones.configuracion[area.id_area];
+      return config ? config.turnosIds.includes(tPrisma.id_turno) : false;
+    });
 
-    if (trabajoEseDia) diasConsecutivos++;
-    else break;
+    if (areasFiltradas.length === 0) continue;
+
+    const resultadoTurno = capa5_generarAsignacionesDia(
+      [],
+      poolTrabajo,
+      areasFiltradas,
+      necesidadesPorArea,
+      tPrisma as unknown as Turno,
+      fechaNormalizada,
+      { ...opciones, programacionExistente: todasLasAsignaciones }
+    );
+
+    resultadoTurno.asignaciones.forEach(asig => {
+      const empInfo = candidatos.find(e => e.id_empleado === asig.id_empleado);
+      const areaInfo = areasBD.find(a => a.id_area === asig.id_area);
+
+      todasLasAsignaciones.push({
+        ...asig,
+        nombre_empleado: empInfo?.nombre_completo || "Desconocido",
+        nombre_area: areaInfo?.nombre_area || "Sin Área",
+        codigo_turno: tPrisma.tipo_turno,
+        cedula: empInfo?.cedula,
+        id_labor_mes: empInfo?.id_labor_mes || null
+      });
+
+      const idx = poolTrabajo.findIndex(e => e.id_empleado === asig.id_empleado);
+      if (idx !== -1) poolTrabajo[idx].disponible = false;
+    });
   }
 
-  if (diasConsecutivos >= maxDias) {
+  const alertasFinales = capa9_detectarProblemas(
+    todasLasAsignaciones,
+    areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })),
+    candidatos,
+    necesidadesPorArea,
+    fechaNormalizada,
+    {
+      maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3,
+      descansosRequeridos: opciones?.descansosRequeridos,
+      empleados: candidatos.map(c => ({
+        id_empleado: c.id_empleado,
+        nombre_completo: c.nombre_completo,
+        cedula: c.cedula,
+        total_areas: c.total_areas,
+        clasificacion: c.clasificacion,
+        areas: c.areas
+      }))
+    }
+  );
+
+  const respuestaBase = {
+    fecha: fechaNormalizada,
+    asignaciones: todasLasAsignaciones,
+    alertas: alertasFinales,
+    resumen: {
+      total_asignaciones: todasLasAsignaciones.length,
+      total_empleados: empleadosBD.length,
+      total_areas: areasBD.length,
+      huecos: []
+    }
+  };
+
+  if (todasLasAsignaciones.length === 0) {
     return {
-      viola: true,
-      diasConsecutivos,
-      mensaje: `Empleado ha trabajado ${diasConsecutivos} días consecutivos en esta área (máximo recomendado: ${maxDias})`
+      ...respuestaBase,
+      guardado: { realizado: false, razon: 'sin_asignaciones' }
     };
   }
 
-  return { viola: false, diasConsecutivos };
-}
+  const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones, opciones?.idUsuario);
 
-export function capa8_verificarUsoRefuerzos(
-  empleado: EmpleadoOrdenado,
-  opciones?: { evitarRefuerzos?: boolean }
-): { viola: boolean; mensaje?: string } {
-  if (opciones?.evitarRefuerzos === false || !empleado) return { viola: false };
-
-  if (empleado.clasificacion === 'comodin') {
-    return {
-      viola: true,
-      mensaje: `Se está usando un empleado con clasificación comodín (refuerzo)`
-    };
-  }
-
-  return { viola: false };
-}
-
-export function capa8_verificarDescansos(
-  empleado: EmpleadoOrdenado,
-  fecha: Date,
-  descansosProgramados?: Map<number, number[]>
-): { viola: boolean; mensaje?: string } {
-  const dt = toDate(fecha);
-  const idEmp = empleado?.id_empleado;
-  if (!descansosProgramados || !dt || !idEmp) return { viola: false };
-
-  const descansos = descansosProgramados.get(idEmp);
-  if (!descansos || descansos.length === 0) return { viola: false };
-
-  const diaDelMes = dt.getUTCDate();
-  if (descansos.includes(diaDelMes)) {
-    return { viola: true, mensaje: `Empleado tiene descanso programado para este día` };
-  }
-
-  return { viola: false };
-}
-
-export function capa8_verificarDistribucionEquitativa(
-  empleado: EmpleadoOrdenado,
-  programacionExistente: Asignacion[],
-  promedioAsignaciones: number
-): { viola: boolean; mensaje?: string; diferencia?: number } {
-  const idEmp = empleado?.id_empleado;
-  if (!idEmp || promedioAsignaciones <= 0) return { viola: false, diferencia: 0 };
-
-  const asignacionesEmpleado = programacionExistente.filter(p => p?.id_empleado === idEmp).length;
-  const diferencia = asignacionesEmpleado - promedioAsignaciones;
-  const umbral = promedioAsignaciones * 0.2;
-
-  if (diferencia > umbral) {
-    return {
-      viola: true,
-      diferencia,
-      mensaje: `Empleado tiene ${asignacionesEmpleado} asignaciones vs promedio de ${promedioAsignaciones.toFixed(1)} (diferencia: +${diferencia.toFixed(1)})`
-    };
-  }
-
-  return { viola: false, diferencia };
-}
-
-export function capa8_validarReglasBlandas(
-  empleado: EmpleadoOrdenado,
-  area: { id_area: number },
-  turno: Turno,
-  fecha: Date,
-  programacionExistente: Asignacion[],
-  opciones?: {
-    maxDiasConsecutivos?: number;
-    evitarRefuerzos?: boolean;
-    descansosProgramados?: Map<number, number[]>;
-    ignorarReglasBlandas?: boolean;
-    promedioAsignaciones?: number;
-  }
-): ValidacionReglasBlandas {
-  if (opciones?.ignorarReglasBlandas || !empleado) return { violaciones: [], advertencias: [] };
-
-  const violaciones: string[] = [];
-  const advertencias: string[] = [];
-
-  const repeticion = capa8_verificarRepeticionArea(empleado, area, fecha, programacionExistente, opciones?.maxDiasConsecutivos ?? 3);
-  if (repeticion.viola) violaciones.push(repeticion.mensaje!);
-
-  const refuerzos = capa8_verificarUsoRefuerzos(empleado, { evitarRefuerzos: opciones?.evitarRefuerzos });
-  if (refuerzos.viola) advertencias.push(refuerzos.mensaje!);
-
-  const descansos = capa8_verificarDescansos(empleado, fecha, opciones?.descansosProgramados);
-  if (descansos.viola) advertencias.push(descansos.mensaje!);
-
-  if (opciones?.promedioAsignaciones !== undefined) {
-    const distribucion = capa8_verificarDistribucionEquitativa(empleado, programacionExistente, opciones.promedioAsignaciones);
-    if (distribucion.viola) advertencias.push(distribucion.mensaje!);
-  }
-
-  return { violaciones, advertencias };
+  return {
+    ...respuestaBase,
+    guardado: {
+      realizado: resultadoGuardado.errores === 0,
+      ...resultadoGuardado
+    }
+  };
 }

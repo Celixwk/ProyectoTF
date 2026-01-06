@@ -9,8 +9,6 @@ import type {
   Cargo,
   Area,
   Turno,
-  ResultadoProgramacion,
-  OpcionesProgramacion,
   AlertaMotor,
 } from '../types/api.types';
 
@@ -70,6 +68,21 @@ export const consultasService = {
     return { ...content, empleados: empleadosMapeados };
   },
 
+  listarNovedades: async (params?: { inicio?: string; fin?: string; id_empleado?: number }) => {
+    const { data } = await api.get('/novedades', { params });
+    return data.data || data;
+  },
+
+  guardarNovedadesMasivas: async (payload: {
+    id_empleado: number;
+    fecha_inicio: string;
+    fecha_fin: string;
+    novedades: Array<{ fecha: string; id_tipo: number }>
+  }) => {
+    const { data } = await api.post('/novedades/masivo', payload);
+    return data;
+  },
+
   obtenerTurnosAsignados: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
@@ -108,35 +121,38 @@ export const consultasService = {
   obtenerNovedadesCompletas: async (params?: {
     id_empleado?: number;
     etapa?: string;
-    fecha_inicio?: string;
-    fecha_fin?: string;
+    inicio?: string;
+    fin?: string;
     page?: number;
     limit?: number;
   }) => {
     const { data } = await api.get<any>('/novedades', { params });
     const content = data.data || data;
-    const novedadesMapeadas: NovedadCompleta[] = (content.novedades || []).map((n: any) => ({
-      id_novedad_registro: n.id_novedad_registro || n.id_novedad_empleado,
+
+    const novedadesMapeadas: NovedadCompleta[] = (Array.isArray(content) ? content : (content.novedades || [])).map((n: any) => ({
+      id_novedad_empleado: n.id_novedad_empleado,
+      id_empleado: n.id_empleado,
+      id_novedad_tipo: n.id_novedad_tipo,
       fecha_solicitud: n.fecha_solicitud,
       fecha_registro: n.fecha_registro,
       fecha_vencimiento: n.fecha_vencimiento,
       etapa: n.etapa,
-      id_empleado: n.id_empleado,
-      empleado: n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : '',
-      cedula: n.empleado?.cedula || '',
-      nombre_cargo: n.empleado?.cargo?.nombre_cargo || '',
-      id_novedad_tipo: n.id_novedad_tipo,
-      codigo_novedad: n.tipo_novedad?.codigo || '',
+      nombre_completo: n.nombre_completo || (n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : ''),
+      cedula: n.cedula || n.empleado?.cedula || '',
+      nombre_cargo: n.nombre_cargo || n.empleado?.cargo?.nombre_cargo || '',
       tipo: n.tipo_novedad?.nombre_novedad || '',
-      afecta_pago: n.tipo_novedad?.afecta_pago,
-      fecha_inicio: n.fecha_solicitud,
-      cantidad: '0',
-      observaciones: '',
+      codigo_novedad: n.tipo_novedad?.codigo || '',
+      afecta_pago: n.tipo_novedad?.afecta_pago || false,
+      fecha_inicio: n.fecha_inicio || n.fecha_solicitud,
+      fecha_fin: n.fecha_fin,
+      detalle_novedad: n.detalle_novedad || [],
+      observaciones: n.observaciones || '',
       usuario_registro: n.usuario?.usuario || '',
       created_at: n.created_at,
       updated_at: n.updated_at
     }));
-    return { ...content, novedades: novedadesMapeadas };
+
+    return Array.isArray(content) ? novedadesMapeadas : { ...content, novedades: novedadesMapeadas };
   },
 
   obtenerRecargosCompletos: async (params?: {
@@ -403,9 +419,13 @@ export const calendarioService = {
 };
 
 export const programacionService = {
-  generarAutomatica: async (payload: any) => {
-    const { data } = await api.post('/programacion/automatica', payload);
-    return data;
+  generarAutomatica: async (payload: { mes: number; anio: number; configuracion: any; id_usuario_registro?: number }) => {
+    const { data } = await api.post('/programacion/generar', payload);
+    return data.data || data;
+  },
+  listarPorPeriodo: async (inicio: string, fin: string) => {
+    const { data } = await api.get('/programacion/detalle', { params: { inicio, fin } });
+    return data.data || data;
   },
   validarDia: async (fecha: string): Promise<AlertaMotor[]> => {
     const { data } = await api.get<any>('/programacion/validar', {
@@ -415,13 +435,23 @@ export const programacionService = {
   },
   eliminarMes: async (mes: number, anio: number) => {
     const { data } = await api.delete('/programacion/eliminar', {
+      data: { mes, anio }
+    });
+    return data.data || data;
+  },
+  generarDia: async (fecha: string, idUsuarioRegistro?: number) => {
+    const { data } = await api.post('/programacion/generar', { fecha, id_usuario_registro: idUsuarioRegistro });
+    return data.data || data;
+  },
+  obtenerNovedades: async (mes: number, anio: number) => {
+    const { data } = await api.get('/programacion/novedades-periodo', {
       params: { mes, anio }
     });
-    return data;
-  },
+    return data.data || data;
+  }
 };
 
-export default {
+const services = {
   authService,
   consultasService,
   vistasService,
@@ -436,3 +466,5 @@ export default {
   calendarioService,
   programacionService
 };
+
+export default services;

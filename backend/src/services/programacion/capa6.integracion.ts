@@ -15,43 +15,41 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUs
   let guardadas = 0;
   let errores = 0;
 
-  try {
-    await prisma.$transaction(
-      asignaciones.map((asig) =>
-        prisma.detalleProgramacion.upsert({
-          where: {
-            uq_empleado_fecha: {
-              id_empleado: asig.id_empleado,
-              fecha: asig.fecha
-            }
-          },
-          update: {
-            id_area: asig.id_area,
-            id_turno: asig.id_turno,
-            updated_at: new Date(),
-            tipo_dia: "Laborado",
-            id_usuario_registro: idUsuario,
-            origen_registro: "Automatico",
-            id_labor_mes: asig.id_labor_mes
-          },
-          create: {
+  for (const asig of asignaciones) {
+    try {
+      await prisma.detalleProgramacion.upsert({
+        where: {
+          uq_empleado_fecha: {
             id_empleado: asig.id_empleado,
-            fecha: asig.fecha,
-            id_area: asig.id_area,
-            id_turno: asig.id_turno,
-            id_labor_mes: asig.id_labor_mes,
-            tipo_dia: "Laborado",
-            estado: "Activo",
-            id_usuario_registro: idUsuario,
-            origen_registro: "Automatico"
-          },
-        })
-      )
-    );
-    guardadas = asignaciones.length;
-  } catch (error) {
-    console.error("❌ Error en persistencia Capa 6:", error);
-    errores = asignaciones.length;
+            fecha: asig.fecha
+          }
+        },
+        update: {
+          id_area: asig.id_area,
+          id_turno: asig.id_turno,
+          updated_at: new Date(),
+          tipo_dia: "Laborado",
+          id_usuario_registro: idUsuario,
+          origen_registro: "Automatico",
+          id_labor_mes: asig.id_labor_mes
+        },
+        create: {
+          id_empleado: asig.id_empleado,
+          fecha: asig.fecha,
+          id_area: asig.id_area,
+          id_turno: asig.id_turno,
+          id_labor_mes: asig.id_labor_mes,
+          tipo_dia: "Laborado",
+          estado: "Activo",
+          id_usuario_registro: idUsuario,
+          origen_registro: "Automatico"
+        },
+      });
+      guardadas++;
+    } catch (error) {
+      console.error(`❌ Error en empleado ${asig.id_empleado}:`, error);
+      errores++;
+    }
   }
   return { guardadas, errores };
 }
@@ -200,7 +198,7 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   return {
     ...respuestaBase,
     guardado: {
-      realizado: resultadoGuardado.errores === 0,
+      realizado: resultadoGuardado.guardadas > 0,
       ...resultadoGuardado
     }
   };
