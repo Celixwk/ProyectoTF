@@ -420,8 +420,14 @@ export const calendarioService = {
 
 export const programacionService = {
   generarAutomatica: async (payload: { mes: number; anio: number; configuracion: any; id_usuario_registro?: number }) => {
-    const { data } = await api.post('/programacion/generar', payload);
-    return data.data || data;
+    const { data } = await api.post<any>('/programacion/generar', payload);
+    return {
+      success: data.success,
+      data: {
+        count: data.data?.count || 0,
+        alertas: data.data?.alertas || []
+      }
+    };
   },
   listarPorPeriodo: async (inicio: string, fin: string) => {
     const { data } = await api.get('/programacion/detalle', { params: { inicio, fin } });
@@ -440,8 +446,14 @@ export const programacionService = {
     return data.data || data;
   },
   generarDia: async (fecha: string, idUsuarioRegistro?: number) => {
-    const { data } = await api.post('/programacion/generar', { fecha, id_usuario_registro: idUsuarioRegistro });
-    return data.data || data;
+    const { data } = await api.post<any>('/programacion/generar', { fecha, id_usuario_registro: idUsuarioRegistro });
+    return {
+      success: data.success,
+      data: {
+        asignaciones: data.data?.asignaciones || [],
+        alertas: data.data?.alertas || []
+      }
+    };
   },
   obtenerNovedades: async (mes: number, anio: number) => {
     const { data } = await api.get('/programacion/novedades-periodo', {

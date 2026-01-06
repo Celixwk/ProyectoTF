@@ -1,3 +1,32 @@
+export interface AlertaMotor {
+  tipo: 'error' | 'advertencia' | 'info';
+  codigo:
+  | 'REGLA_DURA_VIOLADA'
+  | 'DIAS_CONSECUTIVOS_EXCEDIDOS'
+  | 'DESCANSOS_FALTANTES'
+  | 'EMPLEADOS_SIN_ASIGNACION'
+  | 'AREA_SIN_PERSONAL'
+  | 'AREA_DEFICIT_PERSONAL'
+  | 'DESCANSOS_ADVERTENCIA_PROGRESIVA';
+  mensaje: string;
+  fecha?: string;
+  area?: number;
+  empleado?: number;
+  acciones_sugeridas?: string[];
+  empleados_sugeridos?: { id: number; nombre: string }[];
+}
+
+export interface ResultadoProgramacion {
+  success: boolean;
+  data: {
+    count: number;
+    alertas: Array<{
+      fecha: string;
+      alertas: AlertaMotor[];
+    }>;
+  };
+}
+
 export interface EmpleadoCompleto {
   id_empleado: number;
   nombre_completo: string;
@@ -229,37 +258,6 @@ export interface DashboardEstadisticas {
     novedadesPendientes: number;
     recargosMesActual: number;
   };
-}
-
-export interface AlertaMotor {
-  tipo: 'error' | 'advertencia' | 'info';
-  codigo:
-  | 'EMPLEADOS_SIN_ASIGNACION'
-  | 'AREA_SIN_PERSONAL'
-  | 'AREA_DEFICIT_PERSONAL'
-  | 'DIAS_CONSECUTIVOS_EXCEDIDOS'
-  | 'DESCANSOS_FALTANTES'
-  | 'DESCANSOS_ADVERTENCIA_PROGRESIVA';
-  mensaje: string;
-  area?: number;
-  empleado?: number;
-  acciones_sugeridas?: string[];
-  empleados_sugeridos?: { id: number; nombre: string }[];
-}
-
-export interface ResultadoProgramacion {
-  exito: boolean;
-  fecha: string;
-  asignaciones_realizadas: number;
-  huecos_pendientes: number;
-  alertas: AlertaMotor[];
-  detalles_asignacion?: {
-    id_empleado: number;
-    nombre_empleado: string;
-    id_area: number;
-    nombre_area: string;
-    codigo_turno: string;
-  }[];
 }
 
 export interface OpcionesProgramacion {

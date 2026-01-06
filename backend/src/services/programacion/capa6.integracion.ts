@@ -1,44 +1,40 @@
 import prisma from "../../prisma/cliente";
 import { capa3_obtenerPrioridadAreas } from "./capa3.reglasArea";
+import { capa4_detectarHuecos } from "./capa4.gestionHuecos";
 import { capa5_generarAsignacionesDia } from "./capa5.GeneracionAsignacion";
 import { capa9_detectarProblemas } from "./capa9.deteccionProblemas";
+import { capa7_validarReglasDuras } from "./capa7.reglasDuras";
+import { capa8_validarReglasBlandas } from "./capa8.reglasBlandas";
 import {
   Asignacion,
   OpcionesGeneracion,
   ProgramacionDia,
   EmpleadoDisponible,
   AreaPriorizada,
-  Turno
+  Turno,
+  EmpleadoOrdenado
 } from "./tipos";
 
 export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUsuario?: number): Promise<{ guardadas: number; errores: number }> {
   let guardadas = 0;
   let errores = 0;
-
   for (const asig of asignaciones) {
     try {
       await prisma.detalleProgramacion.upsert({
-        where: {
-          uq_empleado_fecha: {
-            id_empleado: asig.id_empleado,
-            fecha: asig.fecha
-          }
-        },
+        where: { uq_empleado_fecha: { id_empleado: asig.id_empleado, fecha: asig.fecha } },
         update: {
           id_area: asig.id_area,
           id_turno: asig.id_turno,
           updated_at: new Date(),
           tipo_dia: "Laborado",
           id_usuario_registro: idUsuario,
-          origen_registro: "Automatico",
-          id_labor_mes: asig.id_labor_mes
+          origen_registro: "Automatico"
         },
         create: {
           id_empleado: asig.id_empleado,
           fecha: asig.fecha,
           id_area: asig.id_area,
           id_turno: asig.id_turno,
-          id_labor_mes: asig.id_labor_mes,
           tipo_dia: "Laborado",
           estado: "Activo",
           id_usuario_registro: idUsuario,
@@ -47,7 +43,6 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUs
       });
       guardadas++;
     } catch (error) {
-      console.error(`❌ Error en empleado ${asig.id_empleado}:`, error);
       errores++;
     }
   }
@@ -59,26 +54,8 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
 
   const [empleadosBD, areasBD, turnosBD, novedades] = await Promise.all([
     prisma.empleado.findMany({
-      where: {
-        id_estado: 1,
-        labor_mes: {
-          some: {
-            fecha_inicio: { lte: fechaNormalizada },
-            fecha_fin: { gte: fechaNormalizada },
-            estado: "Abierto"
-          }
-        }
-      },
-      include: {
-        empleado_area: { include: { area: true } },
-        labor_mes: {
-          where: {
-            fecha_inicio: { lte: fechaNormalizada },
-            fecha_fin: { gte: fechaNormalizada },
-            estado: "Abierto"
-          }
-        }
-      }
+      where: { id_estado: 1 },
+      include: { empleado_area: { include: { area: true } } }
     }),
     prisma.area.findMany(),
     prisma.turno.findMany({ where: { estado: "Activo" } }),
@@ -95,11 +72,12 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     cedula: emp.cedula,
     nombre_completo: `${emp.nombre1} ${emp.apellido1 || ''}`.trim(),
     total_areas: emp.empleado_area.length,
-    clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
-    areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
-    disponible: !idsEnNovedad.has(emp.id_empleado),
-    razonNoDisponible: idsEnNovedad.has(emp.id_empleado) ? "Tiene Novedad/Ausencia" : undefined,
-    id_labor_mes: emp.labor_mes[0]?.id_labor_mes
+    clasificacion: (emp.empleado_area.length === 1 ? "especialista" : "flexible") as any,
+    areas: emp.empleado_area.map(ea => ({
+      id_area: ea.area.id_area,
+      nombre_area: ea.area.nombre_area
+    })),
+    disponible: !idsEnNovedad.has(emp.id_empleado)
   }));
 
   const areasPriorizadas: AreaPriorizada[] = await capa3_obtenerPrioridadAreas(
@@ -110,96 +88,63 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   areasBD.forEach(a => necesidadesPorArea.set(a.id_area, a.max_trabajadores));
 
   let todasLasAsignaciones: Asignacion[] = [];
-  const poolTrabajo = [...candidatos];
+  const empleadosYaAsignadosHoy = new Set<number>();
 
-  for (const tPrisma of turnosBD) {
-    const areasFiltradas = areasPriorizadas.filter(area => {
-      if (!opciones?.configuracion) return true;
-      const config = opciones.configuracion[area.id_area];
-      return config ? config.turnosIds.includes(tPrisma.id_turno) : false;
+  for (const area of areasPriorizadas) {
+    const turnosParaEstaArea = turnosBD.filter(t => {
+      if (!opciones?.configuracion || !opciones.configuracion[area.id_area]) return true;
+      return opciones.configuracion[area.id_area].turnosIds.includes(t.id_turno);
     });
 
-    if (areasFiltradas.length === 0) continue;
+    for (const tPrisma of turnosParaEstaArea) {
+      const resultadoTurno = capa5_generarAsignacionesDia(
+        candidatos as EmpleadoOrdenado[],
+        candidatos,
+        [area],
+        necesidadesPorArea,
+        tPrisma as unknown as Turno,
+        fechaNormalizada,
+        {
+          ...opciones,
+          programacionExistente: todasLasAsignaciones,
+          empleadosYaAsignados: empleadosYaAsignadosHoy,
+          validarReglasFn: (emp, areaObj, turno, f, prog) => {
+            const dura = capa7_validarReglasDuras(emp, areaObj, turno, f, prog);
+            if (!dura.valido) return dura;
+            const blanda = capa8_validarReglasBlandas(emp, areaObj, turno, f, prog, {
+              maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea || 3
+            });
+            return blanda.violaciones.length > 0 ? { valido: false, razon: blanda.violaciones[0] } : { valido: true };
+          }
+        }
+      );
 
-    const resultadoTurno = capa5_generarAsignacionesDia(
-      [],
-      poolTrabajo,
-      areasFiltradas,
-      necesidadesPorArea,
-      tPrisma as unknown as Turno,
-      fechaNormalizada,
-      { ...opciones, programacionExistente: todasLasAsignaciones }
-    );
-
-    resultadoTurno.asignaciones.forEach(asig => {
-      const empInfo = candidatos.find(e => e.id_empleado === asig.id_empleado);
-      const areaInfo = areasBD.find(a => a.id_area === asig.id_area);
-
-      todasLasAsignaciones.push({
-        ...asig,
-        nombre_empleado: empInfo?.nombre_completo || "Desconocido",
-        nombre_area: areaInfo?.nombre_area || "Sin Área",
-        codigo_turno: tPrisma.tipo_turno,
-        cedula: empInfo?.cedula,
-        id_labor_mes: empInfo?.id_labor_mes
+      resultadoTurno.asignaciones.forEach(asig => {
+        const empInfo = candidatos.find(e => e.id_empleado === asig.id_empleado);
+        todasLasAsignaciones.push({
+          ...asig,
+          nombre_empleado: empInfo?.nombre_completo || "Desconocido",
+          nombre_area: area.nombre_area,
+          codigo_turno: tPrisma.tipo_turno,
+          cedula: empInfo?.cedula
+        });
+        empleadosYaAsignadosHoy.add(asig.id_empleado);
       });
-
-      const idx = poolTrabajo.findIndex(e => e.id_empleado === asig.id_empleado);
-      if (idx !== -1) poolTrabajo[idx].disponible = false;
-    });
+    }
   }
 
-  const alertasFinales = capa9_detectarProblemas(
-    todasLasAsignaciones,
-    areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })),
-    candidatos,
-    necesidadesPorArea,
-    fechaNormalizada,
-    {
-      maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3,
-      descansosRequeridos: opciones?.descansosRequeridos,
-      empleados: candidatos.map(c => ({
-        id_empleado: c.id_empleado,
-        nombre_completo: c.nombre_completo,
-        cedula: c.cedula,
-        total_areas: c.total_areas,
-        clasificacion: c.clasificacion,
-        areas: c.areas
-      }))
-    }
-  );
-
-  const hayErroresCriticos = alertasFinales.some(a => a.tipo === 'error');
-
-  const respuestaBase = {
+  return {
     fecha: fechaNormalizada,
     asignaciones: todasLasAsignaciones,
-    alertas: alertasFinales,
+    alertas: capa9_detectarProblemas(todasLasAsignaciones, areasPriorizadas, candidatos, necesidadesPorArea, fechaNormalizada, {
+      maxDiasConsecutivos: 3,
+      empleados: candidatos
+    }),
     resumen: {
       total_asignaciones: todasLasAsignaciones.length,
       total_empleados: empleadosBD.length,
       total_areas: areasBD.length,
-      huecos: []
-    }
-  };
-
-  if (hayErroresCriticos || todasLasAsignaciones.length === 0) {
-    return {
-      ...respuestaBase,
-      guardado: {
-        realizado: false,
-        razon: hayErroresCriticos ? 'alertas_criticas' : 'sin_asignaciones'
-      }
-    };
-  }
-
-  const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones, opciones?.idUsuario);
-
-  return {
-    ...respuestaBase,
-    guardado: {
-      realizado: resultadoGuardado.guardadas > 0,
-      ...resultadoGuardado
+      huecos: capa4_detectarHuecos(todasLasAsignaciones, areasPriorizadas, fechaNormalizada, necesidadesPorArea)
     }
   };
 }
