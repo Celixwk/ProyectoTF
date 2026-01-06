@@ -33,6 +33,7 @@ export interface EmpleadoDisponible extends EmpleadoOrdenado {
   disponible: boolean;
   razonNoDisponible?: string;
   tipoNovedad?: string; // 'INCAP', 'LIC', 'AUS', etc.
+  id_labor_mes?: number;
 }
 
 export interface NovedadPorFecha {
@@ -61,6 +62,7 @@ export interface Hueco {
 
 export interface Asignacion {
   id_asignacion?: number;
+  id_labor_mes?: number;
   id_empleado: number;
   cedula?: string;
   id_area: number;
@@ -126,6 +128,7 @@ export interface OpcionesGeneracion {
   maxDiasConsecutivosArea?: number;
   maxDiasConsecutivos?: number;
   descansosRequeridos?: Map<number, number>;
+  idUsuario?: number;
 }
 
 export interface ParamsGenerarAsignaciones {

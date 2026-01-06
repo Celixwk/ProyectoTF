@@ -23,7 +23,111 @@ export const empleadoController = {
                     empleado_area: { include: { area: true } }
                 }
             });
-            res.status(200).json({ success: true, data: empleado });
+
+            if (!empleado) {
+                return res.status(404).json({ success: false, error: 'Empleado no encontrado' });
+            }
+
+            // Mapear las áreas a un array de IDs
+            const empleadoConAreas = {
+                ...empleado,
+                areas_permitidas: empleado.empleado_area.map(ea => ea.id_area)
+            };
+
+            res.status(200).json({ success: true, data: empleadoConAreas });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    },
+
+    async crear(req: Request, res: Response) {
+        try {
+            const { areas_permitidas, ...empleadoData } = req.body;
+
+            // Crear empleado
+            const empleado = await prisma.empleado.create({
+                data: empleadoData
+            });
+
+            // Si hay áreas, crear las relaciones
+            if (areas_permitidas && Array.isArray(areas_permitidas) && areas_permitidas.length > 0) {
+                await prisma.empleado_area.createMany({
+                    data: areas_permitidas.map((id_area: number) => ({
+                        id_empleado: empleado.id_empleado,
+                        id_area
+                    }))
+                });
+            }
+
+            // Obtener empleado con áreas
+            const empleadoCompleto = await prisma.empleado.findUnique({
+                where: { id_empleado: empleado.id_empleado },
+                include: {
+                    cargo: true,
+                    empleado_area: { include: { area: true } }
+                }
+            });
+
+            res.status(201).json({ success: true, data: empleadoCompleto });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    },
+
+    async actualizar(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            const { areas_permitidas, ...empleadoData } = req.body;
+
+            // Actualizar datos del empleado
+            const empleado = await prisma.empleado.update({
+                where: { id_empleado: Number(id) },
+                data: empleadoData
+            });
+
+            // Si se enviaron áreas, actualizar las relaciones
+            if (areas_permitidas && Array.isArray(areas_permitidas)) {
+                // Eliminar relaciones existentes
+                await prisma.empleado_area.deleteMany({
+                    where: { id_empleado: Number(id) }
+                });
+
+                // Crear nuevas relaciones
+                if (areas_permitidas.length > 0) {
+                    await prisma.empleado_area.createMany({
+                        data: areas_permitidas.map((id_area: number) => ({
+                            id_empleado: Number(id),
+                            id_area
+                        }))
+                    });
+                }
+            }
+
+            // Obtener empleado actualizado con áreas
+            const empleadoCompleto = await prisma.empleado.findUnique({
+                where: { id_empleado: Number(id) },
+                include: {
+                    cargo: true,
+                    empleado_area: { include: { area: true } }
+                }
+            });
+
+            res.status(200).json({ success: true, data: empleadoCompleto });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    },
+
+    async eliminar(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+
+            // El cascade delete eliminará automáticamente las relaciones en empleado_area
+            await prisma.empleado.delete({
+                where: { id_empleado: Number(id) }
+            });
+
+            res.status(200).json({ success: true, message: 'Empleado eliminado' });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -74,6 +178,7 @@ export const vistasController = {
                 estado: emp.id_estado === 1,
                 sexo: emp.sexo?.trim(),
                 vehiculo: emp.vehiculo,
+                areas_permitidas: emp.empleado_area.map(ea => ea.id_area),
                 areas: emp.empleado_area.map(ea => ea.area.nombre_area).join(', ')
             }));
 

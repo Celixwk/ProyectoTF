@@ -11,7 +11,7 @@ import {
   Turno
 } from "./tipos";
 
-export async function capa6_guardarAsignaciones(asignaciones: Asignacion[]): Promise<{ guardadas: number; errores: number }> {
+export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUsuario?: number): Promise<{ guardadas: number; errores: number }> {
   let guardadas = 0;
   let errores = 0;
 
@@ -29,15 +29,21 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[]): Pro
             id_area: asig.id_area,
             id_turno: asig.id_turno,
             updated_at: new Date(),
-            tipo_dia: "Laborado"
+            tipo_dia: "Laborado",
+            id_usuario_registro: idUsuario,
+            origen_registro: "Automatico",
+            id_labor_mes: asig.id_labor_mes
           },
           create: {
             id_empleado: asig.id_empleado,
             fecha: asig.fecha,
             id_area: asig.id_area,
             id_turno: asig.id_turno,
+            id_labor_mes: asig.id_labor_mes,
             tipo_dia: "Laborado",
-            estado: "Activo"
+            estado: "Activo",
+            id_usuario_registro: idUsuario,
+            origen_registro: "Automatico"
           },
         })
       )
@@ -53,14 +59,38 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[]): Pro
 export async function capa6_generarProgramacionDia(fecha: Date, opciones?: OpcionesGeneracion): Promise<ProgramacionDia> {
   const fechaNormalizada = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
 
-  const [empleadosBD, areasBD, turnosBD] = await Promise.all([
+  const [empleadosBD, areasBD, turnosBD, novedades] = await Promise.all([
     prisma.empleado.findMany({
-      where: { id_estado: 1 },
-      include: { empleado_area: { include: { area: true } } }
+      where: {
+        id_estado: 1,
+        labor_mes: {
+          some: {
+            fecha_inicio: { lte: fechaNormalizada },
+            fecha_fin: { gte: fechaNormalizada },
+            estado: "Abierto"
+          }
+        }
+      },
+      include: {
+        empleado_area: { include: { area: true } },
+        labor_mes: {
+          where: {
+            fecha_inicio: { lte: fechaNormalizada },
+            fecha_fin: { gte: fechaNormalizada },
+            estado: "Abierto"
+          }
+        }
+      }
     }),
     prisma.area.findMany(),
-    prisma.turno.findMany({ where: { estado: "Activo" } })
+    prisma.turno.findMany({ where: { estado: "Activo" } }),
+    prisma.detalleNovedad.findMany({
+      where: { fecha: fechaNormalizada },
+      include: { novedad_empleado: true }
+    })
   ]);
+
+  const idsEnNovedad = new Set(novedades.map(n => n.novedad_empleado.id_empleado));
 
   const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => ({
     id_empleado: emp.id_empleado,
@@ -69,7 +99,9 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     total_areas: emp.empleado_area.length,
     clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
     areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
-    disponible: true
+    disponible: !idsEnNovedad.has(emp.id_empleado),
+    razonNoDisponible: idsEnNovedad.has(emp.id_empleado) ? "Tiene Novedad/Ausencia" : undefined,
+    id_labor_mes: emp.labor_mes[0]?.id_labor_mes
   }));
 
   const areasPriorizadas: AreaPriorizada[] = await capa3_obtenerPrioridadAreas(
@@ -77,12 +109,12 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   );
 
   const necesidadesPorArea = new Map<number, number>();
-  areasBD.forEach(a => necesidadesPorArea.set(a.id_area, 2));
+  areasBD.forEach(a => necesidadesPorArea.set(a.id_area, a.max_trabajadores));
 
   let todasLasAsignaciones: Asignacion[] = [];
   const poolTrabajo = [...candidatos];
 
-  const turnosAProcesar = turnosBD.filter(t => [5, 6].includes(t.id_turno));
+  const turnosAProcesar = turnosBD;
 
   for (const tPrisma of turnosAProcesar) {
     const resultadoTurno = capa5_generarAsignacionesDia(
@@ -104,7 +136,8 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
         nombre_empleado: empInfo?.nombre_completo || "Desconocido",
         nombre_area: areaInfo?.nombre_area || "Sin Área",
         codigo_turno: tPrisma.tipo_turno,
-        cedula: empInfo?.cedula
+        cedula: empInfo?.cedula,
+        id_labor_mes: empInfo?.id_labor_mes
       });
 
       const idx = poolTrabajo.findIndex(e => e.id_empleado === asig.id_empleado);
@@ -156,7 +189,7 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     };
   }
 
-  const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones);
+  const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones, opciones?.idUsuario);
 
   return {
     ...respuestaBase,

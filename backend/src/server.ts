@@ -10,6 +10,8 @@ import vistasRoutes from './routes/vista.routes';
 import turnosRoutes from './routes/turnos.routes';
 import cargosRoutes from './routes/cargos.routes';
 import areasRoutes from './routes/areas.routes';
+import calendarioRoutes from './routes/calendario.routes';
+import novedadesRoutes from './routes/novedades.routes';
 
 dotenv.config();
 
@@ -27,6 +29,8 @@ app.use('/api/vistas', vistasRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/cargos', cargosRoutes);
 app.use('/api/areas', areasRoutes);
+app.use('/api/calendario', calendarioRoutes);
+app.use('/api/novedades', novedadesRoutes);
 
 app.post('/api/programacion/generar', async (req, res) => {
   try {
