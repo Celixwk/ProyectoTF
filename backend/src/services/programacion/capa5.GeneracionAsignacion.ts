@@ -22,23 +22,13 @@ interface OpcionesAsignacion {
         fecha: Date,
         maximosPorArea: Map<number, number>
     ) => Hueco[];
-    activarComodinesFn?: (
-        huecos: Hueco[],
-        comodines: EmpleadoOrdenado[],
-        empleadosAsignados: Set<number>,
-        fecha: Date,
-        turno: Turno,
-        programacionExistente: Asignacion[],
-        empleadosDisponiblesInfo: Array<{ id_empleado: number; disponible: boolean }>,
-        validadorReglasDuras: any
-    ) => Array<{ empleado: EmpleadoOrdenado; area: number; hueco: Hueco }>;
     empleadosYaAsignados?: Set<number>;
     programacionExistente?: Asignacion[];
     maxDiasConsecutivos?: number;
-    penalizarRepeticiones?: boolean;
     penalizacionRefuerzoFallback?: number;
     permitirRefuerzoComoFallback?: boolean;
     areasQueUsanRefuerzo?: Set<number>;
+    cuposRestantes?: Map<number, number>;
 }
 
 const ID_AREA_REFUERZOS = 13;
@@ -82,13 +72,11 @@ export function capa5_calcularScore(
     }
 
     let score = pesoClasificacion +
-        totalAsignaciones * 10 +
-        repeticionesArea * 5 +
-        diasConsecutivos * 50;
+        (totalAsignaciones * 50) +
+        (repeticionesArea * 100) +
+        (diasConsecutivos * 200);
 
-    if (esFallback) {
-        score += penalizacion;
-    }
+    if (esFallback) score += penalizacion;
 
     return score;
 }
@@ -132,16 +120,13 @@ export function capa5_seleccionarEmpleadoParaArea(
             for (let d = 1; d <= maxDiasConsecutivos; d++) {
                 const fBusqueda = new Date(hoyTime);
                 fBusqueda.setUTCDate(fBusqueda.getUTCDate() - d);
-                const fBusquedaMs = fBusqueda.getTime();
-
                 const trabajoEseDia = programacionExistente.some(p => {
                     const fAsig = new Date(p.fecha);
                     const fAsigMs = Date.UTC(fAsig.getFullYear(), fAsig.getMonth(), fAsig.getDate());
                     return p.id_empleado === e.id_empleado &&
                         p.id_area === area.id_area &&
-                        fAsigMs === fBusquedaMs;
+                        fAsigMs === fBusqueda.getTime();
                 });
-
                 if (trabajoEseDia) dias++;
                 else break;
             }
@@ -160,18 +145,15 @@ export function capa5_seleccionarEmpleadoParaArea(
     }
 
     const areaHabilitadaParaRefuerzo = !opciones?.areasQueUsanRefuerzo || opciones.areasQueUsanRefuerzo.has(area.id_area);
-
     if (permitirFallback && areaHabilitadaParaRefuerzo) {
         const candidatosRefuerzo = poolCandidatos.filter(e =>
             e.areas.some(a => a.id_area === ID_AREA_REFUERZOS)
         );
-
         const resultadoFallback = ejecutarFiltrosYScoring(candidatosRefuerzo, true);
         if (resultadoFallback.length > 0) {
             return { empleado: resultadoFallback[0].empleado, score: resultadoFallback[0].score, fuente: "fallback-refuerzo" };
         }
     }
-
     return { empleado: null, razon: `Sin candidatos para ${area.nombre_area}` };
 }
 
@@ -183,27 +165,23 @@ export function capa5_generarAsignacionesDia(
     turno: Turno,
     fecha: Date,
     opciones?: OpcionesAsignacion
-): {
-    asignaciones: Asignacion[];
-    huecos: Hueco[];
-    empleadosNoAsignados: EmpleadoDisponible[];
-    advertencias: string[];
-    detalles: Array<{ area: string; empleado: string; score: number; fuente: string }>;
-} {
+) {
     const asignaciones: Asignacion[] = [];
-    const empleadosAsignados = new Set<number>();
+    const empleadosAsignados = opciones?.empleadosYaAsignados ?? new Set<number>();
     const advertencias: string[] = [];
-    const detalles: Array<{ area: string; empleado: string; score: number; fuente: string }> = [];
+    const detalles: any[] = [];
     const programacionExistente = opciones?.programacionExistente || [];
+    const cuposRestantes = opciones?.cuposRestantes ?? new Map(maximosPorArea);
 
     const areasOrdenadas = [...areasPriorizadas]
         .filter(a => a.id_area !== ID_AREA_REFUERZOS)
         .sort((a, b) => a.prioridad - b.prioridad);
 
     for (const area of areasOrdenadas) {
-        const maximoRequerido = maximosPorArea.get(area.id_area) || 0;
+        const cuposDisponiblesArea = cuposRestantes.get(area.id_area) || 0;
+        if (cuposDisponiblesArea <= 0) continue;
 
-        for (let i = 0; i < maximoRequerido; i++) {
+        for (let i = 0; i < cuposDisponiblesArea; i++) {
             const seleccion = capa5_seleccionarEmpleadoParaArea(
                 area,
                 empleadosDisponibles,
@@ -212,7 +190,8 @@ export function capa5_generarAsignacionesDia(
                 {
                     ...opciones,
                     empleadosYaAsignados: empleadosAsignados,
-                    programacionExistente: [...programacionExistente, ...asignaciones]
+                    programacionExistente: [...programacionExistente, ...asignaciones],
+                    cuposRestantes
                 }
             );
 
@@ -230,7 +209,7 @@ export function capa5_generarAsignacionesDia(
                 : [{ hora_entrada: new Date(turno.hora_entrada!), hora_salida: new Date(turno.hora_salida!) }];
 
             const asignacion: Asignacion = {
-                id_asignacion: asignaciones.length + 1,
+                id_asignacion: 0,
                 id_empleado: seleccion.empleado.id_empleado,
                 id_area: area.id_area,
                 id_turno: turno.id_turno,
@@ -242,38 +221,36 @@ export function capa5_generarAsignacionesDia(
 
             asignaciones.push(asignacion);
             empleadosAsignados.add(seleccion.empleado.id_empleado);
+            if (opciones?.empleadosYaAsignados) opciones.empleadosYaAsignados.add(seleccion.empleado.id_empleado);
+
             detalles.push({
                 area: area.nombre_area,
                 empleado: seleccion.empleado.nombre_completo,
                 score: seleccion.score || 0,
                 fuente: seleccion.fuente || "desconocido"
             });
+
+            cuposRestantes.set(area.id_area, Math.max(0, (cuposRestantes.get(area.id_area) || 0) - 1));
         }
     }
 
     let huecos: Hueco[] = [];
     if (opciones?.detectarHuecosFn) {
-        huecos = opciones.detectarHuecosFn(asignaciones, areasOrdenadas, fecha, maximosPorArea);
+        huecos = opciones.detectarHuecosFn(asignaciones, areasOrdenadas, fecha, cuposRestantes);
     } else {
         huecos = areasOrdenadas.map(area => {
-            const req = maximosPorArea.get(area.id_area) || 0;
             const asig = asignaciones.filter(a => a.id_area === area.id_area).length;
+            const restante = cuposRestantes.get(area.id_area) || 0;
             return {
                 id_area: area.id_area,
                 nombre_area: area.nombre_area,
-                deficit: req - asig,
+                deficit: restante,
                 prioridad: area.prioridad,
                 trabajadores_actuales: asig,
-                trabajadores_requeridos: req
+                trabajadores_requeridos: asig + restante
             };
         }).filter(h => h.deficit > 0);
     }
 
-    return {
-        asignaciones,
-        huecos,
-        empleadosNoAsignados: empleadosDisponibles.filter(e => e.disponible && !empleadosAsignados.has(e.id_empleado)),
-        advertencias,
-        detalles
-    };
+    return { asignaciones, huecos, advertencias, detalles };
 }
