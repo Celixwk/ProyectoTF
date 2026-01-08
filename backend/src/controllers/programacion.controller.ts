@@ -10,7 +10,7 @@ export const generarAutomatica = async (req: Request, res: Response) => {
         if (!mes || !anio) return res.status(400).json({ success: false, error: 'Mes y año requeridos' });
 
         const fechaInicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
-        const fechaFin = new Date(Date.UTC(Number(anio), Number(mes), 0));
+        const fechaFin = new Date(Date.UTC(Number(anio), Number(mes), 0, 23, 59, 59));
 
         const laborMes = await prisma.laborMes.findFirst({
             where: {
@@ -69,8 +69,8 @@ export const generarAutomatica = async (req: Request, res: Response) => {
 export const obtenerNovedadesPeriodo = async (req: Request, res: Response) => {
     try {
         const { mes, anio } = req.query;
-        const inicio = new Date(Number(anio), Number(mes) - 1, 1);
-        const fin = new Date(Number(anio), Number(mes), 0);
+        const inicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
+        const fin = new Date(Date.UTC(Number(anio), Number(mes), 0, 23, 59, 59));
         const novedades = await prisma.novedadEmpleado.findMany({
             where: {
                 detalle_novedad: { some: { fecha: { gte: inicio, lte: fin } } }
@@ -115,11 +115,102 @@ export const obtenerDetalleProgramacion = async (req: Request, res: Response) =>
     }
 };
 
+export const obtenerEmpleadosNoAsignadosPorDia = async (req: Request, res: Response) => {
+    try {
+        const { mes, anio } = req.query;
+
+        if (!mes || !anio) {
+            return res.status(400).json({ success: false, error: 'Mes y año requeridos' });
+        }
+
+        const fechaInicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
+        const fechaFin = new Date(Date.UTC(Number(anio), Number(mes), 0, 23, 59, 59));
+        const diasMes = new Date(Number(anio), Number(mes), 0).getDate();
+
+        const empleadosActivos = await prisma.empleado.findMany({
+            where: {
+                id_estado: 1,
+                labor_mes: {
+                    some: {
+                        fecha_inicio: { lte: fechaInicio },
+                        fecha_fin: { gte: fechaFin },
+                        estado: "Abierto"
+                    }
+                }
+            },
+            select: {
+                id_empleado: true,
+                nombre1: true,
+                apellido1: true,
+                cedula: true
+            }
+        });
+
+        const noAsignadosPorDia: Record<string, any[]> = {};
+
+        for (let dia = 1; dia <= diasMes; dia++) {
+            const fechaDia = new Date(Date.UTC(Number(anio), Number(mes) - 1, dia));
+            const fechaISO = fechaDia.toISOString().split('T')[0];
+
+            const asignacionesDelDia = await prisma.detalleProgramacion.findMany({
+                where: { fecha: fechaDia },
+                select: { id_empleado: true }
+            });
+
+            const novedadesDelDia = await prisma.detalleNovedad.findMany({
+                where: { fecha: fechaDia },
+                include: { novedad_empleado: true }
+            });
+
+            const idsAsignados = new Set(asignacionesDelDia.map(a => a.id_empleado));
+            const idsConNovedad = new Set(novedadesDelDia.map(n => n.novedad_empleado.id_empleado));
+
+            const noAsignados = empleadosActivos
+                .filter(emp => !idsAsignados.has(emp.id_empleado) && !idsConNovedad.has(emp.id_empleado))
+                .map(emp => ({
+                    id_empleado: emp.id_empleado,
+                    nombre_completo: `${emp.nombre1} ${emp.apellido1}`,
+                    cedula: emp.cedula
+                }));
+
+            noAsignadosPorDia[fechaISO] = noAsignados;
+        }
+
+        res.json({ success: true, data: noAsignadosPorDia });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+export const moverEmpleado = async (req: Request, res: Response) => {
+    try {
+        const { id_detalle_programacion, nuevo_id_area, nuevo_id_turno } = req.body;
+
+        if (!id_detalle_programacion) {
+            return res.status(400).json({ success: false, error: 'ID requerido' });
+        }
+
+        const actualizado = await prisma.detalleProgramacion.update({
+            where: { id_detalle_programacion: Number(id_detalle_programacion) },
+            data: {
+                ...(nuevo_id_area && { id_area: Number(nuevo_id_area) }),
+                ...(nuevo_id_turno && { id_turno: Number(nuevo_id_turno) }),
+                updated_at: new Date(),
+                origen_registro: 'Manual'
+            }
+        });
+
+        res.json({ success: true, data: actualizado });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 export const eliminarProgramacion = async (req: Request, res: Response) => {
     try {
         const { mes, anio } = req.body;
-        const inicio = new Date(Number(anio), Number(mes) - 1, 1);
-        const fin = new Date(Number(anio), Number(mes), 0);
+        const inicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
+        const fin = new Date(Date.UTC(Number(anio), Number(mes), 0, 23, 59, 59));
         const resultado = await prisma.detalleProgramacion.deleteMany({
             where: { fecha: { gte: inicio, lte: fin } }
         });
@@ -136,3 +227,4 @@ export const validarProgramacion = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
