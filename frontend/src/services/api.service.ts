@@ -9,7 +9,6 @@ import type {
   Cargo,
   Area,
   Turno,
-  AlertaMotor,
 } from '../types/api.types';
 
 export const authService = {
@@ -427,9 +426,9 @@ export const programacionService = {
     const { data } = await api.get('/programacion/detalle', { params: { inicio, fin } });
     return data.data || data;
   },
-  validarDia: async (fecha: string): Promise<AlertaMotor[]> => {
+  validarPeriodo: async (inicio: string, fin: string): Promise<any[]> => {
     const { data } = await api.get<any>('/programacion/validar', {
-      params: { fecha }
+      params: { inicio, fin }
     });
     return data.data || data;
   },
@@ -448,6 +447,21 @@ export const programacionService = {
       params: { mes, anio }
     });
     return data.data || data;
+  },
+  obtenerEmpleadosNoAsignadosPorDia: async (mes: number, anio: number) => {
+    const { data } = await api.get('/programacion/empleados-no-asignados-por-dia', {
+      params: { mes, anio }
+    });
+    return data.data;
+  },
+  moverEmpleado: async (payload: {
+    id_detalle_programacion: number;
+    nuevo_id_area?: number;
+    nuevo_id_turno?: number;
+    nueva_fecha?: string;
+  }) => {
+    const { data } = await api.patch('/programacion/mover-empleado', payload);
+    return data;
   }
 };
 

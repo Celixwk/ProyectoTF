@@ -145,3 +145,68 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones, opciones?.idUsuario);
   return { ...respuestaBase, guardado: { realizado: resultadoGuardado.guardadas > 0, ...resultadoGuardado } };
 }
+
+export async function capa6_validarPeriodo(inicio: string, fin: string) {
+  const fechaInicio = new Date(inicio);
+  const fechaFin = new Date(fin);
+
+  const [programacion, empleadosBD, areasBD, turnosBD] = await Promise.all([
+    prisma.detalleProgramacion.findMany({
+      where: { fecha: { gte: fechaInicio, lte: fechaFin } },
+      include: { empleado: true, area: true, turno: true }
+    }),
+    prisma.empleado.findMany({
+      include: { empleado_area: { include: { area: true } } }
+    }),
+    prisma.area.findMany(),
+    prisma.turno.findMany({ where: { estado: "Activo" } })
+  ]);
+
+  const areasPriorizadas = await capa3_obtenerPrioridadAreas(areasBD.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area })));
+  const necesidadesPorArea = new Map<number, number>();
+  areasBD.forEach(a => necesidadesPorArea.set(a.id_area, a.max_trabajadores));
+
+  const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => ({
+    id_empleado: emp.id_empleado,
+    cedula: emp.cedula,
+    nombre_completo: `${emp.nombre1} ${emp.apellido1 || ''}`.trim(),
+    total_areas: emp.empleado_area.length,
+    clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
+    areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
+    disponible: true
+  }));
+
+  const alertasTotales: Array<{ fecha: string; alertas: any[] }> = [];
+  let curr = new Date(fechaInicio);
+  while (curr <= fechaFin) {
+    const fechaISO = curr.toISOString().split('T')[0];
+    const asignacionesDia = programacion.filter(p => {
+      const pFecha = new Date(p.fecha);
+      return pFecha.toISOString().split('T')[0] === fechaISO;
+    }).map(p => ({
+      id_empleado: p.id_empleado,
+      id_area: p.id_area,
+      id_turno: p.id_turno,
+      fecha: p.fecha,
+      id_labor_mes: p.id_labor_mes || 0,
+      tipo_dia: p.tipo_dia as any,
+      nombre_empleado: p.empleado ? `${p.empleado.nombre1} ${p.empleado.apellido1}` : 'Desconocido',
+      nombre_area: p.area?.nombre_area || 'Desconocido'
+    }));
+
+    const alertas = capa9_detectarProblemas(
+      asignacionesDia,
+      areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })),
+      candidatos as any,
+      necesidadesPorArea,
+      new Date(curr)
+    );
+
+    if (alertas.length > 0) {
+      alertasTotales.push({ fecha: fechaISO, alertas });
+    }
+    curr.setUTCDate(curr.getUTCDate() + 1);
+  }
+
+  return alertasTotales;
+}

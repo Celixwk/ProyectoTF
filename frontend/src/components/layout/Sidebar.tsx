@@ -8,8 +8,8 @@ import {
   FileText,
   Settings,
   Building2,
-  Briefcase,
   CalendarCheck,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,26 +19,23 @@ const navigation = [
   { name: 'Turnos', href: '/turnos', icon: Clock },
   { name: 'Programación', href: '/programacion', icon: Calendar },
   { name: 'Prog. Áreas', href: '/programacion-areas', icon: Building2 },
+  { name: 'Gestión Mensual', href: '/gestion-mensual', icon: ClipboardList },
   { name: 'Recargos', href: '/recargos', icon: DollarSign },
   { name: 'Novedades', href: '/novedades', icon: FileText },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
   { name: 'Config. Programación', href: '/configuracion-programacion', icon: CalendarCheck },
 ];
 
-
-
 export default function Sidebar() {
   return (
     <div className="hidden lg:flex lg:flex-shrink-0">
       <div className="flex flex-col w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-        {/* Logo */}
         <div className="flex items-center h-16 flex-shrink-0 px-6 border-b border-gray-200 dark:border-gray-800">
           <h1 className="text-xl font-bold text-primary">
             Sistema de Nómina
           </h1>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 flex flex-col overflow-y-auto pt-5 pb-4 px-3">
           <div className="space-y-1">
             {navigation.map((item) => (
@@ -61,7 +58,6 @@ export default function Sidebar() {
           </div>
         </nav>
 
-        {/* Footer */}
         <div className="flex-shrink-0 flex border-t border-gray-200 dark:border-gray-800 p-4">
           <div className="flex-shrink-0 w-full group block">
             <div className="flex items-center">
@@ -77,4 +73,3 @@ export default function Sidebar() {
     </div>
   );
 }
-
