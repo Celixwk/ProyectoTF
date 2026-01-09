@@ -53,6 +53,7 @@ export default function GestionMensual() {
         queryFn: () => programacionService.obtenerEmpleadosNoAsignadosPorDia(mes, anio),
         enabled: paso === 'detalle'
     });
+    console.log('noAsignadosPorDia:', noAsignadosPorDia);
     const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
         queryKey: ['validar-programacion', mes, anio],
         queryFn: async () => {

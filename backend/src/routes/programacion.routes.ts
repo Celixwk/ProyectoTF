@@ -8,5 +8,7 @@ router.post('/automatica', controller.generarAutomatica);
 router.get('/detalle', controller.obtenerDetalleProgramacion);
 router.get('/novedades-periodo', controller.obtenerNovedadesPeriodo);
 router.delete('/eliminar', controller.eliminarProgramacion);
+router.get('/validar', controller.validarProgramacion);
+router.get('/empleados-no-asignados-por-dia', controller.obtenerEmpleadosNoAsignadosPorDia);
 
 export default router;
