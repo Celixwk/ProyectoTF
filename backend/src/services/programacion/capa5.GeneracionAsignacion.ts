@@ -49,37 +49,32 @@ export function capa5_calcularScore(
         p => p.id_empleado === empleado.id_empleado
     ).length;
 
-    let diasSeguidosEnArea = 0;
+    const repeticionesArea = programacionHistorica.filter(
+        p => p.id_empleado === empleado.id_empleado && p.id_area === idArea
+    ).length;
+
+    let diasConsecutivos = 0;
     const fechaRef = new Date(fecha);
     fechaRef.setHours(0, 0, 0, 0);
 
     for (let d = 1; d <= 3; d++) {
         const fechaAnterior = new Date(fechaRef);
         fechaAnterior.setDate(fechaRef.getDate() - d);
-
-        const asignacionPrevia = programacionHistorica.find(p => {
+        const trabajoEseDia = programacionHistorica.some(p => {
             const fP = new Date(p.fecha);
             fP.setHours(0, 0, 0, 0);
             return p.id_empleado === empleado.id_empleado &&
+                p.id_area === idArea &&
                 fP.getTime() === fechaAnterior.getTime();
         });
-
-        if (asignacionPrevia && asignacionPrevia.id_area === idArea) {
-            diasSeguidosEnArea++;
-        } else {
-            break;
-        }
-    }
-
-    let bonoContinuidad = 0;
-    if (diasSeguidosEnArea > 0 && diasSeguidosEnArea < 3) {
-        bonoContinuidad = -2000;
+        if (trabajoEseDia) diasConsecutivos++;
+        else break;
     }
 
     let score = pesoClasificacion +
         (totalAsignaciones * 50) +
-        (diasSeguidosEnArea * 100) +
-        bonoContinuidad;
+        (repeticionesArea * 100) +
+        (diasConsecutivos * 200);
 
     if (esFallback) score += penalizacion;
 
@@ -120,15 +115,17 @@ export function capa5_seleccionarEmpleadoParaArea(
         filtrados = filtrados.filter(e => {
             let dias = 0;
             const hoy = new Date(fecha);
-            const hoyTime = Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
+            const hoyTime = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
 
             for (let d = 1; d <= maxDiasConsecutivos; d++) {
                 const fBusqueda = new Date(hoyTime);
                 fBusqueda.setUTCDate(fBusqueda.getUTCDate() - d);
                 const trabajoEseDia = programacionExistente.some(p => {
                     const fAsig = new Date(p.fecha);
-                    const fAsigMs = Date.UTC(fAsig.getUTCFullYear(), fAsig.getUTCMonth(), fAsig.getUTCDate());
-                    return p.id_empleado === e.id_empleado && fAsigMs === fBusqueda.getTime();
+                    const fAsigMs = Date.UTC(fAsig.getFullYear(), fAsig.getMonth(), fAsig.getDate());
+                    return p.id_empleado === e.id_empleado &&
+                        p.id_area === area.id_area &&
+                        fAsigMs === fBusqueda.getTime();
                 });
                 if (trabajoEseDia) dias++;
                 else break;

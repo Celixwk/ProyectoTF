@@ -210,3 +210,4 @@ export async function capa6_validarPeriodo(inicio: string, fin: string) {
 
   return alertasTotales;
 }
+
