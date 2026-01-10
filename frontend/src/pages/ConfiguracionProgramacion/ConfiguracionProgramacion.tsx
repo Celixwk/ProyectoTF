@@ -25,7 +25,7 @@ export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
   const [tipoSeleccionado, setTipoSeleccionado] = useState<number>(6);
-  const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number }>>([]);
+  const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number; id_novedad_empleado?: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
   const [cambiosPendientes, setCambiosPendientes] = useState<Map<string, any>>(new Map());
@@ -45,9 +45,13 @@ export default function ConfiguracionProgramacion() {
   });
 
   const { data: novedadesMes } = useQuery({
-    queryKey: ['novedades-mes', fechaInicio, fechaFin],
-    queryFn: () => consultasService.listarNovedades({ inicio: fechaInicio, fin: fechaFin }),
-    enabled: !!fechaInicio && !!fechaFin
+    queryKey: ['novedades-completas', idEmpleadoSeleccionado, fechaInicio, fechaFin],
+    queryFn: () => consultasService.obtenerNovedadesCompletas({
+      id_empleado: idEmpleadoSeleccionado!,
+      inicio: fechaInicio,
+      fin: fechaFin
+    }),
+    enabled: !!idEmpleadoSeleccionado && !!fechaInicio && !!fechaFin
   });
 
   const empleados = empleadosData?.empleados || [];
@@ -72,50 +76,51 @@ export default function ConfiguracionProgramacion() {
   }, [areas]);
 
   useEffect(() => {
-    if (!idEmpleadoSeleccionado) {
+    if (!idEmpleadoSeleccionado || !empleadoSeleccionado) {
       setNovedades([]);
       setAreasPermitidas([]);
       setCambiosPendientes(new Map());
       return;
     }
-
     if (isSaving.current) return;
 
-    if (empleadoSeleccionado) {
-      setAreasPermitidas(empleadoSeleccionado.areas_permitidas || []);
+    setAreasPermitidas(empleadoSeleccionado.areas_permitidas || []);
+    const dataArray = Array.isArray(novedadesMes) ? novedadesMes : (novedadesMes?.novedades || []);
+    const actualesEnDb = dataArray
+      .filter((n: any) => Number(n.id_empleado) === idEmpleadoSeleccionado)
+      .map((n: any) => ({
+        fecha: parseISO(n.fecha),
+        id_tipo: n.id_novedad_tipo,
+        id_novedad_empleado: n.id_novedad_empleado
+      }));
 
-      const actualesEnDb = novedadesMes?.success
-        ? novedadesMes.data
-          .filter((n: any) => n.id_empleado === idEmpleadoSeleccionado)
-          .flatMap((n: any) => {
-            if (!n.detalle_novedad || n.detalle_novedad.length === 0) return [];
-
-            return n.detalle_novedad.map((d: any) => ({
-              fecha: parseISO(d.fecha),
-              id_tipo: n.id_novedad_tipo
-            }));
-          })
-        : [];
-
-      setNovedades(actualesEnDb);
-      setCambiosPendientes(new Map());
-    }
+    setNovedades(actualesEnDb);
+    setCambiosPendientes(new Map());
   }, [idEmpleadoSeleccionado, empleadoSeleccionado, novedadesMes]);
 
   const handleDiaToggle = (fecha: Date) => {
     const fechaStr = format(fecha, 'yyyy-MM-dd');
-
     setNovedades(prev => {
       const existe = prev.find(n => isSameDay(n.fecha, fecha));
       const nuevosCambios = new Map(cambiosPendientes);
 
       if (existe) {
         if (existe.id_tipo === tipoSeleccionado) {
-          nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: existe.id_tipo, tipo: 'eliminar' });
+          nuevosCambios.set(fechaStr, {
+            fecha: fechaStr,
+            id_tipo: existe.id_tipo,
+            id_novedad_empleado: existe.id_novedad_empleado,
+            tipo: 'eliminar'
+          });
           setCambiosPendientes(nuevosCambios);
           return prev.filter(n => !isSameDay(n.fecha, fecha));
         }
-        nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: tipoSeleccionado, tipo: 'modificar' });
+        nuevosCambios.set(fechaStr, {
+          fecha: fechaStr,
+          id_tipo: tipoSeleccionado,
+          id_novedad_empleado: existe.id_novedad_empleado,
+          tipo: 'modificar'
+        });
         setCambiosPendientes(nuevosCambios);
         return prev.map(n => isSameDay(n.fecha, fecha) ? { ...n, id_tipo: tipoSeleccionado } : n);
       }
@@ -124,6 +129,23 @@ export default function ConfiguracionProgramacion() {
       setCambiosPendientes(nuevosCambios);
       return [...prev, { fecha, id_tipo: tipoSeleccionado }];
     });
+  };
+
+  const handleLimpiarMes = () => {
+    if (novedades.length === 0) return;
+    const nuevosCambios = new Map(cambiosPendientes);
+    novedades.forEach(n => {
+      const key = format(n.fecha, 'yyyy-MM-dd');
+      nuevosCambios.set(key, {
+        fecha: key,
+        id_tipo: n.id_tipo,
+        id_novedad_empleado: n.id_novedad_empleado,
+        tipo: 'eliminar'
+      });
+    });
+    setCambiosPendientes(nuevosCambios);
+    setNovedades([]);
+    toast.info("Días marcados para eliminar localmente. Presione Guardar.");
   };
 
   const handleCapacidadChange = (id_area: number, value: string) => {
@@ -159,7 +181,7 @@ export default function ConfiguracionProgramacion() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
-      queryClient.invalidateQueries({ queryKey: ['novedades-mes'] });
+      queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
       setCambiosPendientes(new Map());
       toast.success('Configuración sincronizada correctamente');
       setTimeout(() => { isSaving.current = false; }, 500);
@@ -170,6 +192,9 @@ export default function ConfiguracionProgramacion() {
     }
   });
 
+  const hayCambiosEnAreas = JSON.stringify(areasPermitidas) !== JSON.stringify(empleadoSeleccionado?.areas_permitidas);
+  const hayCambiosPendientes = cambiosPendientes.size > 0;
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -177,7 +202,6 @@ export default function ConfiguracionProgramacion() {
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Programación Técnica</h1>
           <p className="text-slate-500 font-medium">Gestión de disponibilidad y capacidades</p>
         </div>
-
         <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-2xl border shadow-sm">
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
             <div className="space-y-1">
@@ -252,15 +276,7 @@ export default function ConfiguracionProgramacion() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    const nuevosCambios = new Map(cambiosPendientes);
-                    novedades.forEach(n => {
-                      const key = format(n.fecha, 'yyyy-MM-dd');
-                      nuevosCambios.set(key, { fecha: key, id_tipo: n.id_tipo, tipo: 'eliminar' });
-                    });
-                    setCambiosPendientes(nuevosCambios);
-                    setNovedades([]);
-                  }}
+                  onClick={handleLimpiarMes}
                   className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 font-bold text-xs uppercase"
                 >
                   <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
@@ -281,18 +297,19 @@ export default function ConfiguracionProgramacion() {
             <CardContent className="p-6 bg-white">
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
                 {diasEnRango.map(fecha => {
-                  const novedad = novedades.find(n => isSameDay(n.fecha, fecha));
+                  const fechaISO = format(fecha, 'yyyy-MM-dd');
+                  const novedad = novedades.find(n => format(n.fecha, 'yyyy-MM-dd') === fechaISO);
                   const tipo = TIPOS_NOVEDAD.find(t => t.id === novedad?.id_tipo);
                   return (
                     <div
-                      key={fecha.toISOString()}
+                      key={fechaISO}
                       onClick={() => handleDiaToggle(fecha)}
-                      className={`h-20 border-2 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative group shadow-sm ${novedad ? `${tipo?.color} border-transparent scale-[1.02]` : 'bg-white hover:border-indigo-300 border-slate-50'}`}
+                      className={`h-20 border-2 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative group shadow-sm ${novedad ? `${tipo?.color} border-transparent scale-[1.02]` : 'bg-white hover:border-indigo-300 border-slate-50 text-slate-900'}`}
                     >
                       <span className="text-[10px] font-bold opacity-60 uppercase mb-1">{format(fecha, 'eee', { locale: es })}</span>
                       <span className="text-lg font-black">{format(fecha, 'dd')}</span>
                       {novedad && <span className="text-[9px] font-black tracking-tighter mt-1">{tipo?.corta}</span>}
-                      {cambiosPendientes.has(format(fecha, 'yyyy-MM-dd')) && (
+                      {cambiosPendientes.has(fechaISO) && (
                         <div className="absolute top-1 right-1 w-2 h-2 bg-yellow-400 rounded-full shadow-sm" />
                       )}
                     </div>
@@ -303,7 +320,7 @@ export default function ConfiguracionProgramacion() {
                 <Button
                   className="w-full h-14 text-lg font-black bg-indigo-600 hover:bg-indigo-700 rounded-xl"
                   onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado!, areas: areasPermitidas })}
-                  disabled={guardarTodoMutation.isPending || (cambiosPendientes.size === 0 && JSON.stringify(areasPermitidas) === JSON.stringify(empleadoSeleccionado?.areas_permitidas))}
+                  disabled={guardarTodoMutation.isPending || (!hayCambiosEnAreas && !hayCambiosPendientes)}
                 >
                   <Save className="h-6 w-6 mr-3" /> {guardarTodoMutation.isPending ? 'SINCRONIZANDO...' : 'GUARDAR CAMBIOS'}
                 </Button>

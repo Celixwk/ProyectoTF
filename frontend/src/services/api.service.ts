@@ -39,12 +39,20 @@ export const consultasService = {
     const response = await api.get<{ success: boolean, data: { empleados: any[]; paginacion: any } }>('/vistas/empleados-completos', { params });
     const content = response.data.data;
 
-    const empleadosMapeados: EmpleadoCompleto[] = (content.empleados || []).map(e => {
+    const empleadosMapeados: EmpleadoCompleto[] = (content.empleados || []).map((e: any) => {
       let areasPermitidas: number[] = [];
       if (Array.isArray(e.areas_permitidas)) {
-        areasPermitidas = e.areas_permitidas;
+        areasPermitidas = e.areas_permitidas.map(Number);
+      } else if (typeof e.areas_permitidas === 'string') {
+        areasPermitidas = e.areas_permitidas
+          .split(',')
+          .map((n: string) => parseInt(n.trim()))
+          .filter((n: number) => !isNaN(n));
       } else if (typeof e.areas === 'string' && e.areas) {
-        areasPermitidas = [];
+        areasPermitidas = e.areas
+          .split(',')
+          .map((n: string) => parseInt(n.trim()))
+          .filter((n: number) => !isNaN(n));
       }
 
       return {
@@ -127,34 +135,43 @@ export const consultasService = {
   }) => {
     const { data } = await api.get<any>('/novedades', { params });
     const content = data.data || data;
+    const dataArray = Array.isArray(content) ? content : (content.novedades || []);
 
-    const novedadesMapeadas: NovedadCompleta[] = (Array.isArray(content) ? content : (content.novedades || [])).map((n: any) => ({
-      id_novedad_empleado: n.id_novedad_empleado,
-      id_empleado: n.id_empleado,
-      id_novedad_tipo: n.id_novedad_tipo,
-      fecha_solicitud: n.fecha_solicitud,
-      fecha_registro: n.fecha_registro,
-      fecha_vencimiento: n.fecha_vencimiento,
-      etapa: n.etapa,
-      nombre_completo: n.nombre_completo || (n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : ''),
-      cedula: n.cedula || n.empleado?.cedula || '',
-      nombre_cargo: n.nombre_cargo || n.empleado?.cargo?.nombre_cargo || '',
-      tipo: n.tipo_novedad?.nombre_novedad || '',
-      codigo_novedad: n.tipo_novedad?.codigo || '',
-      afecta_pago: n.tipo_novedad?.afecta_pago || false,
-      fecha_inicio: n.fecha_inicio || n.fecha_solicitud,
-      fecha_fin: n.fecha_fin,
-      detalle_novedad: n.detalle_novedad || [],
-      observaciones: n.observaciones || '',
-      usuario_registro: n.usuario?.usuario || '',
-      created_at: n.created_at,
-      updated_at: n.updated_at
-    }));
+    const novedadesAplanadas: NovedadCompleta[] = dataArray.flatMap((n: any) => {
+      if (n.detalle_novedad && Array.isArray(n.detalle_novedad) && n.detalle_novedad.length > 0) {
+        return n.detalle_novedad.map((d: any) => ({
+          ...n,
+          id_novedad_empleado: n.id_novedad_empleado,
+          id_empleado: n.id_empleado,
+          id_novedad_tipo: n.id_novedad_tipo,
+          nombre_completo: n.nombre_completo || (n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : ''),
+          cedula: n.cedula || n.empleado?.cedula || '',
+          nombre_cargo: n.nombre_cargo || n.empleado?.cargo?.nombre_cargo || '',
+          tipo: n.tipo_novedad?.nombre_novedad || '',
+          codigo_novedad: n.tipo_novedad?.codigo || '',
+          afecta_pago: n.tipo_novedad?.afecta_pago || false,
+          fecha: d.fecha,
+          fecha_inicio: n.fecha_inicio || n.fecha_solicitud,
+          fecha_fin: n.fecha_fin,
+          usuario_registro: n.usuario?.usuario || '',
+        }));
+      }
 
-    return Array.isArray(content) ? novedadesMapeadas : { ...content, novedades: novedadesMapeadas };
+
+      return [{
+        ...n,
+        fecha: n.fecha_inicio || n.fecha_solicitud,
+        nombre_completo: n.nombre_completo || (n.empleado ? `${n.empleado.nombre1} ${n.empleado.apellido1}` : ''),
+        tipo: n.tipo_novedad?.nombre_novedad || '',
+        codigo_novedad: n.tipo_novedad?.codigo || '',
+        afecta_pago: n.tipo_novedad?.afecta_pago || false,
+      } as NovedadCompleta];
+    });
+
+    return Array.isArray(content) ? novedadesAplanadas : { ...content, novedades: novedadesAplanadas };
   },
 
-  obtenerRecargosCompletos: async (params?: {
+  obtenerRecargosCompletas: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
     fecha_fin?: string;

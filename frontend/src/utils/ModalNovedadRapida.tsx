@@ -55,6 +55,7 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
+            queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
 
             const fechaCorte = parseISO(fechaInicio);
             onSuccess(fechaCorte);
@@ -95,7 +96,6 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
                 <div className="grid gap-6 py-4">
                     <div className="space-y-2">
                         <Label className="text-xs font-black uppercase text-slate-400 ml-1">Tipo de Novedad</Label>
-                        <span className="sr-only">Seleccionar tipo de novedad</span>
                         <Select value={tipoNovedad} onValueChange={setTipoNovedad}>
                             <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold">
                                 <SelectValue />

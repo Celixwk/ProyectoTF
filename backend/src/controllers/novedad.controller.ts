@@ -131,9 +131,21 @@ export const novedadController = {
                         where: {
                             id_empleado: Number(id_empleado),
                             detalle_novedad: { some: { fecha } }
-                        },
-                        include: { detalle_novedad: true }
+                        }
                     });
+
+                    if (op.tipo === 'eliminar') {
+                        const idABorrar = op.id_novedad_empleado || existente?.id_novedad_empleado;
+                        if (idABorrar) {
+                            await tx.detalleNovedad.deleteMany({
+                                where: { id_novedad_empleado: Number(idABorrar) }
+                            });
+                            await tx.novedadEmpleado.delete({
+                                where: { id_novedad_empleado: Number(idABorrar) }
+                            });
+                        }
+                        continue;
+                    }
 
                     if (op.tipo === 'crear') {
                         if (existente) continue;
@@ -162,25 +174,6 @@ export const novedadController = {
                             where: { id_novedad_empleado: existente.id_novedad_empleado },
                             data: { id_novedad_tipo: Number(op.id_tipo) }
                         });
-                    }
-
-                    if (op.tipo === 'eliminar' && existente) {
-                        await tx.detalleNovedad.deleteMany({
-                            where: {
-                                id_novedad_empleado: existente.id_novedad_empleado,
-                                fecha
-                            }
-                        });
-
-                        const restantes = await tx.detalleNovedad.count({
-                            where: { id_novedad_empleado: existente.id_novedad_empleado }
-                        });
-
-                        if (restantes === 0) {
-                            await tx.novedadEmpleado.delete({
-                                where: { id_novedad_empleado: existente.id_novedad_empleado }
-                            });
-                        }
                     }
                 }
             });
@@ -257,8 +250,13 @@ export const novedadController = {
     async eliminar(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            await prisma.novedadEmpleado.delete({
-                where: { id_novedad_empleado: Number(id) }
+            await prisma.$transaction(async (tx) => {
+                await tx.detalleNovedad.deleteMany({
+                    where: { id_novedad_empleado: Number(id) }
+                });
+                await tx.novedadEmpleado.delete({
+                    where: { id_novedad_empleado: Number(id) }
+                });
             });
             res.status(200).json({ success: true, message: 'Eliminada' });
         } catch (error: any) {
