@@ -6,6 +6,7 @@ const router = Router();
 router.get('/tipos', novedadController.listarTipos);
 router.get('/', novedadController.listar);
 router.post('/', novedadController.crear);
+router.post('/sincronizar', novedadController.sincronizarNovedades);
 router.post('/masivo', novedadController.guardarMasivo);
 router.delete('/:id', novedadController.eliminar);
 

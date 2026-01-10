@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { consultasService, empleadosService, areasService } from '@/services/api.service';
+import { consultasService, empleadosService, areasService, novedadesService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -28,8 +28,7 @@ export default function ConfiguracionProgramacion() {
   const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
-
-
+  const [cambiosPendientes, setCambiosPendientes] = useState<Map<string, any>>(new Map());
   const isSaving = useRef(false);
 
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-01'));
@@ -76,9 +75,9 @@ export default function ConfiguracionProgramacion() {
     if (!idEmpleadoSeleccionado) {
       setNovedades([]);
       setAreasPermitidas([]);
+      setCambiosPendientes(new Map());
       return;
     }
-
 
     if (isSaving.current) return;
 
@@ -88,23 +87,41 @@ export default function ConfiguracionProgramacion() {
       const actualesEnDb = novedadesMes?.success
         ? novedadesMes.data
           .filter((n: any) => n.id_empleado === idEmpleadoSeleccionado)
-          .flatMap((n: any) => n.detalle_novedad.map((d: any) => ({
-            fecha: parseISO(d.fecha),
-            id_tipo: n.id_novedad_tipo
-          })))
+          .flatMap((n: any) => {
+            if (!n.detalle_novedad || n.detalle_novedad.length === 0) return [];
+
+            return n.detalle_novedad.map((d: any) => ({
+              fecha: parseISO(d.fecha),
+              id_tipo: n.id_novedad_tipo
+            }));
+          })
         : [];
 
       setNovedades(actualesEnDb);
+      setCambiosPendientes(new Map());
     }
   }, [idEmpleadoSeleccionado, empleadoSeleccionado, novedadesMes]);
 
   const handleDiaToggle = (fecha: Date) => {
+    const fechaStr = format(fecha, 'yyyy-MM-dd');
+
     setNovedades(prev => {
       const existe = prev.find(n => isSameDay(n.fecha, fecha));
+      const nuevosCambios = new Map(cambiosPendientes);
+
       if (existe) {
-        if (existe.id_tipo === tipoSeleccionado) return prev.filter(n => !isSameDay(n.fecha, fecha));
+        if (existe.id_tipo === tipoSeleccionado) {
+          nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: existe.id_tipo, tipo: 'eliminar' });
+          setCambiosPendientes(nuevosCambios);
+          return prev.filter(n => !isSameDay(n.fecha, fecha));
+        }
+        nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: tipoSeleccionado, tipo: 'modificar' });
+        setCambiosPendientes(nuevosCambios);
         return prev.map(n => isSameDay(n.fecha, fecha) ? { ...n, id_tipo: tipoSeleccionado } : n);
       }
+
+      nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: tipoSeleccionado, tipo: 'crear' });
+      setCambiosPendientes(nuevosCambios);
       return [...prev, { fecha, id_tipo: tipoSeleccionado }];
     });
   };
@@ -129,28 +146,27 @@ export default function ConfiguracionProgramacion() {
   };
 
   const guardarTodoMutation = useMutation({
-    mutationFn: async (payload: { idEmpleado: number, areas: number[], novedades: any[] }) => {
+    mutationFn: async (payload: { idEmpleado: number, areas: number[] }) => {
       isSaving.current = true;
       await empleadosService.actualizar(payload.idEmpleado, { areas_permitidas: payload.areas });
-      await consultasService.guardarNovedadesMasivas({
-        id_empleado: payload.idEmpleado,
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin,
-        novedades: payload.novedades.map(n => ({
-          fecha: format(n.fecha, 'yyyy-MM-dd'),
-          id_tipo: n.id_tipo
-        }))
-      });
+      if (cambiosPendientes.size > 0) {
+        const operaciones = Array.from(cambiosPendientes.values());
+        await novedadesService.sincronizar({
+          id_empleado: payload.idEmpleado,
+          operaciones
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
       queryClient.invalidateQueries({ queryKey: ['novedades-mes'] });
-      toast.success('Configuración sincronizada con éxito');
+      setCambiosPendientes(new Map());
+      toast.success('Configuración sincronizada correctamente');
       setTimeout(() => { isSaving.current = false; }, 500);
     },
     onError: () => {
       isSaving.current = false;
-      toast.error('Error al guardar configuración');
+      toast.error('Error al sincronizar configuración');
     }
   });
 
@@ -236,7 +252,15 @@ export default function ConfiguracionProgramacion() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setNovedades([])}
+                  onClick={() => {
+                    const nuevosCambios = new Map(cambiosPendientes);
+                    novedades.forEach(n => {
+                      const key = format(n.fecha, 'yyyy-MM-dd');
+                      nuevosCambios.set(key, { fecha: key, id_tipo: n.id_tipo, tipo: 'eliminar' });
+                    });
+                    setCambiosPendientes(nuevosCambios);
+                    setNovedades([]);
+                  }}
                   className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 font-bold text-xs uppercase"
                 >
                   <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
@@ -268,6 +292,9 @@ export default function ConfiguracionProgramacion() {
                       <span className="text-[10px] font-bold opacity-60 uppercase mb-1">{format(fecha, 'eee', { locale: es })}</span>
                       <span className="text-lg font-black">{format(fecha, 'dd')}</span>
                       {novedad && <span className="text-[9px] font-black tracking-tighter mt-1">{tipo?.corta}</span>}
+                      {cambiosPendientes.has(format(fecha, 'yyyy-MM-dd')) && (
+                        <div className="absolute top-1 right-1 w-2 h-2 bg-yellow-400 rounded-full shadow-sm" />
+                      )}
                     </div>
                   );
                 })}
@@ -275,10 +302,10 @@ export default function ConfiguracionProgramacion() {
               <div className="mt-8 pt-6 border-t">
                 <Button
                   className="w-full h-14 text-lg font-black bg-indigo-600 hover:bg-indigo-700 rounded-xl"
-                  onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado, areas: areasPermitidas, novedades })}
-                  disabled={guardarTodoMutation.isPending}
+                  onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado!, areas: areasPermitidas })}
+                  disabled={guardarTodoMutation.isPending || (cambiosPendientes.size === 0 && JSON.stringify(areasPermitidas) === JSON.stringify(empleadoSeleccionado?.areas_permitidas))}
                 >
-                  <Save className="h-6 w-6 mr-3" /> {guardarTodoMutation.isPending ? 'SINCRONIZANDO...' : 'GUARDAR CAMBIOS DEL EMPLEADO'}
+                  <Save className="h-6 w-6 mr-3" /> {guardarTodoMutation.isPending ? 'SINCRONIZANDO...' : 'GUARDAR CAMBIOS'}
                 </Button>
               </div>
             </CardContent>
@@ -291,7 +318,6 @@ export default function ConfiguracionProgramacion() {
         </div>
       )}
 
-      {/* Capacidades */}
       <Card className="border-indigo-100 bg-indigo-50/30 rounded-2xl overflow-hidden mt-6 shadow-md">
         <CardHeader className="py-4 border-b border-indigo-100 bg-white/50 flex flex-row items-center justify-between">
           <CardTitle className="text-xs font-black text-indigo-900 flex items-center gap-2 tracking-widest uppercase">

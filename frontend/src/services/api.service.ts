@@ -344,6 +344,17 @@ export const novedadesService = {
     const { data } = await api.post('/novedades', novedad);
     return data;
   },
+  sincronizar: async (payload: {
+    id_empleado: number;
+    operaciones: Array<{
+      fecha: string;
+      id_tipo: number;
+      tipo: 'crear' | 'modificar' | 'eliminar';
+    }>;
+  }) => {
+    const { data } = await api.post('/novedades/sincronizar', payload);
+    return data;
+  },
   actualizarEstado: async (id: number, etapa: string) => {
     const { data } = await api.put(`/novedades/${id}/estado`, { etapa });
     return data;
