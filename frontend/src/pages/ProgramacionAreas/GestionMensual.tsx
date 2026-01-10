@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
 import { areasService, turnosService, programacionService } from '@/services/api.service';
+import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -33,10 +34,16 @@ export default function GestionMensual() {
     const [paso, setPaso] = useState<'seleccion' | 'detalle'>(searchParams.get('mes') ? 'detalle' : 'seleccion');
     const [cambiosLocales, setCambiosLocales] = useState<CambioLocal[]>([]);
     const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
+
+    const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
+    const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
+    const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
+
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
     const { data: areasRaw } = useQuery<Area[]>({ queryKey: ['areas'], queryFn: () => areasService.listar() });
     const { data: turnosRaw } = useQuery<Turno[]>({ queryKey: ['turnos'], queryFn: () => turnosService.listar({ estado: true }) });
+
     const { data: programacionOriginal = [], isLoading: cargandoProg, refetch } = useQuery({
         queryKey: ['programacion-mensual', mes, anio],
         queryFn: async () => {
@@ -48,12 +55,13 @@ export default function GestionMensual() {
         enabled: paso === 'detalle',
         staleTime: 0
     });
-    const { data: noAsignadosPorDia = {} } = useQuery({
+
+    const { data: noAsignadosPorDia = {}, refetch: refetchNoAsignados } = useQuery({
         queryKey: ['no-asignados-dia', mes, anio],
         queryFn: () => programacionService.obtenerEmpleadosNoAsignadosPorDia(mes, anio),
         enabled: paso === 'detalle'
     });
-    console.log('noAsignadosPorDia:', noAsignadosPorDia);
+
     const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
         queryKey: ['validar-programacion', mes, anio],
         queryFn: async () => {
@@ -66,12 +74,10 @@ export default function GestionMensual() {
 
     const programacion = useMemo(() => {
         if (!programacionOriginal || cambiosLocales.length === 0) return programacionOriginal;
-        const programacionModificada = programacionOriginal.map((asig: any) => {
+        return programacionOriginal.map((asig: any) => {
             const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
             if (cambio) {
-                if (cambio.id_area_destino === -1) {
-                    return { ...asig, _eliminado: true };
-                }
+                if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
                 return {
                     ...asig,
                     id_area: cambio.id_area_destino,
@@ -82,7 +88,6 @@ export default function GestionMensual() {
             }
             return asig;
         }).filter((asig: any) => !asig._eliminado);
-        return programacionModificada;
     }, [programacionOriginal, cambiosLocales]);
 
     const areas = useMemo(() => {
@@ -197,12 +202,11 @@ export default function GestionMensual() {
                 id_area_destino: idAreaDestino,
                 id_turno_destino: idTurnoDestino
             };
-            const fechaOrigenEmpleadoArrastrado = empleadoArrastrado.fecha.split('T')[0];
             const cambio2: CambioLocal = {
                 id: cambioId,
                 id_detalle_programacion: destinoAsignacion.id_detalle_programacion,
                 empleado: nombreDestino,
-                fecha: fechaOrigenEmpleadoArrastrado,
+                fecha: fechaOrigen,
                 id_area_origen: idAreaDestino,
                 id_turno_origen: idTurnoDestino,
                 id_area_destino: empleadoArrastrado.id_area_origen,
@@ -223,7 +227,7 @@ export default function GestionMensual() {
                 id_turno_destino: idTurnoDestino
             };
             setCambiosLocales(prev => [...prev, cambio]);
-            toast.info(`${cambio.empleado} movido. Presiona "Guardar Cambios" para confirmar.`);
+            toast.info(`${cambio.empleado} movido.`);
         }
         setEmpleadoArrastrado(null);
     };
@@ -253,7 +257,7 @@ export default function GestionMensual() {
             id_turno_destino: -1
         };
         setCambiosLocales(prev => [...prev, cambio]);
-        toast.info(`${cambio.empleado} movido a refuerzos. Presiona "Guardar Cambios" para confirmar.`);
+        toast.info(`${cambio.empleado} movido a refuerzos.`);
         setEmpleadoArrastrado(null);
     };
 
@@ -271,6 +275,12 @@ export default function GestionMensual() {
     const handleExportar = () => {
         const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
         XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`, { bookType: 'xlsx', cellStyles: true });
+    };
+
+    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
+        setEmpleadoSeleccionado({ id, nombre });
+        setFechaParaNovedad(fecha);
+        setModalNovedadOpen(true);
     };
 
     return (
@@ -312,7 +322,7 @@ export default function GestionMensual() {
                     </Card>
                     <div className="bg-slate-50 border-dashed border-2 rounded-xl p-8 text-center">
                         <CalendarDays className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                        <h3 className="text-lg font-medium text-slate-900">¿No hay programación generada ?</h3>
+                        <h3 className="text-lg font-medium text-slate-900">¿No hay programación generada?</h3>
                         <p className="text-slate-500 mb-6">Debe generar primero la distribución automática en el motor de áreas.</p>
                         <Button variant="outline" onClick={() => navigate('/programacion-areas')}>Ir a Programación Áreas <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
@@ -330,7 +340,7 @@ export default function GestionMensual() {
                                 </>
                             )}
                             <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
-                            <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`¿Eliminar toda la programación de ${meses[mes - 1]} ${anio}?`)) { eliminarMutation.mutate(); } }} disabled={eliminarMutation.isPending}><Trash2 className="mr-2 h-4 w-4" /> Eliminar Mes</Button>
+                            <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`¿Eliminar toda la programación?`)) { eliminarMutation.mutate(); } }} disabled={eliminarMutation.isPending}><Trash2 className="mr-2 h-4 w-4" /> Eliminar Mes</Button>
                         </div>
                     </div>
                     {cargandoProg ? (
@@ -338,27 +348,20 @@ export default function GestionMensual() {
                             <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-4" />
                             <p className="text-slate-500 text-sm">Cargando programación ...</p>
                         </div>
-                    ) : programacion.length === 0 ? (
-                        <Card className="p-12 text-center border-dashed">
-                            <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
-                            <h3 className="text-xl font-bold">Sin Registros</h3>
-                            <p className="text-slate-500 mb-4">No se encontró programación para {meses[mes - 1]} del {anio}.</p>
-                            <Button onClick={() => navigate('/programacion-areas')}>Generar Ahora</Button>
-                        </Card>
                     ) : (
                         <>
                             {alertasMotor.length > 0 && (
                                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-                                    <h3 className="text-sm font-bold text-amber-900 flex items-center gap-2 mb-3"><AlertCircle className="h-4 w-4" /> Alertas de Cobertura y Personal ({alertasMotor.reduce((acc: number, g: any) => acc + g.alertas.length, 0)})</h3>
-                                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-amber-200">
+                                    <h3 className="text-sm font-bold text-amber-900 flex items-center gap-2 mb-3"><AlertCircle className="h-4 w-4" /> Alertas de Cobertura</h3>
+                                    <div className="flex gap-4 overflow-x-auto pb-2">
                                         {alertasMotor.map((grupo: any, gIdx: number) => (
                                             <div key={gIdx} className="min-w-[200px] bg-white border border-amber-100 rounded-lg p-2 shadow-sm">
-                                                <div className="text-[10px] font-bold text-amber-700 border-b border-amber-50 mb-1.5 pb-1 uppercase">Día {new Date(grupo.fecha).getUTCDate()}</div>
-                                                <div className="space-y-1.5">
+                                                <div className="text-[10px] font-bold text-amber-700 border-b mb-1 uppercase">Día {new Date(grupo.fecha).getUTCDate()}</div>
+                                                <div className="space-y-1">
                                                     {grupo.alertas.map((alerta: any, aIdx: number) => (
-                                                        <div key={aIdx} className="flex gap-1.5 items-start">
+                                                        <div key={aIdx} className="flex gap-1 items-start">
                                                             <div className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${alerta.tipo === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                                                            <p className="text-[10px] leading-tight text-slate-700 font-medium">{alerta.mensaje}</p>
+                                                            <p className="text-[10px] text-slate-700">{alerta.mensaje}</p>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -380,7 +383,7 @@ export default function GestionMensual() {
                                                             <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-slate-500">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-indigo-600 font-bold">{dia.nombreDia}</span>
-                                                                    <span>{dia.numero} de {meses[mes - 1].substring(0, 3)}</span>
+                                                                    <span>{dia.numero}</span>
                                                                 </div>
                                                             </th>
                                                         ))}
@@ -390,18 +393,24 @@ export default function GestionMensual() {
                                                     {configAreasTurnos[area.id_area]?.map((tId) => {
                                                         const turnoInfo = turnos.find(t => t.id_turno === tId);
                                                         return (
-                                                            <tr key={tId} className="hover:bg-slate-50/50">
-                                                                <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">{turnoInfo?.tipo_turno || `T${tId}`}</td>
+                                                            <tr key={tId}>
+                                                                <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
                                                                 {infoDias.map((dia) => {
                                                                     const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
                                                                     return (
-                                                                        <td key={dia.fechaISO} className={`border p-2 min-h-[60px] ${asignados.length === 0 ? 'bg-red-50/30' : ''}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
+                                                                        <td key={dia.fechaISO} className="border p-2 min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
                                                                             <div className="flex flex-col gap-1">
-                                                                                {asignados.length > 0 ? asignados.map((asig: any, idx: number) => (
-                                                                                    <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} className={`px-1.5 py-1 border rounded text-[9px] leading-tight font-medium truncate cursor-move transition-all ${asig._modificado ? 'bg-amber-100 border-amber-400 text-amber-900 ring-2 ring-amber-200' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-300'}`}>
-                                                                                        {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
+                                                                                {asignados.map((asig: any, idx: number) => (
+                                                                                    <div
+                                                                                        key={idx}
+                                                                                        draggable
+                                                                                        onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
+                                                                                        onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
+                                                                                        className={`px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all ${asig._modificado ? 'bg-amber-100 border-amber-400' : 'bg-slate-50 border-slate-200'}`}
+                                                                                    >
+                                                                                        {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                     </div>
-                                                                                )) : <span className="text-slate-200 text-center text-xs"> -</span>}
+                                                                                ))}
                                                                             </div>
                                                                         </td>
                                                                     );
@@ -415,40 +424,36 @@ export default function GestionMensual() {
                                     </div>
                                 ))}
                             </div>
-                            <Card className="border-amber-200 bg-amber-50">
+                            <Card className="border-amber-200 bg-amber-50 mt-8">
                                 <CardContent className="p-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-sm font-bold text-amber-900">Empleados Sin Asignación por Día</h3>
-                                        <span className="text-xs text-amber-700 bg-amber-100 px-3 py-1 rounded-full font-medium">Arrastra empleados aquí para quitarlos de programación</span>
-                                    </div>
+                                    <h3 className="text-sm font-bold text-amber-900 mb-4">Refuerzos / Disponibles</h3>
                                     <div className="overflow-x-auto">
                                         <table className="w-full border-collapse">
                                             <thead>
                                                 <tr className="bg-amber-100">
-                                                    <th className="border p-2 text-left w-28 text-[11px] font-bold text-amber-800">REFUERZOS</th>
+                                                    <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
                                                     {infoDias.map((dia) => (
-                                                        <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-amber-700">
-                                                            <div className="flex flex-col">
-                                                                <span className="font-bold">{dia.nombreDia}</span>
-                                                                <span>{dia.numero}</span>
-                                                            </div>
-                                                        </th>
+                                                        <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px]">{dia.numero}</th>
                                                     ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td className="border p-2 text-xs font-bold text-amber-900 bg-amber-50">Disponibles</td>
+                                                    <td className="border p-2 text-xs font-bold">Disponibles</td>
                                                     {infoDias.map((dia) => {
                                                         const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
                                                         return (
                                                             <td key={dia.fechaISO} className="border p-2 bg-white min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
                                                                 <div className="flex flex-col gap-1">
-                                                                    {noAsignados.length > 0 ? noAsignados.map((emp: any) => (
-                                                                        <div key={emp.id_empleado} className="px-1.5 py-1 border border-amber-200 rounded text-[9px] leading-tight bg-amber-50 text-amber-800 font-medium truncate">
+                                                                    {noAsignados.map((emp: any) => (
+                                                                        <div
+                                                                            key={emp.id_empleado}
+                                                                            onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
+                                                                            className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer"
+                                                                        >
                                                                             {emp.nombre_completo}
                                                                         </div>
-                                                                    )) : <span className="text-slate-300 text-center text-xs"> -</span>}
+                                                                    ))}
                                                                 </div>
                                                             </td>
                                                         );
@@ -463,6 +468,18 @@ export default function GestionMensual() {
                     )}
                 </div>
             )}
+
+            <ModalNovedadRapida
+                isOpen={modalNovedadOpen}
+                onClose={() => setModalNovedadOpen(false)}
+                empleado={empleadoSeleccionado}
+                fechaSeleccionada={fechaParaNovedad}
+                onSuccess={() => {
+                    refetch();
+                    refetchNoAsignados();
+                    refetchAlertas();
+                }}
+            />
         </div>
     );
 }
