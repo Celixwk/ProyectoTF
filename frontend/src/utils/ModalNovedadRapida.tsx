@@ -32,9 +32,15 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
     const [fechaInicio, setFechaInicio] = useState<string>(fechaSeleccionada || "");
     const [fechaFin, setFechaFin] = useState<string>(fechaSeleccionada || "");
 
+    const esFormularioValido =
+        empleado &&
+        fechaInicio !== "" &&
+        fechaFin !== "" &&
+        new Date(fechaInicio) <= new Date(fechaFin);
+
     const sincronizarMutation = useMutation({
         mutationFn: async () => {
-            if (!empleado || !fechaInicio || !fechaFin) return;
+            if (!esFormularioValido) return;
 
             const dias = eachDayOfInterval({
                 start: parseISO(fechaInicio),
@@ -69,14 +75,7 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
     });
 
     const handleGuardar = () => {
-        if (!fechaInicio || !fechaFin) {
-            toast.error('Debe seleccionar un rango de fechas');
-            return;
-        }
-        if (new Date(fechaInicio) > new Date(fechaFin)) {
-            toast.error('La fecha inicial no puede ser mayor a la final');
-            return;
-        }
+        if (!esFormularioValido) return;
         sincronizarMutation.mutate();
     };
 
@@ -146,8 +145,11 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
                     </Button>
                     <Button
                         onClick={handleGuardar}
-                        disabled={sincronizarMutation.isPending}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-8 rounded-xl h-12 shadow-lg shadow-indigo-100 transition-all active:scale-95"
+                        disabled={!esFormularioValido || sincronizarMutation.isPending}
+                        className={`font-black px-8 rounded-xl h-12 shadow-lg transition-all active:scale-95 ${!esFormularioValido
+                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100'
+                            }`}
                     >
                         {sincronizarMutation.isPending ? (
                             <Loader2 className="h-5 w-5 animate-spin" />

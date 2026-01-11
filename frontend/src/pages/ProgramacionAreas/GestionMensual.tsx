@@ -9,8 +9,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Trash2, Save, Undo2 } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Trash2, Save, Undo2, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import type { Area, Turno } from '@/types/api.types';
 
 interface CambioLocal {
@@ -38,9 +40,11 @@ export default function GestionMensual() {
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
     const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
+    const [fechaCorteNovedades, setFechaCorteNovedades] = useState<Date | null>(null);
 
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
+
     const { data: areasRaw } = useQuery<Area[]>({ queryKey: ['areas'], queryFn: () => areasService.listar() });
     const { data: turnosRaw } = useQuery<Turno[]>({ queryKey: ['turnos'], queryFn: () => turnosService.listar({ estado: true }) });
 
@@ -116,42 +120,12 @@ export default function GestionMensual() {
             const fecha = new Date(anio, mes - 1, i + 1);
             return {
                 numero: i + 1,
-                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace(", ", ""),
-                fechaISO: fecha.toISOString().split('T')[0]
+                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace(".", ""),
+                fechaISO: fecha.toISOString().split('T')[0],
+                objetoFecha: fecha
             };
         });
     }, [mes, anio]);
-
-    const eliminarMutation = useMutation({
-        mutationFn: () => programacionService.eliminarMes(mes, anio),
-        onSuccess: () => {
-            toast.success('Programación eliminada del periodo');
-            setPaso('seleccion');
-            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
-        },
-        onError: () => toast.error('No se pudo eliminar la programación')
-    });
-
-    const guardarCambiosMutation = useMutation({
-        mutationFn: async () => {
-            for (const cambio of cambiosLocales) {
-                await programacionService.moverEmpleado({
-                    id_detalle_programacion: cambio.id_detalle_programacion,
-                    nuevo_id_area: cambio.id_area_destino,
-                    nuevo_id_turno: cambio.id_turno_destino,
-                    nueva_fecha: cambio.fecha
-                });
-            }
-        },
-        onSuccess: () => {
-            toast.success('Cambios guardados exitosamente');
-            setCambiosLocales([]);
-            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
-            queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
-            refetchAlertas();
-        },
-        onError: () => toast.error('Error al guardar cambios')
-    });
 
     const handleDragStart = (e: React.DragEvent, asignacion: any, idArea: number, idTurno: number) => {
         setEmpleadoArrastrado({ ...asignacion, id_area_origen: idArea, id_turno_origen: idTurno });
@@ -167,67 +141,37 @@ export default function GestionMensual() {
         e.preventDefault();
         if (!empleadoArrastrado) return;
         const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
+
         if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
-        if (fechaOrigen !== fechaDestino) {
-            const yaAsignadoEseDia = programacion.some((p: any) => p.id_empleado === empleadoArrastrado.id_empleado && p.fecha.split('T')[0] === fechaDestino);
-            if (yaAsignadoEseDia) {
-                toast.error('El empleado ya tiene una asignación en ese día');
-                setEmpleadoArrastrado(null);
-                return;
-            }
-        }
+
         const destinoAsignacion = programacion.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
         const cambioId = `${Date.now()}-${Math.random()}`;
+
         if (destinoAsignacion) {
-            if (fechaOrigen !== fechaDestino) {
-                const destinoYaAsignadoEnOrigen = programacion.some((p: any) => p.id_empleado === destinoAsignacion.id_empleado && p.fecha.split('T')[0] === fechaOrigen);
-                if (destinoYaAsignadoEnOrigen) {
-                    toast.error('El intercambio no es posible: el otro empleado ya tiene asignación en el día de origen');
-                    setEmpleadoArrastrado(null);
-                    return;
-                }
-            }
             const nombreArrastrado = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
             const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
             const cambio1: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
-                empleado: nombreArrastrado,
-                fecha: fechaDestino,
-                id_area_origen: empleadoArrastrado.id_area_origen,
-                id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino,
-                id_turno_destino: idTurnoDestino
+                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArrastrado,
+                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
+                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
             };
             const cambio2: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: destinoAsignacion.id_detalle_programacion,
-                empleado: nombreDestino,
-                fecha: fechaOrigen,
-                id_area_origen: idAreaDestino,
-                id_turno_origen: idTurnoDestino,
-                id_area_destino: empleadoArrastrado.id_area_origen,
-                id_turno_destino: empleadoArrastrado.id_turno_origen
+                id: cambioId, id_detalle_programacion: destinoAsignacion.id_detalle_programacion, empleado: nombreDestino,
+                fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino,
+                id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen
             };
             setCambiosLocales(prev => [...prev, cambio1, cambio2]);
-            toast.success(`Intercambio realizado entre ${cambio1.empleado} y ${cambio2.empleado}`);
         } else {
             const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
             const cambio: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
-                empleado: nombreArr,
-                fecha: fechaDestino,
-                id_area_origen: empleadoArrastrado.id_area_origen,
-                id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino,
-                id_turno_destino: idTurnoDestino
+                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
+                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
+                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
             };
             setCambiosLocales(prev => [...prev, cambio]);
-            toast.info(`${cambio.empleado} movido.`);
         }
         setEmpleadoArrastrado(null);
     };
@@ -235,46 +179,33 @@ export default function GestionMensual() {
     const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
-        const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
-        if (fechaOrigen !== fechaDestino) {
-            const yaAsignadoEseDia = programacion.some((p: any) => p.id_empleado === empleadoArrastrado.id_empleado && p.fecha.split('T')[0] === fechaDestino);
-            if (yaAsignadoEseDia) {
-                toast.error('El empleado ya tiene una asignación en ese día');
-                setEmpleadoArrastrado(null);
-                return;
-            }
-        }
         const cambioId = `${Date.now()}-${Math.random()}`;
         const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
         const cambio: CambioLocal = {
-            id: cambioId,
-            id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
-            empleado: nombreArr,
-            fecha: fechaDestino,
-            id_area_origen: empleadoArrastrado.id_area_origen,
-            id_turno_origen: empleadoArrastrado.id_turno_origen,
-            id_area_destino: -1,
-            id_turno_destino: -1
+            id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
+            fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
+            id_area_destino: -1, id_turno_destino: -1
         };
         setCambiosLocales(prev => [...prev, cambio]);
-        toast.info(`${cambio.empleado} movido a refuerzos.`);
         setEmpleadoArrastrado(null);
     };
 
     const handleRevertirCambios = () => {
         setCambiosLocales([]);
-        toast.info('Todos los cambios han sido revertidos');
+        setFechaCorteNovedades(null);
+        toast.info('Cambios revertidos');
     };
 
     const handleConsultar = () => {
         setPaso('detalle');
         setCambiosLocales([]);
+        setFechaCorteNovedades(null);
         refetch();
     };
 
     const handleExportar = () => {
         const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
-        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`, { bookType: 'xlsx', cellStyles: true });
+        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`);
     };
 
     const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
@@ -283,14 +214,22 @@ export default function GestionMensual() {
         setModalNovedadOpen(true);
     };
 
+    const handleNovedadExitosa = (fechaCorte: Date) => {
+        setFechaCorteNovedades(prev => {
+            if (!prev || fechaCorte < prev) return fechaCorte;
+            return prev;
+        });
+    };
+
     return (
         <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
                 <p className="text-slate-500">
-                    {paso === 'seleccion' ? 'Seleccione el periodo para consultar y gestionar la programación guardada.' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}
+                    {paso === 'seleccion' ? 'Seleccione el periodo' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}
                 </p>
             </div>
+
             {paso === 'seleccion' && (
                 <div className="max-w-4xl mx-auto space-y-6">
                     <Card className="bg-white border shadow-sm">
@@ -320,14 +259,9 @@ export default function GestionMensual() {
                             </Button>
                         </CardContent>
                     </Card>
-                    <div className="bg-slate-50 border-dashed border-2 rounded-xl p-8 text-center">
-                        <CalendarDays className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                        <h3 className="text-lg font-medium text-slate-900">¿No hay programación generada?</h3>
-                        <p className="text-slate-500 mb-6">Debe generar primero la distribución automática en el motor de áreas.</p>
-                        <Button variant="outline" onClick={() => navigate('/programacion-areas')}>Ir a Programación Áreas <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                    </div>
                 </div>
             )}
+
             {paso === 'detalle' && (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm">
@@ -336,136 +270,151 @@ export default function GestionMensual() {
                             {cambiosLocales.length > 0 && (
                                 <>
                                     <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir Todo</Button>
-                                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => guardarCambiosMutation.mutate()} disabled={guardarCambiosMutation.isPending}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
+                                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] })}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
                                 </>
                             )}
                             <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
-                            <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`¿Eliminar toda la programación?`)) { eliminarMutation.mutate(); } }} disabled={eliminarMutation.isPending}><Trash2 className="mr-2 h-4 w-4" /> Eliminar Mes</Button>
                         </div>
                     </div>
-                    {cargandoProg ? (
-                        <div className="flex flex-col items-center justify-center py-20">
-                            <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-4" />
-                            <p className="text-slate-500 text-sm">Cargando programación ...</p>
-                        </div>
-                    ) : (
-                        <>
-                            {alertasMotor.length > 0 && (
-                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-                                    <h3 className="text-sm font-bold text-amber-900 flex items-center gap-2 mb-3"><AlertCircle className="h-4 w-4" /> Alertas de Cobertura</h3>
-                                    <div className="flex gap-4 overflow-x-auto pb-2">
-                                        {alertasMotor.map((grupo: any, gIdx: number) => (
-                                            <div key={gIdx} className="min-w-[200px] bg-white border border-amber-100 rounded-lg p-2 shadow-sm">
-                                                <div className="text-[10px] font-bold text-amber-700 border-b mb-1 uppercase">Día {new Date(grupo.fecha).getUTCDate()}</div>
-                                                <div className="space-y-1">
-                                                    {grupo.alertas.map((alerta: any, aIdx: number) => (
-                                                        <div key={aIdx} className="flex gap-1 items-start">
-                                                            <div className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${alerta.tipo === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} />
-                                                            <p className="text-[10px] text-slate-700">{alerta.mensaje}</p>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            <div className="space-y-8">
-                                {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
-                                    <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                                        <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full border-collapse">
-                                                <thead>
-                                                    <tr className="bg-slate-50">
-                                                        <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
-                                                        {infoDias.map((dia) => (
-                                                            <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-slate-500">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-indigo-600 font-bold">{dia.nombreDia}</span>
-                                                                    <span>{dia.numero}</span>
-                                                                </div>
-                                                            </th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {configAreasTurnos[area.id_area]?.map((tId) => {
-                                                        const turnoInfo = turnos.find(t => t.id_turno === tId);
-                                                        return (
-                                                            <tr key={tId}>
-                                                                <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
-                                                                {infoDias.map((dia) => {
-                                                                    const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                                    return (
-                                                                        <td key={dia.fechaISO} className="border p-2 min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
-                                                                            <div className="flex flex-col gap-1">
-                                                                                {asignados.map((asig: any, idx: number) => (
-                                                                                    <div
-                                                                                        key={idx}
-                                                                                        draggable
-                                                                                        onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
-                                                                                        onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
-                                                                                        className={`px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all ${asig._modificado ? 'bg-amber-100 border-amber-400' : 'bg-slate-50 border-slate-200'}`}
-                                                                                    >
-                                                                                        {asig.nombre_empleado || asig.empleado?.nombre_completo}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </td>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                ))}
+
+                    {fechaCorteNovedades && (
+                        <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="bg-red-500 p-2 rounded-xl text-white shadow-lg shadow-red-100">
+                                <AlertCircle className="h-5 w-5" />
                             </div>
-                            <Card className="border-amber-200 bg-amber-50 mt-8">
-                                <CardContent className="p-6">
-                                    <h3 className="text-sm font-bold text-amber-900 mb-4">Refuerzos / Disponibles</h3>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full border-collapse">
-                                            <thead>
-                                                <tr className="bg-amber-100">
-                                                    <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
-                                                    {infoDias.map((dia) => (
-                                                        <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px]">{dia.numero}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td className="border p-2 text-xs font-bold">Disponibles</td>
-                                                    {infoDias.map((dia) => {
-                                                        const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
-                                                        return (
-                                                            <td key={dia.fechaISO} className="border p-2 bg-white min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
-                                                                <div className="flex flex-col gap-1">
-                                                                    {noAsignados.map((emp: any) => (
-                                                                        <div
-                                                                            key={emp.id_empleado}
-                                                                            onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
-                                                                            className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer"
-                                                                        >
-                                                                            {emp.nombre_completo}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </>
+                            <div className="flex-1">
+                                <p className="text-sm font-black text-red-900 uppercase tracking-tight">Novedad Registrada</p>
+                                <p className="text-xs text-red-700 font-medium">Se requiere regenerar la cobertura desde el {format(fechaCorteNovedades, "dd 'de' MMMM", { locale: es })}.</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button size="sm" onClick={() => navigate(`/programacion-areas?mes=${mes}&anio=${anio}`)} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl">
+                                    <RefreshCcw className="mr-2 h-4 w-4" /> REGENERAR DESDE {format(fechaCorteNovedades, 'dd/MM')}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setFechaCorteNovedades(null)} className="text-red-700 hover:bg-red-100 font-bold">Ignorar</Button>
+                            </div>
+                        </div>
                     )}
+
+                    <div className="space-y-8">
+                        {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
+                            <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                                <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50">
+                                                <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
+                                                {infoDias.map((dia) => {
+                                                    const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
+                                                    return (
+                                                        <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-500 ${esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500'}`}>
+                                                            <div className="flex flex-col relative">
+                                                                <span className={`${esSucio ? 'text-red-600 font-black' : 'text-indigo-600 font-bold'}`}>{dia.nombreDia}</span>
+                                                                <span className={`${esSucio ? 'text-red-700 font-black text-xs' : ''}`}>{dia.numero}</span>
+                                                                {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {configAreasTurnos[area.id_area]?.map((tId) => {
+                                                const turnoInfo = turnos.find(t => t.id_turno === tId);
+                                                return (
+                                                    <tr key={tId}>
+                                                        <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
+                                                        {infoDias.map((dia) => {
+                                                            const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
+                                                            const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
+
+                                                            // DETECCIÓN DE NOVEDAD
+                                                            const tieneNovedad = alertasMotor.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
+
+                                                            return (
+                                                                <td
+                                                                    key={dia.fechaISO}
+                                                                    className={`border p-2 min-h-[60px] transition-all duration-300 ${tieneNovedad
+                                                                        ? 'bg-red-300 border-red-500 shadow-inner'
+                                                                        : esSucio
+                                                                            ? 'bg-red-200'
+                                                                            : ''
+                                                                        }`}
+                                                                    onDragOver={handleDragOver}
+                                                                    onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}
+                                                                >
+                                                                    <div className="flex flex-col gap-1">
+                                                                        {asignados.map((asig: any, idx: number) => (
+                                                                            <div
+                                                                                key={idx}
+                                                                                draggable
+                                                                                onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
+                                                                                onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
+                                                                                className={`px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm ${tieneNovedad
+                                                                                    ? 'bg-white border-red-600 text-red-700 font-bold'
+                                                                                    : asig._modificado
+                                                                                        ? 'bg-amber-100 border-amber-400'
+                                                                                        : 'bg-white border-slate-200 hover:border-indigo-300'
+                                                                                    }`}
+                                                                            >
+                                                                                {asig.nombre_empleado || asig.empleado?.nombre_completo}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <Card className={`mt-8 transition-all duration-500 ${fechaCorteNovedades ? 'border-red-200 shadow-md' : 'border-slate-200'}`}>
+                        <CardContent className={`p-6 ${fechaCorteNovedades ? 'bg-red-50/10' : 'bg-slate-50'}`}>
+                            <h3 className={`text-sm font-bold mb-4 ${fechaCorteNovedades ? 'text-red-900' : 'text-slate-900'}`}>Refuerzos / Disponibles</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse">
+                                    <thead>
+                                        <tr className={fechaCorteNovedades ? 'bg-red-50' : 'bg-slate-100'}>
+                                            <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
+                                            {infoDias.map((dia) => (
+                                                <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] ${fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades ? 'bg-red-50 text-red-800 font-bold' : ''}`}>{dia.numero}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td className="border p-2 text-xs font-bold">Disponibles</td>
+                                            {infoDias.map((dia) => {
+                                                const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
+                                                const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
+                                                return (
+                                                    <td key={dia.fechaISO} className={`border p-2 bg-white min-h-[60px] ${esSucio ? 'bg-red-50/20' : ''}`} onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
+                                                        <div className="flex flex-col gap-1">
+                                                            {noAsignados.map((emp: any) => (
+                                                                <div
+                                                                    key={emp.id_empleado}
+                                                                    onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
+                                                                    className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer hover:bg-amber-100"
+                                                                >
+                                                                    {emp.nombre_completo}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 
@@ -474,10 +423,11 @@ export default function GestionMensual() {
                 onClose={() => setModalNovedadOpen(false)}
                 empleado={empleadoSeleccionado}
                 fechaSeleccionada={fechaParaNovedad}
-                onSuccess={() => {
+                onSuccess={(fechaCorte) => {
                     refetch();
                     refetchNoAsignados();
                     refetchAlertas();
+                    if (fechaCorte) handleNovedadExitosa(fechaCorte);
                 }}
             />
         </div>
