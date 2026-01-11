@@ -216,7 +216,8 @@ export function capa5_generarAsignacionesDia(
                 fecha: new Date(fecha),
                 hora_entrada: periodosTurno[0].hora_entrada,
                 hora_salida: periodosTurno[periodosTurno.length - 1].hora_salida,
-                periodos: periodosTurno
+                periodos: periodosTurno,
+                id_labor_mes: seleccion.empleado.id_labor_mes
             };
 
             asignaciones.push(asignacion);

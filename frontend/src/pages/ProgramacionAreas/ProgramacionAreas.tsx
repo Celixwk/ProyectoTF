@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, CalendarDays, CheckCircle2, Trash2, LayoutDashboard, AlertCircle } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
+import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
 import type { Area, Turno } from '@/types/api.types';
 
 export default function ProgramacionAreas() {
@@ -37,7 +38,10 @@ export default function ProgramacionAreas() {
 
     const { data: novedadesData, isLoading: novedadesLoading } = useQuery({
         queryKey: ['novedades-periodo', mes, anio],
-        queryFn: () => programacionService.obtenerNovedades(mes, anio),
+        queryFn: async () => {
+            const res = await programacionService.obtenerNovedades(mes, anio);
+            return Array.isArray(res) ? res : (res.data || []);
+        },
         enabled: paso === 'inicio'
     });
 
@@ -69,24 +73,23 @@ export default function ProgramacionAreas() {
     useEffect(() => {
         if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0) {
             const initialConfig: Record<number, { turnosIds: number[] }> = {};
-            // Mapeo de IDs según tu sistema
             const tIds = { T1: 5, T2: 6, T3: 7, T5: 8, T6: 9, T8: 11, T11: 14, T13: 15 };
 
             areas.forEach((area) => {
                 let idsSeleccionados: number[] = [];
                 switch (area.id_area) {
-                    case 1: idsSeleccionados = [tIds.T1, tIds.T11]; break; // SALA PRINCIPAL
-                    case 2: idsSeleccionados = [tIds.T11, tIds.T5]; break; // PUERTAS Y SALA
-                    case 3: idsSeleccionados = [tIds.T5, tIds.T3]; break;  // BAÑO 1
-                    case 5: idsSeleccionados = [tIds.T5, tIds.T11]; break; // SALA TAXIS
-                    case 6: idsSeleccionados = [tIds.T5, tIds.T13, tIds.T11]; break; // CASETA ENTRADA
-                    case 7: idsSeleccionados = [tIds.T11, tIds.T5, tIds.T13]; break; // CASETA SALIDA
-                    case 8: idsSeleccionados = [tIds.T11, tIds.T5]; break; // CONDUCE
-                    case 9: idsSeleccionados = [tIds.T13, tIds.T11, tIds.T5]; break; // PARQUEADERO 1
-                    case 10: idsSeleccionados = [tIds.T5, tIds.T11]; break; // PARQUEADERO 2
-                    case 11: idsSeleccionados = [tIds.T6, tIds.T8, tIds.T2]; break; // PERIFERICO NORTE
-                    case 12: idsSeleccionados = [tIds.T6]; break; // PERIFERICO SUR
-                    case 4: idsSeleccionados = [tIds.T5, tIds.T11]; break; // BAÑOS 3 (Default)
+                    case 1: idsSeleccionados = [tIds.T1, tIds.T11]; break;
+                    case 2: idsSeleccionados = [tIds.T11, tIds.T5]; break;
+                    case 3: idsSeleccionados = [tIds.T5, tIds.T3]; break;
+                    case 5: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    case 6: idsSeleccionados = [tIds.T5, tIds.T13, tIds.T11]; break;
+                    case 7: idsSeleccionados = [tIds.T11, tIds.T5, tIds.T13]; break;
+                    case 8: idsSeleccionados = [tIds.T11, tIds.T5]; break;
+                    case 9: idsSeleccionados = [tIds.T13, tIds.T11, tIds.T5]; break;
+                    case 10: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    case 11: idsSeleccionados = [tIds.T6, tIds.T8, tIds.T2]; break;
+                    case 12: idsSeleccionados = [tIds.T6]; break;
+                    case 4: idsSeleccionados = [tIds.T5, tIds.T11]; break;
                     default: idsSeleccionados = [tIds.T5, tIds.T11];
                 }
                 initialConfig[area.id_area] = { turnosIds: idsSeleccionados.filter(id => id !== undefined) };
@@ -116,19 +119,9 @@ export default function ProgramacionAreas() {
             toast.success('Programación generada exitosamente');
             queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
             queryClient.invalidateQueries({ queryKey: ['programacion-periodo'] });
+            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
         },
         onError: () => toast.error('Error al generar la programación')
-    });
-
-    const eliminarMutation = useMutation({
-        mutationFn: () => programacionService.eliminarMes(mes, anio),
-        onSuccess: () => {
-            toast.success('Programación eliminada del periodo');
-            setPaso('inicio');
-            setProgramacionGenerada([]);
-            queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
-        },
-        onError: () => toast.error('No se pudo eliminar la programación')
     });
 
     const handleIniciarProceso = () => {
@@ -264,29 +257,27 @@ export default function ProgramacionAreas() {
                             </div>
                         </div>
                         <div className="flex gap-3">
-                            <Button
-                                variant="outline"
-                                className="border-red-200 text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                    if (confirm("¿Estás seguro de eliminar esta programación? Se borrarán todos los registros de este mes en la DB.")) {
-                                        eliminarMutation.mutate();
-                                    }
+                            <BotonEliminarProgramacion
+                                mes={mes}
+                                anio={anio}
+                                onSuccess={() => {
+                                    setPaso('inicio');
+                                    setProgramacionGenerada([]);
                                 }}
-                                disabled={eliminarMutation.isPending}
+                            />
+                            <Button
+                                className="bg-indigo-600 hover:bg-indigo-700 font-bold"
+                                onClick={() => {
+                                    const params = new URLSearchParams({
+                                        mes: mes.toString(),
+                                        anio: anio.toString()
+                                    });
+                                    navigate(`/gestion-mensual?${params.toString()}`);
+                                }}
                             >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                {eliminarMutation.isPending ? 'Borrando...' : 'Descartar y Borrar'}
+                                <LayoutDashboard className="h-4 w-4 mr-2" />
+                                IR A GESTIÓN MENSUAL
                             </Button>
-                            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate(`/programacion/gestion?mes=${mes}&anio=${anio}`)}>
-                                <LayoutDashboard className="h-4 w-4 mr-2" /> Ir a Gestión Mensual
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg flex items-start gap-3">
-                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
-                        <div className="text-sm text-amber-800">
-                            <strong>Nota de Gestión:</strong> Los resultados mostrados son automáticos. Si desea realizar cambios manuales, mover empleados de refuerzo o ajustar turnos específicos, por favor diríjase a la ventana de <strong>Gestión Mensual</strong>.
                         </div>
                     </div>
 
@@ -311,9 +302,6 @@ export default function ProgramacionAreas() {
                                                         }`} />
                                                     <div className="space-y-0.5">
                                                         <p className="font-semibold text-slate-800 leading-tight">{alerta.mensaje}</p>
-                                                        {alerta.codigo === 'EMPLEADOS_SIN_ASIGNACION' && (
-                                                            <p className="text-slate-500 italic">Ver sección de refuerzos en Gestión Mensual.</p>
-                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -381,33 +369,16 @@ export default function ProgramacionAreas() {
                 </div>
             )}
 
-            <Dialog open={mostrarDialogoNovedades} onOpenChange={setMostrarDialogoNovedades}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-amber-600">
-                            <CalendarDays className="h-5 w-5" />
-                            Novedades en el Periodo
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="text-sm text-slate-500 mb-2">
-                        Se detectaron bloqueos o novedades para {meses[mes - 1]}. El motor los excluirá de la asignación.
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto border rounded-md bg-slate-50">
-                        {novedadesData?.map((nov: any, i: number) => (
-                            <div key={i} className="flex justify-between items-center p-3 border-b last:border-0">
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-slate-800 text-xs">{nov.nombre_completo || nov.nombre}</span>
-                                    <span className="text-[10px] text-slate-500 uppercase tracking-tighter">{nov.tipo || 'Novedad registrada'}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    <DialogFooter className="mt-4 gap-2">
-                        <Button variant="ghost" onClick={() => navigate('/novedades')}>Ver en detalle</Button>
-                        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => { setMostrarDialogoNovedades(false); setPaso('configuracion'); }}>Entendido, Continuar</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <ModalInfoNovedadesGeneracion
+                isOpen={mostrarDialogoNovedades}
+                onClose={() => setMostrarDialogoNovedades(false)}
+                onContinue={() => {
+                    setMostrarDialogoNovedades(false);
+                    setPaso('configuracion');
+                }}
+                novedades={novedadesData || []}
+                nombreMes={meses[mes - 1]}
+            />
         </div>
     );
 }

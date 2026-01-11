@@ -29,6 +29,8 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUs
 
 export async function capa6_generarProgramacionDia(fecha: Date, opciones?: OpcionesGeneracion): Promise<ProgramacionDia> {
   const fechaNormalizada = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+  const finDia = new Date(fechaNormalizada);
+  finDia.setUTCDate(fechaNormalizada.getUTCDate() + 1);
 
   const [empleadosBD, areasBD, turnosBD, novedades] = await Promise.all([
     prisma.empleado.findMany({
@@ -37,7 +39,10 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     }),
     prisma.area.findMany(),
     prisma.turno.findMany({ where: { estado: "Activo" } }),
-    prisma.detalleNovedad.findMany({ where: { fecha: fechaNormalizada }, include: { novedad_empleado: true } })
+    prisma.detalleNovedad.findMany({
+      where: { fecha: { gte: fechaNormalizada, lt: finDia } },
+      include: { novedad_empleado: true }
+    })
   ]);
 
   const programacionDelMes = await prisma.detalleProgramacion.findMany({
@@ -135,7 +140,6 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   }
 
   const alertasFinales = capa9_detectarProblemas(todasLasAsignaciones, areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })), candidatos, necesidadesPorArea, fechaNormalizada, { maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3, empleados: candidatos });
-  const hayErroresCriticos = alertasFinales.some(a => a.tipo === 'error');
   const respuestaBase = { fecha: fechaNormalizada, asignaciones: todasLasAsignaciones, alertas: alertasFinales, resumen: { total_asignaciones: todasLasAsignaciones.length, total_empleados: empleadosBD.length, total_areas: areasBD.length, huecos: [] } };
 
   if (todasLasAsignaciones.length === 0 && poolTrabajo.filter(e => e.disponible).length > 0) {
@@ -210,4 +214,3 @@ export async function capa6_validarPeriodo(inicio: string, fin: string) {
 
   return alertasTotales;
 }
-

@@ -1,98 +1,49 @@
-import { useState, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
-import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { areasService, turnosService, programacionService } from '@/services/api.service';
-import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Trash2, Save, Undo2, RefreshCcw } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
+import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
 import type { Area, Turno } from '@/types/api.types';
 
-interface CambioLocal {
-    id: string;
-    id_detalle_programacion: number;
-    empleado: string;
-    fecha: string;
-    id_area_origen: number;
-    id_turno_origen: number;
-    id_area_destino: number;
-    id_turno_destino: number;
-}
-
-export default function GestionMensual() {
-    const navigate = useNavigate();
+export default function ProgramacionAreas() {
     const queryClient = useQueryClient();
-    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const hoy = new Date();
-    const [mes, setMes] = useState(parseInt(searchParams.get('mes') || String(hoy.getMonth() + 1)));
-    const [anio, setAnio] = useState(parseInt(searchParams.get('anio') || String(hoy.getFullYear())));
-    const [paso, setPaso] = useState<'seleccion' | 'detalle'>(searchParams.get('mes') ? 'detalle' : 'seleccion');
-    const [cambiosLocales, setCambiosLocales] = useState<CambioLocal[]>([]);
-    const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
 
-    const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
-    const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
-    const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
-    const [fechaCorteNovedades, setFechaCorteNovedades] = useState<Date | null>(null);
+    const [mes, setMes] = useState(hoy.getMonth() + 1);
+    const [anio, setAnio] = useState(hoy.getFullYear());
+    const [paso, setPaso] = useState<'inicio' | 'configuracion' | 'resultado'>('inicio');
+    const [mostrarDialogoNovedades, setMostrarDialogoNovedades] = useState(false);
+    const [configAreas, setConfigAreas] = useState<Record<number, { turnosIds: number[] }>>({});
+    const [programacionGenerada, setProgramacionGenerada] = useState<any[]>([]);
+    const [alertasMotor, setAlertasMotor] = useState<any[]>([]);
 
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
+    const { data: areasRaw, isLoading: areasLoading } = useQuery<Area[]>({
+        queryKey: ['areas'],
+        queryFn: () => areasService.listar()
+    });
 
-    const { data: areasRaw } = useQuery<Area[]>({ queryKey: ['areas'], queryFn: () => areasService.listar() });
-    const { data: turnosRaw } = useQuery<Turno[]>({ queryKey: ['turnos'], queryFn: () => turnosService.listar({ estado: true }) });
+    const { data: turnosRaw, isLoading: turnosLoading } = useQuery<Turno[]>({
+        queryKey: ['turnos'],
+        queryFn: () => turnosService.listar({ estado: true })
+    });
 
-    const { data: programacionOriginal = [], isLoading: cargandoProg, refetch } = useQuery({
-        queryKey: ['programacion-mensual', mes, anio],
+    const { data: novedadesData, isLoading: novedadesLoading } = useQuery({
+        queryKey: ['novedades-periodo', mes, anio],
         queryFn: async () => {
-            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
-            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-            const res = await programacionService.listarPorPeriodo(inicio, fin);
+            const res = await programacionService.obtenerNovedades(mes, anio);
             return Array.isArray(res) ? res : (res.data || []);
         },
-        enabled: paso === 'detalle',
-        staleTime: 0
+        enabled: paso === 'inicio'
     });
-
-    const { data: noAsignadosPorDia = {}, refetch: refetchNoAsignados } = useQuery({
-        queryKey: ['no-asignados-dia', mes, anio],
-        queryFn: () => programacionService.obtenerEmpleadosNoAsignadosPorDia(mes, anio),
-        enabled: paso === 'detalle'
-    });
-
-    const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
-        queryKey: ['validar-programacion', mes, anio],
-        queryFn: async () => {
-            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
-            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-            return programacionService.validarPeriodo(inicio, fin);
-        },
-        enabled: paso === 'detalle'
-    });
-
-    const programacion = useMemo(() => {
-        if (!programacionOriginal || cambiosLocales.length === 0) return programacionOriginal;
-        return programacionOriginal.map((asig: any) => {
-            const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
-            if (cambio) {
-                if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
-                return {
-                    ...asig,
-                    id_area: cambio.id_area_destino,
-                    id_turno: cambio.id_turno_destino,
-                    fecha: cambio.fecha,
-                    _modificado: true
-                };
-            }
-            return asig;
-        }).filter((asig: any) => !asig._eliminado);
-    }, [programacionOriginal, cambiosLocales]);
 
     const areas = useMemo(() => {
         if (!areasRaw) return [];
@@ -104,141 +55,105 @@ export default function GestionMensual() {
         return turnosRaw.filter(t => ![1, 2, 3].includes(t.id_turno));
     }, [turnosRaw]);
 
-    const configAreasTurnos = useMemo(() => {
-        const config: Record<number, number[]> = {};
-        if (!programacion || !Array.isArray(programacion)) return config;
-        areas.forEach(area => {
-            const turnosUsados = new Set(programacion.filter((p: any) => Number(p.id_area) === area.id_area).map((p: any) => Number(p.id_turno)));
-            config[area.id_area] = Array.from(turnosUsados).sort((a, b) => a - b);
-        });
-        return config;
-    }, [programacion, areas]);
-
     const infoDias = useMemo(() => {
-        const ultimoDia = new Date(anio, mes, 0).getDate();
-        return Array.from({ length: ultimoDia }, (_, i) => {
+        const total = new Date(anio, mes, 0).getDate();
+        return Array.from({ length: total }, (_, i) => {
             const fecha = new Date(anio, mes - 1, i + 1);
             return {
                 numero: i + 1,
-                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase().replace(".", ""),
-                fechaISO: fecha.toISOString().split('T')[0],
-                objetoFecha: fecha
+                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase(),
+                fechaISO: fecha.toISOString().split('T')[0]
             };
         });
     }, [mes, anio]);
 
-    const handleDragStart = (e: React.DragEvent, asignacion: any, idArea: number, idTurno: number) => {
-        setEmpleadoArrastrado({ ...asignacion, id_area_origen: idArea, id_turno_origen: idTurno });
-        e.dataTransfer.effectAllowed = 'move';
-    };
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() + i);
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    };
+    useEffect(() => {
+        if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0) {
+            const initialConfig: Record<number, { turnosIds: number[] }> = {};
+            const tIds = { T1: 5, T2: 6, T3: 7, T5: 8, T6: 9, T8: 11, T11: 14, T13: 15 };
 
-    const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
-        e.preventDefault();
-        if (!empleadoArrastrado) return;
-        const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
-
-        if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
-            setEmpleadoArrastrado(null);
-            return;
+            areas.forEach((area) => {
+                let idsSeleccionados: number[] = [];
+                switch (area.id_area) {
+                    case 1: idsSeleccionados = [tIds.T1, tIds.T11]; break;
+                    case 2: idsSeleccionados = [tIds.T11, tIds.T5]; break;
+                    case 3: idsSeleccionados = [tIds.T5, tIds.T3]; break;
+                    case 5: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    case 6: idsSeleccionados = [tIds.T5, tIds.T13, tIds.T11]; break;
+                    case 7: idsSeleccionados = [tIds.T11, tIds.T5, tIds.T13]; break;
+                    case 8: idsSeleccionados = [tIds.T11, tIds.T5]; break;
+                    case 9: idsSeleccionados = [tIds.T13, tIds.T11, tIds.T5]; break;
+                    case 10: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    case 11: idsSeleccionados = [tIds.T6, tIds.T8, tIds.T2]; break;
+                    case 12: idsSeleccionados = [tIds.T6]; break;
+                    case 4: idsSeleccionados = [tIds.T5, tIds.T11]; break;
+                    default: idsSeleccionados = [tIds.T5, tIds.T11];
+                }
+                initialConfig[area.id_area] = { turnosIds: idsSeleccionados.filter(id => id !== undefined) };
+            });
+            setConfigAreas(initialConfig);
         }
+    }, [areas, turnos]);
 
-        const destinoAsignacion = programacion.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
-        const cambioId = `${Date.now()}-${Math.random()}`;
+    const formatTime = (time: string | null | undefined): string => {
+        if (!time) return '--:--';
+        const formatted = time.includes('T') ? time.split('T')[1] : time;
+        return formatted.substring(0, 5);
+    };
 
-        if (destinoAsignacion) {
-            const nombreArrastrado = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-            const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
-            const cambio1: CambioLocal = {
-                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArrastrado,
-                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
-            };
-            const cambio2: CambioLocal = {
-                id: cambioId, id_detalle_programacion: destinoAsignacion.id_detalle_programacion, empleado: nombreDestino,
-                fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino,
-                id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen
-            };
-            setCambiosLocales(prev => [...prev, cambio1, cambio2]);
+    const generarMutation = useMutation({
+        mutationFn: async () => {
+            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
+            const result = await programacionService.generarAutomatica({ mes, anio, configuracion: configAreas });
+            const data = await programacionService.listarPorPeriodo(inicio, fin);
+            return { data, alertas: result.alertas || [] };
+        },
+        onSuccess: (res: any) => {
+            setProgramacionGenerada(Array.isArray(res.data) ? res.data : (res.data.data || []));
+            setAlertasMotor(res.alertas);
+            setPaso('resultado');
+            toast.success('Programación generada exitosamente');
+            queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
+            queryClient.invalidateQueries({ queryKey: ['programacion-periodo'] });
+            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
+        },
+        onError: () => toast.error('Error al generar la programación')
+    });
+
+    const handleIniciarProceso = () => {
+        if (novedadesData && novedadesData.length > 0) {
+            setMostrarDialogoNovedades(true);
         } else {
-            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-            const cambio: CambioLocal = {
-                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
-                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
-            };
-            setCambiosLocales(prev => [...prev, cambio]);
+            setPaso('configuracion');
         }
-        setEmpleadoArrastrado(null);
     };
 
-    const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
-        e.preventDefault();
-        if (!empleadoArrastrado) return;
-        const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-        const cambio: CambioLocal = {
-            id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
-            fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-            id_area_destino: -1, id_turno_destino: -1
-        };
-        setCambiosLocales(prev => [...prev, cambio]);
-        setEmpleadoArrastrado(null);
-    };
-
-    const handleRevertirCambios = () => {
-        setCambiosLocales([]);
-        setFechaCorteNovedades(null);
-        toast.info('Cambios revertidos');
-    };
-
-    const handleConsultar = () => {
-        setPaso('detalle');
-        setCambiosLocales([]);
-        setFechaCorteNovedades(null);
-        refetch();
-    };
-
-    const handleExportar = () => {
-        const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
-        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`);
-    };
-
-    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
-        setEmpleadoSeleccionado({ id, nombre });
-        setFechaParaNovedad(fecha);
-        setModalNovedadOpen(true);
-    };
-
-    const handleNovedadExitosa = (fechaCorte: Date) => {
-        setFechaCorteNovedades(prev => {
-            if (!prev || fechaCorte < prev) return fechaCorte;
-            return prev;
-        });
-    };
+    if (areasLoading || turnosLoading) return <div className="p-8 text-center text-slate-500">Cargando parámetros del sistema...</div>;
 
     return (
         <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Motor de Programación</h1>
                 <p className="text-slate-500">
-                    {paso === 'seleccion' ? 'Seleccione el periodo' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}
+                    {paso === 'inicio' && 'Defina el periodo de tiempo a programar.'}
+                    {paso === 'configuracion' && 'Seleccione los turnos habilitados por cada área de trabajo.'}
+                    {paso === 'resultado' && 'Revise la distribución del personal asignado automáticamente.'}
                 </p>
             </div>
 
-            {paso === 'seleccion' && (
-                <div className="max-w-4xl mx-auto space-y-6">
-                    <Card className="bg-white border shadow-sm">
+            {paso === 'inicio' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
+                    <Card className="bg-slate-50 border-none shadow-sm">
                         <CardContent className="pt-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Mes de Consulta</Label>
+                                    <Label>Mes de Programación</Label>
                                     <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
                                         </SelectContent>
@@ -247,188 +162,215 @@ export default function GestionMensual() {
                                 <div className="space-y-2">
                                     <Label>Año</Label>
                                     <Select value={String(anio)} onValueChange={(v) => setAnio(parseInt(v))}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
-                            <Button className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700" size="lg" onClick={handleConsultar}>
-                                <Search className="mr-2 h-4 w-4" /> Consultar Programación
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-dashed border-2 bg-white hover:border-indigo-200 transition-colors">
+                        <CardContent className="pt-6 flex flex-col items-center justify-center text-center py-12 gap-4">
+                            <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center">
+                                <CalendarDays className="h-8 w-8 text-indigo-600" />
+                            </div>
+                            <div className="space-y-1">
+                                <h3 className="text-xl font-semibold">Configurar Distribución</h3>
+                                <p className="text-sm text-slate-500">Se validarán novedades antes de proceder</p>
+                            </div>
+                            <Button size="lg" onClick={handleIniciarProceso} disabled={novedadesLoading} className="px-8">
+                                {novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'} <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </CardContent>
                     </Card>
                 </div>
             )}
 
-            {paso === 'detalle' && (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm">
-                        <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
-                        <div className="flex gap-2">
-                            {cambiosLocales.length > 0 && (
-                                <>
-                                    <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir Todo</Button>
-                                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] })}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
-                                </>
-                            )}
-                            <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
+            {paso === 'configuracion' && (
+                <div className="space-y-6 max-w-5xl mx-auto">
+                    <div className="flex items-center justify-between bg-white p-4 border rounded-lg shadow-sm">
+                        <div className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                            Periodo: {meses[mes - 1]} {anio}
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Periodo</Button>
+                    </div>
+
+                    <div className="grid gap-4">
+                        {areas.map((area) => (
+                            <Card key={area.id_area} className="border-l-4 border-l-indigo-500 overflow-hidden shadow-sm">
+                                <CardHeader className="pb-3 bg-slate-50/50">
+                                    <CardTitle className="text-lg text-slate-800">{area.nombre_area}</CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-4">
+                                    <div className="flex flex-wrap gap-3">
+                                        {turnos.map((turno) => {
+                                            const isSelected = configAreas[area.id_area]?.turnosIds?.includes(turno.id_turno);
+                                            return (
+                                                <div
+                                                    key={turno.id_turno}
+                                                    onClick={() => {
+                                                        const currentIds = configAreas[area.id_area]?.turnosIds || [];
+                                                        const newIds = isSelected
+                                                            ? currentIds.filter(id => id !== turno.id_turno)
+                                                            : [...currentIds, turno.id_turno];
+                                                        setConfigAreas(prev => ({ ...prev, [area.id_area]: { turnosIds: newIds } }));
+                                                    }}
+                                                    className={`cursor-pointer px-4 py-3 rounded-lg border text-sm flex items-center gap-3 transition-all ${isSelected ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200' : 'bg-white hover:border-slate-300'}`}
+                                                >
+                                                    <Checkbox checked={Boolean(isSelected)} onCheckedChange={() => { }} />
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-700">{turno.tipo_turno}</span>
+                                                        <span className="text-[11px] text-slate-500">{formatTime(turno.hora_entrada)} - {formatTime(turno.hora_salida)}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+
+                    <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-2xl flex justify-end gap-3 z-50">
+                        <Button variant="outline" onClick={() => setPaso('inicio')}>Atrás</Button>
+                        <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
+                            {generarMutation.isPending ? 'Generando...' : 'Generar Programación'}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {paso === 'resultado' && (
+                <div className="space-y-8">
+                    <div className="flex items-center justify-between bg-emerald-50 p-6 border border-emerald-200 rounded-xl">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-emerald-600 p-2 rounded-full">
+                                <CheckCircle2 className="h-6 w-6 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-emerald-900">Programación Lista</h2>
+                                <p className="text-emerald-700 text-sm">Se ha guardado la asignación automática en la base de datos.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <BotonEliminarProgramacion
+                                mes={mes}
+                                anio={anio}
+                                onSuccess={() => {
+                                    setPaso('inicio');
+                                    setProgramacionGenerada([]);
+                                }}
+                            />
+                            {/* CORRECCIÓN DE RUTA AQUÍ */}
+                            <Button className="bg-indigo-600 hover:bg-indigo-700 font-bold" onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}>
+                                <LayoutDashboard className="h-4 w-4 mr-2" /> IR A GESTIÓN MENSUAL
+                            </Button>
                         </div>
                     </div>
 
-                    {fechaCorteNovedades && (
-                        <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="bg-red-500 p-2 rounded-xl text-white shadow-lg shadow-red-100">
-                                <AlertCircle className="h-5 w-5" />
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm font-black text-red-900 uppercase tracking-tight">Novedad Registrada</p>
-                                <p className="text-xs text-red-700 font-medium">Se requiere regenerar la cobertura desde el {format(fechaCorteNovedades, "dd 'de' MMMM", { locale: es })}.</p>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button size="sm" onClick={() => navigate(`/programacion-areas?mes=${mes}&anio=${anio}`)} className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl">
-                                    <RefreshCcw className="mr-2 h-4 w-4" /> REGENERAR DESDE {format(fechaCorteNovedades, 'dd/MM')}
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => setFechaCorteNovedades(null)} className="text-red-700 hover:bg-red-100 font-bold">Ignorar</Button>
+                    {/* Alertas del motor... */}
+                    {alertasMotor.length > 0 && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <AlertCircle className="h-5 w-5 text-amber-500" />
+                                Problemas Detectados en la Generación
+                            </h3>
+                            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                {alertasMotor.map((grupo, idx) => (
+                                    <Card key={idx} className="border-amber-100 bg-amber-50/30 overflow-hidden">
+                                        <div className="bg-amber-100 px-3 py-1.5 text-[10px] font-bold text-amber-800 uppercase tracking-wider flex justify-between items-center">
+                                            <span>Fecha: {grupo.fecha}</span>
+                                            <span className="bg-amber-200 px-1.5 py-0.5 rounded text-amber-900">{grupo.alertas.length} avisos</span>
+                                        </div>
+                                        <CardContent className="p-3 space-y-2">
+                                            {grupo.alertas.map((alerta: any, aIdx: number) => (
+                                                <div key={aIdx} className="flex items-start gap-2 text-[11px]">
+                                                    <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${alerta.tipo === 'error' ? 'bg-red-500' :
+                                                        alerta.tipo === 'advertencia' ? 'bg-amber-500' : 'bg-blue-500'
+                                                        }`} />
+                                                    <div className="space-y-0.5">
+                                                        <p className="font-semibold text-slate-800 leading-tight">{alerta.mensaje}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                ))}
                             </div>
                         </div>
                     )}
 
-                    <div className="space-y-8">
-                        {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
-                            <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                                <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full border-collapse">
-                                        <thead>
-                                            <tr className="bg-slate-50">
-                                                <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
-                                                {infoDias.map((dia) => {
-                                                    const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
-                                                    return (
-                                                        <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-500 ${esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500'}`}>
-                                                            <div className="flex flex-col relative">
-                                                                <span className={`${esSucio ? 'text-red-600 font-black' : 'text-indigo-600 font-bold'}`}>{dia.nombreDia}</span>
-                                                                <span className={`${esSucio ? 'text-red-700 font-black text-xs' : ''}`}>{dia.numero}</span>
-                                                                {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
-                                                            </div>
-                                                        </th>
-                                                    );
-                                                })}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {configAreasTurnos[area.id_area]?.map((tId) => {
-                                                const turnoInfo = turnos.find(t => t.id_turno === tId);
-                                                return (
-                                                    <tr key={tId}>
-                                                        <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
-                                                        {infoDias.map((dia) => {
-                                                            const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                            const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
-
-                                                            // DETECCIÓN DE NOVEDAD
-                                                            const tieneNovedad = alertasMotor.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
-
-                                                            return (
-                                                                <td
-                                                                    key={dia.fechaISO}
-                                                                    className={`border p-2 min-h-[60px] transition-all duration-300 ${tieneNovedad
-                                                                        ? 'bg-red-300 border-red-500 shadow-inner'
-                                                                        : esSucio
-                                                                            ? 'bg-red-200'
-                                                                            : ''
-                                                                        }`}
-                                                                    onDragOver={handleDragOver}
-                                                                    onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}
-                                                                >
-                                                                    <div className="flex flex-col gap-1">
-                                                                        {asignados.map((asig: any, idx: number) => (
-                                                                            <div
-                                                                                key={idx}
-                                                                                draggable
-                                                                                onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
-                                                                                onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
-                                                                                className={`px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm ${tieneNovedad
-                                                                                    ? 'bg-white border-red-600 text-red-700 font-bold'
-                                                                                    : asig._modificado
-                                                                                        ? 'bg-amber-100 border-amber-400'
-                                                                                        : 'bg-white border-slate-200 hover:border-indigo-300'
-                                                                                    }`}
-                                                                            >
-                                                                                {asig.nombre_empleado || asig.empleado?.nombre_completo}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                    {/* Tabla de resultados... */}
+                    {areas.map((area) => (
+                        <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                            <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
+                                {area.nombre_area}
                             </div>
-                        ))}
-                    </div>
-
-                    <Card className={`mt-8 transition-all duration-500 ${fechaCorteNovedades ? 'border-red-200 shadow-md' : 'border-slate-200'}`}>
-                        <CardContent className={`p-6 ${fechaCorteNovedades ? 'bg-red-50/10' : 'bg-slate-50'}`}>
-                            <h3 className={`text-sm font-bold mb-4 ${fechaCorteNovedades ? 'text-red-900' : 'text-slate-900'}`}>Refuerzos / Disponibles</h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full border-collapse">
                                     <thead>
-                                        <tr className={fechaCorteNovedades ? 'bg-red-50' : 'bg-slate-100'}>
-                                            <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
+                                        <tr className="bg-slate-50">
+                                            <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
                                             {infoDias.map((dia) => (
-                                                <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] ${fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades ? 'bg-red-50 text-red-800 font-bold' : ''}`}>{dia.numero}</th>
+                                                <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-slate-500">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-indigo-600 font-bold">{dia.nombreDia}</span>
+                                                        <span>{dia.numero} de {meses[mes - 1].substring(0, 3)}</span>
+                                                    </div>
+                                                </th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td className="border p-2 text-xs font-bold">Disponibles</td>
-                                            {infoDias.map((dia) => {
-                                                const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
-                                                const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
-                                                return (
-                                                    <td key={dia.fechaISO} className={`border p-2 bg-white min-h-[60px] ${esSucio ? 'bg-red-50/20' : ''}`} onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
-                                                        <div className="flex flex-col gap-1">
-                                                            {noAsignados.map((emp: any) => (
-                                                                <div
-                                                                    key={emp.id_empleado}
-                                                                    onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
-                                                                    className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer hover:bg-amber-100"
-                                                                >
-                                                                    {emp.nombre_completo}
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                        {configAreas[area.id_area]?.turnosIds.map((tId) => {
+                                            const turnoInfo = turnos.find(t => t.id_turno === tId);
+                                            return (
+                                                <tr key={tId} className="hover:bg-slate-50/50">
+                                                    <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                                        {turnoInfo?.tipo_turno}
                                                     </td>
-                                                );
-                                            })}
-                                        </tr>
+                                                    {infoDias.map((dia) => {
+                                                        const asignados = programacionGenerada.filter(p =>
+                                                            Number(p.id_area) === area.id_area &&
+                                                            Number(p.id_turno) === tId &&
+                                                            p.fecha.split('T')[0] === dia.fechaISO
+                                                        );
+                                                        return (
+                                                            <td key={dia.fechaISO} className="border p-2 min-h-[60px]">
+                                                                <div className="flex flex-col gap-1">
+                                                                    {asignados.length > 0 ? asignados.map((asig, idx) => (
+                                                                        <div key={idx} className="px-1.5 py-1 border border-slate-200 rounded text-[9px] leading-tight bg-slate-50 text-slate-700 font-medium truncate">
+                                                                            {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
+                                                                        </div>
+                                                                    )) : <span className="text-slate-200 text-center text-xs">-</span>}
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    ))}
                 </div>
             )}
 
-            <ModalNovedadRapida
-                isOpen={modalNovedadOpen}
-                onClose={() => setModalNovedadOpen(false)}
-                empleado={empleadoSeleccionado}
-                fechaSeleccionada={fechaParaNovedad}
-                onSuccess={(fechaCorte) => {
-                    refetch();
-                    refetchNoAsignados();
-                    refetchAlertas();
-                    if (fechaCorte) handleNovedadExitosa(fechaCorte);
+            <ModalInfoNovedadesGeneracion
+                isOpen={mostrarDialogoNovedades}
+                onClose={() => setMostrarDialogoNovedades(false)}
+                onContinue={() => {
+                    setMostrarDialogoNovedades(false);
+                    setPaso('configuracion');
                 }}
+                novedades={novedadesData || []}
+                nombreMes={meses[mes - 1]}
             />
         </div>
     );

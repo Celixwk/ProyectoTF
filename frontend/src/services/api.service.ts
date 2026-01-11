@@ -157,7 +157,6 @@ export const consultasService = {
         }));
       }
 
-
       return [{
         ...n,
         fecha: n.fecha_inicio || n.fecha_solicitud,
@@ -490,7 +489,19 @@ export const programacionService = {
   }) => {
     const { data } = await api.patch('/programacion/mover-empleado', payload);
     return data;
-  }
+  },
+  regenerarDesdeFecha: async (payload: {
+    fechaInicio: string;
+    configuracion: any;
+    idUsuario?: number;
+  }) => {
+    const { data } = await api.post('/programacion/regenerar-desde', {
+      fecha_inicio: payload.fechaInicio,
+      configuracion: payload.configuracion,
+      id_usuario_registro: payload.idUsuario
+    });
+    return data;
+  },
 };
 
 const services = {

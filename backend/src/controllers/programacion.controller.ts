@@ -8,20 +8,26 @@ export const generarAutomatica = async (req: Request, res: Response) => {
     try {
         const { mes, anio, configuracion, id_usuario_registro } = req.body;
         if (!mes || !anio) return res.status(400).json({ success: false, error: 'Mes y año requeridos' });
+
         const fechaInicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
         const fechaFin = new Date(Date.UTC(Number(anio), Number(mes), 0));
+
         const laborMes = await prisma.laborMes.findFirst({
             where: { fecha_inicio: { lte: fechaInicio }, fecha_fin: { gte: fechaFin } }
         });
+
         if (!laborMes) return res.status(400).json({ success: false, error: 'Periodo contable no encontrado.' });
+
         await prisma.detalleProgramacion.deleteMany({
             where: { fecha: { gte: fechaInicio, lte: fechaFin }, origen_registro: 'Automatico' }
         });
+
         const diasMes = fechaFin.getUTCDate();
         let totalAsignaciones = 0;
         let totalGuardadas = 0;
         let totalErrores = 0;
         const alertasTotales: Array<{ fecha: string; alertas: any[] }> = [];
+
         for (let dia = 1; dia <= diasMes; dia++) {
             const fechaProceso = new Date(Date.UTC(Number(anio), Number(mes) - 1, dia));
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
@@ -29,16 +35,20 @@ export const generarAutomatica = async (req: Request, res: Response) => {
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea: 3
             });
+
             totalAsignaciones += resultadoDia.resumen?.total_asignaciones ?? resultadoDia.asignaciones?.length ?? 0;
             const guardado = resultadoDia.guardado ?? null;
+
             if (guardado) {
                 totalGuardadas += guardado.guardadas ?? 0;
                 totalErrores += guardado.errores ?? 0;
             }
+
             if (Array.isArray(resultadoDia.alertas) && resultadoDia.alertas.length > 0) {
                 alertasTotales.push({ fecha: fechaProceso.toISOString().split('T')[0], alertas: resultadoDia.alertas });
             }
         }
+
         res.json({
             success: true,
             message: `Programación generada para ${fechaInicio.toISOString().slice(0, 7)}`,
@@ -55,12 +65,13 @@ export const generarAutomatica = async (req: Request, res: Response) => {
 export const regenerarDesdeFecha = async (req: Request, res: Response) => {
     try {
         const { fecha_inicio, configuracion, id_usuario_registro } = req.body;
-        if (!fecha_inicio) return res.status(400).json({ success: false, error: 'Fecha de inicio requerida' });
+        if (!fecha_inicio || !configuracion) {
+            return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos' });
+        }
 
-        const inicioProceso = new Date(fecha_inicio);
-        const anio = inicioProceso.getUTCFullYear();
-        const mes = inicioProceso.getUTCMonth();
-        const ultimoDiaMes = new Date(Date.UTC(anio, mes + 1, 0));
+        const [anio, mes, dia] = fecha_inicio.split('-').map(Number);
+        const inicioProceso = new Date(Date.UTC(anio, mes - 1, dia, 0, 0, 0, 0));
+        const ultimoDiaMes = new Date(Date.UTC(anio, mes, 0, 23, 59, 59, 999));
 
         await prisma.detalleProgramacion.deleteMany({
             where: {
@@ -69,25 +80,53 @@ export const regenerarDesdeFecha = async (req: Request, res: Response) => {
             }
         });
 
-        const diasRestantes = ultimoDiaMes.getUTCDate() - inicioProceso.getUTCDate() + 1;
+        const primerDiaMes = new Date(Date.UTC(anio, mes - 1, 1, 0, 0, 0, 0));
+        const programacionPrevia = await prisma.detalleProgramacion.findMany({
+            where: {
+                fecha: { gte: primerDiaMes, lt: inicioProceso }
+            },
+            select: { id_empleado: true, id_area: true, fecha: true, id_turno: true }
+        });
+
+        let programacionAcumulada = [...programacionPrevia];
+        const alertasTotales: Array<{ fecha: string; alertas: any[] }> = [];
         let totalAsignaciones = 0;
 
-        for (let i = 0; i < diasRestantes; i++) {
-            const fechaActual = new Date(Date.UTC(anio, mes, inicioProceso.getUTCDate() + i));
-            const resultadoDia = await capa6_generarProgramacionDia(fechaActual, {
+        const diaInicio = inicioProceso.getUTCDate();
+        const diaFin = ultimoDiaMes.getUTCDate();
+
+        for (let d = diaInicio; d <= diaFin; d++) {
+            const fechaProceso = new Date(Date.UTC(anio, mes - 1, d, 0, 0, 0, 0));
+
+            const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
                 configuracion,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
-                maxDiasConsecutivosArea: 3
-            });
-            totalAsignaciones += resultadoDia.resumen?.total_asignaciones ?? resultadoDia.asignaciones?.length ?? 0;
+                maxDiasConsecutivosArea: 3,
+                programacionExistente: programacionAcumulada
+            } as any);
+
+            if (resultadoDia.asignaciones && resultadoDia.asignaciones.length > 0) {
+                programacionAcumulada.push(...resultadoDia.asignaciones);
+                totalAsignaciones += resultadoDia.asignaciones.length;
+            }
+
+            if (Array.isArray(resultadoDia.alertas) && resultadoDia.alertas.length > 0) {
+                alertasTotales.push({
+                    fecha: fechaProceso.toISOString().split('T')[0],
+                    alertas: resultadoDia.alertas
+                });
+            }
         }
 
         res.json({
             success: true,
-            message: `Programación regenerada exitosamente desde ${fecha_inicio}`,
-            total_asignaciones: totalAsignaciones
+            message: `Regeneración completada desde ${fecha_inicio}`,
+            total_asignaciones: totalAsignaciones,
+            alertas: alertasTotales
         });
+
     } catch (error: any) {
+        console.error('Error regenerando:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 };
