@@ -11,6 +11,7 @@ import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } 
 import { toast } from 'sonner';
 import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
+import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
 
 export default function ProgramacionAreas() {
@@ -25,6 +26,7 @@ export default function ProgramacionAreas() {
     const [configAreas, setConfigAreas] = useState<Record<number, { turnosIds: number[] }>>({});
     const [programacionGenerada, setProgramacionGenerada] = useState<any[]>([]);
     const [alertasMotor, setAlertasMotor] = useState<any[]>([]);
+    const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
 
     const { data: areasRaw, isLoading: areasLoading } = useQuery<Area[]>({
         queryKey: ['areas'],
@@ -98,6 +100,15 @@ export default function ProgramacionAreas() {
         }
     }, [areas, turnos]);
 
+    useEffect(() => {
+        if (fechasRecienGeneradas.length > 0) {
+            const timer = setTimeout(() => {
+                setFechasRecienGeneradas([]);
+            }, 15000);
+            return () => clearTimeout(timer);
+        }
+    }, [fechasRecienGeneradas]);
+
     const formatTime = (time: string | null | undefined): string => {
         if (!time) return '--:--';
         const formatted = time.includes('T') ? time.split('T')[1] : time;
@@ -110,11 +121,15 @@ export default function ProgramacionAreas() {
             const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
             const result = await programacionService.generarAutomatica({ mes, anio, configuracion: configAreas });
             const data = await programacionService.listarPorPeriodo(inicio, fin);
-            return { data, alertas: result.alertas || [] };
+
+            const fechasAfectadas = result.fechasProcesadas || infoDias.map(d => d.fechaISO);
+
+            return { data, alertas: result.alertas || [], fechasAfectadas };
         },
         onSuccess: (res: any) => {
             setProgramacionGenerada(Array.isArray(res.data) ? res.data : (res.data.data || []));
             setAlertasMotor(res.alertas);
+            setFechasRecienGeneradas(res.fechasAfectadas);
             setPaso('resultado');
             toast.success('Programación generada exitosamente');
             queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
@@ -265,18 +280,8 @@ export default function ProgramacionAreas() {
                                     setProgramacionGenerada([]);
                                 }}
                             />
-                            <Button
-                                className="bg-indigo-600 hover:bg-indigo-700 font-bold"
-                                onClick={() => {
-                                    const params = new URLSearchParams({
-                                        mes: mes.toString(),
-                                        anio: anio.toString()
-                                    });
-                                    navigate(`/gestion-mensual?${params.toString()}`);
-                                }}
-                            >
-                                <LayoutDashboard className="h-4 w-4 mr-2" />
-                                IR A GESTIÓN MENSUAL
+                            <Button className="bg-indigo-600 hover:bg-indigo-700 font-bold" onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}>
+                                <LayoutDashboard className="h-4 w-4 mr-2" /> IR A GESTIÓN MENSUAL
                             </Button>
                         </div>
                     </div>
@@ -322,14 +327,27 @@ export default function ProgramacionAreas() {
                                     <thead>
                                         <tr className="bg-slate-50">
                                             <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
-                                            {infoDias.map((dia) => (
-                                                <th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px] text-slate-500">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-indigo-600 font-bold">{dia.nombreDia}</span>
-                                                        <span>{dia.numero} de {meses[mes - 1].substring(0, 3)}</span>
-                                                    </div>
-                                                </th>
-                                            ))}
+                                            {infoDias.map((dia) => {
+                                                const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                                                return (
+                                                    <th
+                                                        key={dia.fechaISO}
+                                                        className={cn(
+                                                            "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-1000",
+                                                            esRegenerado ? "bg-emerald-100 border-emerald-300" : "text-slate-500"
+                                                        )}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className={cn("font-bold", esRegenerado ? "text-emerald-700" : "text-indigo-600")}>
+                                                                {dia.nombreDia}
+                                                            </span>
+                                                            <span className={esRegenerado ? "text-emerald-600" : ""}>
+                                                                {dia.numero} de {meses[mes - 1].substring(0, 3)}
+                                                            </span>
+                                                        </div>
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -346,11 +364,23 @@ export default function ProgramacionAreas() {
                                                             Number(p.id_turno) === tId &&
                                                             p.fecha.split('T')[0] === dia.fechaISO
                                                         );
+                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                         return (
-                                                            <td key={dia.fechaISO} className="border p-2 min-h-[60px]">
+                                                            <td
+                                                                key={dia.fechaISO}
+                                                                className={cn(
+                                                                    "border p-2 min-h-[60px] transition-colors duration-1000",
+                                                                    esRegenerado && "bg-emerald-50/50 border-emerald-200"
+                                                                )}
+                                                            >
                                                                 <div className="flex flex-col gap-1">
                                                                     {asignados.length > 0 ? asignados.map((asig, idx) => (
-                                                                        <div key={idx} className="px-1.5 py-1 border border-slate-200 rounded text-[9px] leading-tight bg-slate-50 text-slate-700 font-medium truncate">
+                                                                        <div key={idx} className={cn(
+                                                                            "px-1.5 py-1 border rounded text-[9px] leading-tight font-medium truncate",
+                                                                            esRegenerado
+                                                                                ? "bg-emerald-100 border-emerald-200 text-emerald-800"
+                                                                                : "bg-slate-50 border-slate-200 text-slate-700"
+                                                                        )}>
                                                                             {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
                                                                         </div>
                                                                     )) : <span className="text-slate-200 text-center text-xs">-</span>}

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2 } from 'lucide-react';
+import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2, Search } from 'lucide-react';
 import { format, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -24,6 +24,7 @@ const TIPOS_NOVEDAD = [
 export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
+  const [busquedaEmpleado, setBusquedaEmpleado] = useState('');
   const [tipoSeleccionado, setTipoSeleccionado] = useState<number>(6);
   const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number; id_novedad_empleado?: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
@@ -35,9 +36,16 @@ export default function ConfiguracionProgramacion() {
   const [fechaFin, setFechaFin] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), 'yyyy-MM-dd'));
 
   const { data: empleadosData } = useQuery({
-    queryKey: ['empleados-completos'],
-    queryFn: () => consultasService.obtenerEmpleadosCompletos({ estado: true }),
+    queryKey: ['empleados-completos', { estado: true, limit: 1000 }],
+    queryFn: () =>
+      consultasService.obtenerEmpleadosCompletos({
+        estado: true,
+        limit: 1000,
+      }),
+    staleTime: 0,
+    refetchOnMount: true,
   });
+
 
   const { data: areas } = useQuery({
     queryKey: ['areas'],
@@ -55,6 +63,15 @@ export default function ConfiguracionProgramacion() {
   });
 
   const empleados = empleadosData?.empleados || [];
+
+  const empleadosFiltrados = useMemo(() => {
+    const term = busquedaEmpleado.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (!term) return empleados;
+    return empleados.filter((e: EmpleadoCompleto) =>
+      e.nombre_completo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term)
+    );
+  }, [empleados, busquedaEmpleado]);
+
   const empleadoSeleccionado = empleados?.find((e: any) => e.id_empleado === idEmpleadoSeleccionado);
 
   const diasEnRango = useMemo(() => {
@@ -231,15 +248,48 @@ export default function ConfiguracionProgramacion() {
             onValueChange={v => {
               isSaving.current = false;
               setIdEmpleadoSeleccionado(parseInt(v));
+              setBusquedaEmpleado('');
             }}
           >
             <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
               <SelectValue placeholder="Seleccione un empleado..." />
             </SelectTrigger>
-            <SelectContent>
-              {empleados.map((e: EmpleadoCompleto) => (
-                <SelectItem key={e.id_empleado} value={e.id_empleado.toString()}>{e.nombre_completo}</SelectItem>
-              ))}
+            <SelectContent className="w-[var(--radix-select-trigger-width)]">
+              <div
+                className="flex items-center px-3 pb-2 border-b"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <Search className="h-4 w-4 mr-2 text-slate-400" />
+                <input
+                  className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-slate-400"
+                  placeholder="Escriba para filtrar..."
+                  value={busquedaEmpleado}
+                  onChange={(e) => setBusquedaEmpleado(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              <div className="max-h-[300px] overflow-y-auto mt-1 p-1">
+                {empleadosFiltrados.length > 0 ? (
+                  empleadosFiltrados.map((e: EmpleadoCompleto) => (
+                    <SelectItem
+                      key={e.id_empleado}
+                      value={e.id_empleado.toString()}
+                      className="py-3"
+                    >
+                      <span className="font-bold uppercase text-xs">
+                        {e.nombre_completo}
+                      </span>
+                      <span className="ml-2 text-indigo-600 font-mono text-xs">
+                        [{e.cedula}]
+                      </span>
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="py-6 text-center text-sm text-slate-500 italic">
+                    Sin resultados para "{busquedaEmpleado}"
+                  </div>
+                )}
+              </div>
             </SelectContent>
           </Select>
         </div>
