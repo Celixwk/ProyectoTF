@@ -4,6 +4,28 @@ import { capa6_generarProgramacionDia } from '../services/programacion/capa6.int
 
 const prisma = new PrismaClient();
 
+export const verificarProgramacionExistente = async (req: Request, res: Response) => {
+    try {
+        const { mes, anio } = req.query;
+        if (!mes || !anio) return res.status(400).json({ success: false, error: 'Mes y año requeridos' });
+
+        const inicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
+        const fin = new Date(Date.UTC(Number(anio), Number(mes), 0, 23, 59, 59));
+
+        const count = await prisma.detalleProgramacion.count({
+            where: { fecha: { gte: inicio, lte: fin } }
+        });
+
+        res.json({
+            success: true,
+            existe: count > 0,
+            total_registros: count
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 export const generarAutomatica = async (req: Request, res: Response) => {
     try {
         const { mes, anio, configuracion, id_usuario_registro } = req.body;
@@ -11,6 +33,17 @@ export const generarAutomatica = async (req: Request, res: Response) => {
 
         const fechaInicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
         const fechaFin = new Date(Date.UTC(Number(anio), Number(mes), 0));
+
+        const existenciaPrevia = await prisma.detalleProgramacion.count({
+            where: { fecha: { gte: fechaInicio, lte: fechaFin } }
+        });
+
+        if (existenciaPrevia > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Ya existe una programación para este periodo con ${existenciaPrevia} registros. Use Gestión Mensual para modificarla o elimínela primero.`
+            });
+        }
 
         const laborMes = await prisma.laborMes.findFirst({
             where: { fecha_inicio: { lte: fechaInicio }, fecha_fin: { gte: fechaFin } }

@@ -3,6 +3,7 @@ import * as controller from '../controllers/programacion.controller';
 
 const router = Router();
 
+router.get('/verificar-existente', controller.verificarProgramacionExistente); // <-- Nueva ruta
 router.post('/generar', controller.generarAutomatica);
 router.post('/automatica', controller.generarAutomatica);
 router.get('/detalle', controller.obtenerDetalleProgramacion);

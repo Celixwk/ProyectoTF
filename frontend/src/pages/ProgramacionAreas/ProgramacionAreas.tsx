@@ -47,6 +47,12 @@ export default function ProgramacionAreas() {
         enabled: paso === 'inicio'
     });
 
+    const { data: programacionExistente, isLoading: verificandoExistente } = useQuery({
+        queryKey: ['verificar-programacion', mes, anio],
+        queryFn: () => programacionService.verificarProgramacionExistente(mes, anio),
+        enabled: paso === 'inicio'
+    });
+
     const areas = useMemo(() => {
         if (!areasRaw) return [];
         return areasRaw.filter(a => a.id_area !== 13);
@@ -140,6 +146,19 @@ export default function ProgramacionAreas() {
     });
 
     const handleIniciarProceso = () => {
+        if (programacionExistente?.existe) {
+            toast.error(
+                `Ya existe una programación para ${meses[mes - 1]} ${anio} con ${programacionExistente.total_registros} registros.`,
+                {
+                    duration: 5000,
+                    action: {
+                        label: 'Ir a Gestión Mensual',
+                        onClick: () => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)
+                    }
+                }
+            );
+            return;
+        }
         if (novedadesData && novedadesData.length > 0) {
             setMostrarDialogoNovedades(true);
         } else {
@@ -196,8 +215,16 @@ export default function ProgramacionAreas() {
                                 <h3 className="text-xl font-semibold">Configurar Distribución</h3>
                                 <p className="text-sm text-slate-500">Se validarán novedades antes de proceder</p>
                             </div>
-                            <Button size="lg" onClick={handleIniciarProceso} disabled={novedadesLoading} className="px-8">
-                                {novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'} <ArrowRight className="ml-2 h-4 w-4" />
+                            <Button
+                                size="lg"
+                                onClick={handleIniciarProceso}
+                                disabled={novedadesLoading || verificandoExistente}
+                                className="px-8"
+                            >
+                                {verificandoExistente ? 'Verificando...' :
+                                    novedadesLoading ? 'Verificando Novedades...' :
+                                        'Siguiente Paso'}
+                                <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </CardContent>
                     </Card>

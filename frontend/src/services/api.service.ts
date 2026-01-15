@@ -445,6 +445,12 @@ export const calendarioService = {
 };
 
 export const programacionService = {
+  verificarProgramacionExistente: async (mes: number, anio: number) => {
+    const { data } = await api.get('/programacion/verificar-existente', {
+      params: { mes, anio }
+    });
+    return data;
+  },
   generarAutomatica: async (payload: { mes: number; anio: number; configuracion: any; id_usuario_registro?: number }) => {
     const { data } = await api.post('/programacion/generar', payload);
     return data.data || data;
