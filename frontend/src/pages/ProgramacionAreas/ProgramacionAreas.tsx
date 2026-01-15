@@ -50,7 +50,9 @@ export default function ProgramacionAreas() {
     const { data: programacionExistente, isLoading: verificandoExistente } = useQuery({
         queryKey: ['verificar-programacion', mes, anio],
         queryFn: () => programacionService.verificarProgramacionExistente(mes, anio),
-        enabled: paso === 'inicio'
+        enabled: paso === 'inicio',
+        staleTime: 0,
+        refetchOnMount: 'always'
     });
 
     const areas = useMemo(() => {
@@ -141,6 +143,7 @@ export default function ProgramacionAreas() {
             queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
             queryClient.invalidateQueries({ queryKey: ['programacion-periodo'] });
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
+            queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
         },
         onError: () => toast.error('Error al generar la programación')
     });
@@ -305,6 +308,7 @@ export default function ProgramacionAreas() {
                                 onSuccess={() => {
                                     setPaso('inicio');
                                     setProgramacionGenerada([]);
+                                    queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
                                 }}
                             />
                             <Button className="bg-indigo-600 hover:bg-indigo-700 font-bold" onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}>

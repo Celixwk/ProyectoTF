@@ -12,7 +12,7 @@ interface BotonRegeneracionProps {
     anio: number;
     programacionOriginal: any[];
     areas: Area[];
-    onSuccess: () => void;
+    onSuccess: (data: any) => void;
     onError: (error: string) => void;
 }
 
@@ -62,8 +62,8 @@ export function BotonRegeneracion({
                 idUsuario: undefined
             });
         },
-        onSuccess: () => {
-            onSuccess();
+        onSuccess: (data) => {
+            onSuccess(data);
         },
         onError: (error: any) => {
             onError(error.message || 'Error al regenerar');

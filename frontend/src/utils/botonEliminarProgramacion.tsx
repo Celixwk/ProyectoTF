@@ -22,6 +22,7 @@ export function BotonEliminarProgramacion({ mes, anio, onSuccess }: BotonElimina
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
             queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
+            queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
             onSuccess();
         },
         onError: (e: any) => toast.error(e.message || 'Error eliminando programación')

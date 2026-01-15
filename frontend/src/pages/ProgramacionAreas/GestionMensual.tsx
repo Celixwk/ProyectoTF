@@ -1,20 +1,19 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
 import { areasService, turnosService, programacionService } from '@/services/api.service';
 import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
-import { BotonRegeneracion } from '@/utils/botonRegeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
+import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
 
 interface CambioLocal {
@@ -33,22 +32,38 @@ export default function GestionMensual() {
     const queryClient = useQueryClient();
     const [searchParams] = useSearchParams();
     const hoy = new Date();
+
     const [mes, setMes] = useState(parseInt(searchParams.get('mes') || String(hoy.getMonth() + 1)));
     const [anio, setAnio] = useState(parseInt(searchParams.get('anio') || String(hoy.getFullYear())));
     const [paso, setPaso] = useState<'seleccion' | 'detalle'>(searchParams.get('mes') ? 'detalle' : 'seleccion');
     const [cambiosLocales, setCambiosLocales] = useState<CambioLocal[]>([]);
     const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
+    const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
+    const [bannerIgnorado, setBannerIgnorado] = useState(false);
 
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
     const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
-    const [fechaCorteNovedades, setFechaCorteNovedades] = useState<Date | null>(null);
 
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
 
     const { data: areasRaw } = useQuery<Area[]>({ queryKey: ['areas'], queryFn: () => areasService.listar() });
     const { data: turnosRaw } = useQuery<Turno[]>({ queryKey: ['turnos'], queryFn: () => turnosService.listar({ estado: true }) });
+
+    useEffect(() => {
+        if (fechasRecienGeneradas.length > 0) {
+            const timer = setTimeout(() => {
+                setFechasRecienGeneradas([]);
+            }, 15000);
+            return () => clearTimeout(timer);
+        }
+    }, [fechasRecienGeneradas]);
+
+
+    useEffect(() => {
+        setBannerIgnorado(false);
+    }, [mes, anio]);
 
     const { data: programacionOriginal = [], isLoading: cargandoProg, refetch } = useQuery({
         queryKey: ['programacion-mensual', mes, anio],
@@ -77,6 +92,15 @@ export default function GestionMensual() {
         },
         enabled: paso === 'detalle'
     });
+
+
+    const fechaConflictoPersistente = useMemo(() => {
+        const conflictos = alertasMotor.filter((a: any) => a.tipo === 'NOVEDAD');
+        if (conflictos.length === 0) return null;
+
+        const fechas = conflictos.map((a: any) => new Date(a.fecha));
+        return new Date(Math.min(...fechas.map(f => f.getTime())));
+    }, [alertasMotor]);
 
     const programacion = useMemo(() => {
         if (!programacionOriginal || cambiosLocales.length === 0) return programacionOriginal;
@@ -143,15 +167,12 @@ export default function GestionMensual() {
         e.preventDefault();
         if (!empleadoArrastrado) return;
         const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
-
         if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
-
         const destinoAsignacion = programacion.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
         const cambioId = `${Date.now()}-${Math.random()}`;
-
         if (destinoAsignacion) {
             const nombreArrastrado = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
             const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
@@ -194,14 +215,13 @@ export default function GestionMensual() {
 
     const handleRevertirCambios = () => {
         setCambiosLocales([]);
-        setFechaCorteNovedades(null);
         toast.info('Cambios revertidos');
     };
 
     const handleConsultar = () => {
         setPaso('detalle');
         setCambiosLocales([]);
-        setFechaCorteNovedades(null);
+        setBannerIgnorado(false);
         refetch();
     };
 
@@ -214,13 +234,6 @@ export default function GestionMensual() {
         setEmpleadoSeleccionado({ id, nombre });
         setFechaParaNovedad(fecha);
         setModalNovedadOpen(true);
-    };
-
-    const handleNovedadExitosa = (fechaCorte: Date) => {
-        setFechaCorteNovedades(prev => {
-            if (!prev || fechaCorte < prev) return fechaCorte;
-            return prev;
-        });
     };
 
     return (
@@ -275,7 +288,6 @@ export default function GestionMensual() {
                     <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm">
                         <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
 
-                        {/* BOTONERA: Solo se muestra si hay programación */}
                         {programacion.length > 0 && (
                             <div className="flex gap-2">
                                 {cambiosLocales.length > 0 ? (
@@ -290,6 +302,7 @@ export default function GestionMensual() {
                                         onSuccess={() => {
                                             setCambiosLocales([]);
                                             setPaso('seleccion');
+                                            queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
                                         }}
                                     />
                                 )}
@@ -312,34 +325,28 @@ export default function GestionMensual() {
                         </Card>
                     ) : (
                         <>
-                            {fechaCorteNovedades && (
-                                <div className="flex items-center gap-4 p-4 bg-red-50 border border-red-100 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
-                                    <div className="bg-red-500 p-2 rounded-xl text-white shadow-lg shadow-red-100">
-                                        <AlertCircle className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-black text-red-900 uppercase tracking-tight">Novedad Registrada</p>
-                                        <p className="text-xs text-red-700 font-medium">Se requiere regenerar la cobertura desde el {format(fechaCorteNovedades, "dd 'de' MMMM", { locale: es })}.</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <BotonRegeneracion
-                                            fechaCorte={fechaCorteNovedades}
-                                            mes={mes}
-                                            anio={anio}
-                                            programacionOriginal={programacionOriginal}
-                                            areas={areas}
-                                            onSuccess={() => {
-                                                refetch();
-                                                refetchNoAsignados();
-                                                refetchAlertas();
-                                                setFechaCorteNovedades(null);
-                                                toast.success('Programación regenerada exitosamente');
-                                            }}
-                                            onError={(msg) => toast.error(msg)}
-                                        />
-                                        <Button size="sm" variant="ghost" onClick={() => setFechaCorteNovedades(null)} className="text-red-700 hover:bg-red-100 font-bold">Ignorar</Button>
-                                    </div>
-                                </div>
+                            {/* Renderizar solo si hay conflicto real desde el motor Y no ha sido ignorado */}
+                            {!bannerIgnorado && fechaConflictoPersistente && (
+                                <BannerNecesidadRegenerar
+                                    fechaCorte={fechaConflictoPersistente}
+                                    mes={mes}
+                                    anio={anio}
+                                    programacionOriginal={programacionOriginal}
+                                    areas={areas}
+                                    modo="gestion"
+                                    onSuccess={(res) => {
+                                        refetch();
+                                        refetchNoAsignados();
+                                        refetchAlertas();
+                                        setBannerIgnorado(false);
+                                        const afectadas = res?.fechasProcesadas || infoDias
+                                            .filter(d => d.objetoFecha >= fechaConflictoPersistente)
+                                            .map(d => d.fechaISO);
+                                        setFechasRecienGeneradas(afectadas);
+                                        toast.success('Programación regenerada exitosamente');
+                                    }}
+                                    onIgnore={() => setBannerIgnorado(true)}
+                                />
                             )}
 
                             <div className="space-y-8">
@@ -352,12 +359,18 @@ export default function GestionMensual() {
                                                     <tr className="bg-slate-50">
                                                         <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
                                                         {infoDias.map((dia) => {
-                                                            const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
+
+                                                            const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
+                                                            const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                             return (
-                                                                <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-500 ${esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500'}`}>
+                                                                <th key={dia.fechaISO} className={cn(
+                                                                    "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-500",
+                                                                    esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500',
+                                                                    esRegenerado && "bg-emerald-100 border-emerald-300"
+                                                                )}>
                                                                     <div className="flex flex-col relative">
-                                                                        <span className={`${esSucio ? 'text-red-600 font-black' : 'text-indigo-600 font-bold'}`}>{dia.nombreDia}</span>
-                                                                        <span className={`${esSucio ? 'text-red-700 font-black text-xs' : ''}`}>{dia.numero}</span>
+                                                                        <span className={cn("font-bold", esSucio ? 'text-red-600 font-black' : 'text-indigo-600', esRegenerado && "text-emerald-700")}>{dia.nombreDia}</span>
+                                                                        <span className={cn(esSucio ? 'text-red-700 font-black text-xs' : '', esRegenerado && "text-emerald-600")}>{dia.numero}</span>
                                                                         {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
                                                                     </div>
                                                                 </th>
@@ -373,19 +386,18 @@ export default function GestionMensual() {
                                                                 <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
                                                                 {infoDias.map((dia) => {
                                                                     const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                                    const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
-
+                                                                    const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
+                                                                    const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     const tieneNovedad = alertasMotor.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
-
                                                                     return (
                                                                         <td
                                                                             key={dia.fechaISO}
-                                                                            className={`border p-2 min-h-[60px] transition-all duration-300 ${tieneNovedad
-                                                                                ? 'bg-red-300 border-red-500 shadow-inner'
-                                                                                : esSucio
-                                                                                    ? 'bg-red-200'
-                                                                                    : ''
-                                                                                }`}
+                                                                            className={cn(
+                                                                                "border p-2 min-h-[60px] transition-all duration-300",
+                                                                                tieneNovedad ? 'bg-red-300 border-red-500 shadow-inner' :
+                                                                                    esSucio ? 'bg-red-200' :
+                                                                                        esRegenerado ? 'bg-emerald-50/50 border-emerald-200' : ''
+                                                                            )}
                                                                             onDragOver={handleDragOver}
                                                                             onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}
                                                                         >
@@ -396,12 +408,13 @@ export default function GestionMensual() {
                                                                                         draggable
                                                                                         onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
                                                                                         onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
-                                                                                        className={`px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm ${tieneNovedad
-                                                                                            ? 'bg-white border-red-600 text-red-700 font-bold'
-                                                                                            : asig._modificado
-                                                                                                ? 'bg-amber-100 border-amber-400'
-                                                                                                : 'bg-white border-slate-200 hover:border-indigo-300'
-                                                                                            }`}
+                                                                                        className={cn(
+                                                                                            "px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm",
+                                                                                            tieneNovedad ? 'bg-white border-red-600 text-red-700 font-bold' :
+                                                                                                asig._modificado ? 'bg-amber-100 border-amber-400' :
+                                                                                                    esRegenerado ? 'bg-emerald-100 border-emerald-200 text-emerald-800' :
+                                                                                                        'bg-white border-slate-200 hover:border-indigo-300'
+                                                                                        )}
                                                                                     >
                                                                                         {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                     </div>
@@ -420,17 +433,25 @@ export default function GestionMensual() {
                                 ))}
                             </div>
 
-                            <Card className={`mt-8 transition-all duration-500 ${fechaCorteNovedades ? 'border-red-200 shadow-md' : 'border-slate-200'}`}>
-                                <CardContent className={`p-6 ${fechaCorteNovedades ? 'bg-red-50/10' : 'bg-slate-50'}`}>
-                                    <h3 className={`text-sm font-bold mb-4 ${fechaCorteNovedades ? 'text-red-900' : 'text-slate-900'}`}>Refuerzos / Disponibles</h3>
+                            <Card className={cn("mt-8 transition-all duration-500", fechaConflictoPersistente ? 'border-red-200 shadow-md' : 'border-slate-200')}>
+                                <CardContent className={cn("p-6", fechaConflictoPersistente ? 'bg-red-50/10' : 'bg-slate-50')}>
+                                    <h3 className={cn("text-sm font-bold mb-4", fechaConflictoPersistente ? 'text-red-900' : 'text-slate-900')}>Refuerzos / Disponibles</h3>
                                     <div className="overflow-x-auto">
                                         <table className="w-full border-collapse">
                                             <thead>
-                                                <tr className={fechaCorteNovedades ? 'bg-red-50' : 'bg-slate-100'}>
+                                                <tr className={fechaConflictoPersistente ? 'bg-red-50' : 'bg-slate-100'}>
                                                     <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
-                                                    {infoDias.map((dia) => (
-                                                        <th key={dia.fechaISO} className={`border p-2 text-center text-[10px] min-w-[120px] ${fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades ? 'bg-red-50 text-red-800 font-bold' : ''}`}>{dia.numero}</th>
-                                                    ))}
+                                                    {infoDias.map((dia) => {
+                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                                                        const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
+                                                        return (
+                                                            <th key={dia.fechaISO} className={cn(
+                                                                "border p-2 text-center text-[10px] min-w-[120px]",
+                                                                esSucio && 'bg-red-50 text-red-800 font-bold',
+                                                                esRegenerado && "bg-emerald-100 text-emerald-800 font-bold"
+                                                            )}>{dia.numero}</th>
+                                                        )
+                                                    })}
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -438,15 +459,16 @@ export default function GestionMensual() {
                                                     <td className="border p-2 text-xs font-bold">Disponibles</td>
                                                     {infoDias.map((dia) => {
                                                         const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
-                                                        const esSucio = fechaCorteNovedades && dia.objetoFecha >= fechaCorteNovedades;
+                                                        const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
+                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                         return (
-                                                            <td key={dia.fechaISO} className={`border p-2 bg-white min-h-[60px] ${esSucio ? 'bg-red-50/20' : ''}`} onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
+                                                            <td key={dia.fechaISO} className={cn("border p-2 bg-white min-h-[60px]", esSucio && 'bg-red-50/20', esRegenerado && "bg-emerald-50/30")} onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
                                                                 <div className="flex flex-col gap-1">
                                                                     {noAsignados.map((emp: any) => (
                                                                         <div
                                                                             key={emp.id_empleado}
                                                                             onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
-                                                                            className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer hover:bg-amber-100"
+                                                                            className={cn("px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer hover:bg-amber-100", esRegenerado && "border-emerald-200 bg-emerald-50 text-emerald-800")}
                                                                         >
                                                                             {emp.nombre_completo}
                                                                         </div>
@@ -465,7 +487,6 @@ export default function GestionMensual() {
                     )}
                 </div>
             )}
-
             <ModalNovedadRapida
                 isOpen={modalNovedadOpen}
                 onClose={() => setModalNovedadOpen(false)}
@@ -475,7 +496,7 @@ export default function GestionMensual() {
                     refetch();
                     refetchNoAsignados();
                     refetchAlertas();
-                    if (fechaCorte) handleNovedadExitosa(fechaCorte);
+
                 }}
             />
         </div>
