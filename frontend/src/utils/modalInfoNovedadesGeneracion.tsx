@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, ArrowRight, AlertTriangle, ExternalLink, XCircle } from 'lucide-react';
-import { format, differenceInCalendarDays, parseISO, isValid } from 'date-fns';
+import { format, differenceInCalendarDays, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 interface ModalInfoNovedadesProps {
@@ -45,8 +45,8 @@ export function ModalInfoNovedadesGeneracion({ isOpen, onClose, onContinue, nove
             if (item.fecha instanceof Date) {
                 fechaObj = item.fecha;
             } else if (typeof item.fecha === 'string') {
-                fechaObj = parseISO(item.fecha);
-                if (!isValid(fechaObj)) fechaObj = new Date(item.fecha);
+                const [y, m, d] = item.fecha.split('T')[0].split('-').map(Number);
+                fechaObj = new Date(y, m - 1, d);
             }
             if (!fechaObj || !isValid(fechaObj)) return null;
             return { ...item, fechaObj };

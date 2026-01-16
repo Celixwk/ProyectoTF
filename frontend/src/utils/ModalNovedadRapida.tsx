@@ -42,10 +42,12 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
         mutationFn: async () => {
             if (!esFormularioValido) return;
 
+
             const dias = eachDayOfInterval({
                 start: parseISO(fechaInicio),
                 end: parseISO(fechaFin)
             });
+
 
             const operaciones = dias.map(fecha => ({
                 fecha: format(fecha, 'yyyy-MM-dd'),
@@ -62,6 +64,7 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
             queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
+            queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
 
             const fechaCorte = parseISO(fechaInicio);
             onSuccess(fechaCorte);

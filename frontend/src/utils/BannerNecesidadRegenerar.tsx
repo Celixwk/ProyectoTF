@@ -61,7 +61,7 @@ export function BannerNecesidadRegenerar({
                     <Button
                         size="sm"
                         className="bg-red-600 hover:bg-red-700 text-white font-bold"
-                        onClick={() => navigate(`/programacion-mensual?mes=${mes}&anio=${anio}`)}
+                        onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}
                     >
                         Ir a Gestionar <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>

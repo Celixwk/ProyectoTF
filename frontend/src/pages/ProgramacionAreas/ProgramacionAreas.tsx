@@ -14,6 +14,12 @@ import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
 
+const parseFechaSinAjuste = (fechaStr: string) => {
+    if (!fechaStr) return null;
+    const [y, m, d] = fechaStr.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
 export default function ProgramacionAreas() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
@@ -327,7 +333,7 @@ export default function ProgramacionAreas() {
                                 {alertasMotor.map((grupo, idx) => (
                                     <Card key={idx} className="border-amber-100 bg-amber-50/30 overflow-hidden">
                                         <div className="bg-amber-100 px-3 py-1.5 text-[10px] font-bold text-amber-800 uppercase tracking-wider flex justify-between items-center">
-                                            <span>Fecha: {grupo.fecha}</span>
+                                            <span>Fecha: {grupo.fecha.split('T')[0]}</span>
                                             <span className="bg-amber-200 px-1.5 py-0.5 rounded text-amber-900">{grupo.alertas.length} avisos</span>
                                         </div>
                                         <CardContent className="p-3 space-y-2">

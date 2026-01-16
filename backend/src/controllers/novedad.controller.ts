@@ -6,16 +6,22 @@ export const novedadController = {
         try {
             const { inicio, fin } = req.query;
 
-            const filtroFecha = inicio && fin ? {
-                detalle_novedad: {
-                    some: {
-                        fecha: {
-                            gte: new Date(inicio as string),
-                            lte: new Date(fin as string)
+            let filtroFecha = {};
+            if (inicio && fin) {
+                const [yI, mI, dI] = (inicio as string).split('-').map(Number);
+                const [yF, mF, dF] = (fin as string).split('-').map(Number);
+
+                filtroFecha = {
+                    detalle_novedad: {
+                        some: {
+                            fecha: {
+                                gte: new Date(Date.UTC(yI, mI - 1, dI, 0, 0, 0)),
+                                lte: new Date(Date.UTC(yF, mF - 1, dF, 23, 59, 59))
+                            }
                         }
                     }
-                }
-            } : {};
+                };
+            }
 
             const novedades = await prisma.novedadEmpleado.findMany({
                 where: filtroFecha,
@@ -85,11 +91,11 @@ export const novedadController = {
                 });
 
                 const dias = [];
-                const current = new Date(fecha_inicio);
-                const fin = new Date(fecha_fin);
+                const [yI, mI, dI] = fecha_inicio.split('-').map(Number);
+                const [yF, mF, dF] = fecha_fin.split('-').map(Number);
 
-                current.setHours(0, 0, 0, 0);
-                fin.setHours(0, 0, 0, 0);
+                const current = new Date(Date.UTC(yI, mI - 1, dI, 12, 0, 0));
+                const fin = new Date(Date.UTC(yF, mF - 1, dF, 12, 0, 0));
 
                 while (current <= fin) {
                     dias.push({
@@ -98,7 +104,7 @@ export const novedadController = {
                         cantidad: Number(cantidad_diaria),
                         observaciones
                     });
-                    current.setDate(current.getDate() + 1);
+                    current.setUTCDate(current.getUTCDate() + 1);
                 }
 
                 if (dias.length > 0) {
@@ -124,13 +130,20 @@ export const novedadController = {
 
             await prisma.$transaction(async (tx) => {
                 for (const op of operaciones) {
-                    const fecha = new Date(op.fecha);
-                    fecha.setHours(0, 0, 0, 0);
+                    const [y, m, d] = op.fecha.split('-').map(Number);
+                    const fecha = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
+                    const inicioDia = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+                    const finDia = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
 
                     const existente = await tx.novedadEmpleado.findFirst({
                         where: {
                             id_empleado: Number(id_empleado),
-                            detalle_novedad: { some: { fecha } }
+                            detalle_novedad: {
+                                some: {
+                                    fecha: { gte: inicioDia, lte: finDia }
+                                }
+                            }
                         }
                     });
 
@@ -192,6 +205,12 @@ export const novedadController = {
                 return res.status(400).json({ success: false, error: 'Datos incompletos' });
             }
 
+            const [yI, mI, dI] = fecha_inicio.split('-').map(Number);
+            const [yF, mF, dF] = fecha_fin.split('-').map(Number);
+
+            const start = new Date(Date.UTC(yI, mI - 1, dI, 0, 0, 0));
+            const end = new Date(Date.UTC(yF, mF - 1, dF, 23, 59, 59));
+
             await prisma.$transaction(async (tx) => {
                 const existentes = await tx.novedadEmpleado.findMany({
                     where: {
@@ -199,8 +218,8 @@ export const novedadController = {
                         detalle_novedad: {
                             some: {
                                 fecha: {
-                                    gte: new Date(fecha_inicio),
-                                    lte: new Date(fecha_fin)
+                                    gte: start,
+                                    lte: end
                                 }
                             }
                         }
@@ -220,6 +239,9 @@ export const novedadController = {
 
                 if (Array.isArray(novedades)) {
                     for (const item of novedades) {
+                        const [y, m, d] = item.fecha.split('-').map(Number);
+                        const fechaItem = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
                         const novedad = await tx.novedadEmpleado.create({
                             data: {
                                 id_empleado: Number(id_empleado),
@@ -233,7 +255,7 @@ export const novedadController = {
                         await tx.detalleNovedad.create({
                             data: {
                                 id_novedad_empleado: novedad.id_novedad_empleado,
-                                fecha: new Date(item.fecha),
+                                fecha: fechaItem,
                                 cantidad: 1
                             }
                         });

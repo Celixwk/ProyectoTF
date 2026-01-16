@@ -17,13 +17,13 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Empleados', href: '/empleados', icon: Users },
   { name: 'Turnos', href: '/turnos', icon: Clock },
-  { name: 'Programación', href: '/programacion', icon: Calendar },
-  { name: 'Prog. Áreas', href: '/programacion-areas', icon: Building2 },
+  { name: 'Vist. Programación', href: '/programacion', icon: Calendar },
+  { name: 'Generar Programación', href: '/programacion-areas', icon: Building2 },
   { name: 'Gestión Mensual', href: '/gestion-mensual', icon: ClipboardList },
-  { name: 'Recargos', href: '/recargos', icon: DollarSign },
-  { name: 'Novedades', href: '/novedades', icon: FileText },
+  // { name: 'Recargos', href: '/recargos', icon: DollarSign },
+  // { name: 'Novedades', href: '/novedades', icon: FileText },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
-  { name: 'Config. Programación', href: '/configuracion-programacion', icon: CalendarCheck },
+  { name: 'Config. Programación y Novedades', href: '/configuracion-programacion', icon: CalendarCheck },
 ];
 
 export default function Sidebar() {

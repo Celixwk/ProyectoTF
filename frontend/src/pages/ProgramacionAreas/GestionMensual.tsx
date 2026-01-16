@@ -27,6 +27,12 @@ interface CambioLocal {
     id_turno_destino: number;
 }
 
+const parseFechaSinAjuste = (fechaStr: string) => {
+    if (!fechaStr) return null;
+    const [y, m, d] = fechaStr.split('T')[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
 export default function GestionMensual() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
@@ -98,8 +104,11 @@ export default function GestionMensual() {
         const conflictos = alertasMotor.filter((a: any) => a.tipo === 'NOVEDAD');
         if (conflictos.length === 0) return null;
 
-        const fechas = conflictos.map((a: any) => new Date(a.fecha));
-        return new Date(Math.min(...fechas.map(f => f.getTime())));
+        const fechas = conflictos.map((a: any) => parseFechaSinAjuste(a.fecha));
+        const fechasValidas = fechas.filter((f): f is Date => f !== null);
+
+        if (fechasValidas.length === 0) return null;
+        return new Date(Math.min(...fechasValidas.map(f => f.getTime())));
     }, [alertasMotor]);
 
     const programacion = useMemo(() => {
@@ -325,7 +334,6 @@ export default function GestionMensual() {
                         </Card>
                     ) : (
                         <>
-                            {/* Renderizar solo si hay conflicto real desde el motor Y no ha sido ignorado */}
                             {!bannerIgnorado && fechaConflictoPersistente && (
                                 <BannerNecesidadRegenerar
                                     fechaCorte={fechaConflictoPersistente}
@@ -359,7 +367,6 @@ export default function GestionMensual() {
                                                     <tr className="bg-slate-50">
                                                         <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
                                                         {infoDias.map((dia) => {
-
                                                             const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
                                                             const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                             return (
@@ -462,7 +469,12 @@ export default function GestionMensual() {
                                                         const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
                                                         const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                         return (
-                                                            <td key={dia.fechaISO} className={cn("border p-2 bg-white min-h-[60px]", esSucio && 'bg-red-50/20', esRegenerado && "bg-emerald-50/30")} onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
+                                                            <td
+                                                                key={dia.fechaISO}
+                                                                className={cn("border p-2 bg-white min-h-[60px]", esSucio && 'bg-red-50/20', esRegenerado && "bg-emerald-50/30")}
+                                                                onDragOver={handleDragOver}
+                                                                onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}
+                                                            >
                                                                 <div className="flex flex-col gap-1">
                                                                     {noAsignados.map((emp: any) => (
                                                                         <div
@@ -496,7 +508,6 @@ export default function GestionMensual() {
                     refetch();
                     refetchNoAsignados();
                     refetchAlertas();
-
                 }}
             />
         </div>

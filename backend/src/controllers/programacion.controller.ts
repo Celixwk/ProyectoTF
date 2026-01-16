@@ -218,7 +218,66 @@ export const eliminarProgramacion = async (req: Request, res: Response) => {
 
 export const validarProgramacion = async (req: Request, res: Response) => {
     try {
-        res.json({ success: true, data: [] });
+        const { inicio, fin } = req.query;
+        if (!inicio || !fin) return res.status(400).json({ success: false, error: 'Faltan fechas' });
+
+
+        const [yI, mI, dI] = (inicio as string).split('-').map(Number);
+        const [yF, mF, dF] = (fin as string).split('-').map(Number);
+
+        const fechaInicio = new Date(yI, mI - 1, dI);
+        const fechaFin = new Date(yF, mF - 1, dF, 23, 59, 59);
+
+
+        const programacion = await prisma.detalleProgramacion.findMany({
+            where: {
+                fecha: { gte: fechaInicio, lte: fechaFin }
+            },
+            select: { id_empleado: true, fecha: true, id_detalle_programacion: true }
+        });
+
+        if (programacion.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+
+        const empleadosIds = [...new Set(programacion.map(p => p.id_empleado))];
+
+        const novedades = await prisma.detalleNovedad.findMany({
+            where: {
+                fecha: { gte: fechaInicio, lte: fechaFin },
+                novedad_empleado: {
+                    id_empleado: { in: empleadosIds }
+                }
+            },
+            include: {
+                novedad_empleado: true
+            }
+        });
+
+
+        const alertas = [];
+
+        for (const prog of programacion) {
+
+            const fechaProg = prog.fecha.toISOString().split('T')[0];
+
+            const conflicto = novedades.find(nov =>
+                nov.novedad_empleado.id_empleado === prog.id_empleado &&
+                nov.fecha.toISOString().split('T')[0] === fechaProg
+            );
+
+            if (conflicto) {
+                alertas.push({
+                    tipo: 'NOVEDAD',
+                    fecha: fechaProg,
+                    id_empleado: prog.id_empleado,
+                    mensaje: 'Conflicto: Empleado con turno y novedad simultánea'
+                });
+            }
+        }
+
+        res.json({ success: true, data: alertas });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }

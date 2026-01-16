@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { consultasService, empleadosService, areasService, novedadesService } from '@/services/api.service';
+import { consultasService, empleadosService, areasService, novedadesService, programacionService } from '@/services/api.service';
+import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -21,6 +22,12 @@ const TIPOS_NOVEDAD = [
   { id: 4, nombre: 'Suspensión', color: 'bg-slate-800 text-white', corta: 'SUS' },
 ];
 
+const parseFechaSinAjuste = (fechaStr: string) => {
+  if (!fechaStr) return null;
+  const [y, m, d] = fechaStr.split('T')[0].split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
 export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
@@ -30,10 +37,37 @@ export default function ConfiguracionProgramacion() {
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
   const [cambiosPendientes, setCambiosPendientes] = useState<Map<string, any>>(new Map());
+  const [bannerIgnorado, setBannerIgnorado] = useState(false);
   const isSaving = useRef(false);
 
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-01'));
   const [fechaFin, setFechaFin] = useState(format(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0), 'yyyy-MM-dd'));
+
+  const mesActual = useMemo(() => parseInt(fechaInicio.split('-')[1]), [fechaInicio]);
+  const anioActual = useMemo(() => parseInt(fechaInicio.split('-')[0]), [fechaInicio]);
+
+  useEffect(() => {
+    setBannerIgnorado(false);
+  }, [mesActual, anioActual]);
+
+  const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
+    queryKey: ['validar-programacion', mesActual, anioActual],
+    queryFn: async () => {
+      return programacionService.validarPeriodo(fechaInicio, fechaFin);
+    },
+    staleTime: 0
+  });
+
+  const fechaConflicto = useMemo(() => {
+    const conflictos = alertasMotor.filter((a: any) => a.tipo === 'NOVEDAD');
+    if (conflictos.length === 0) return null;
+
+    const fechas = conflictos.map((a: any) => parseFechaSinAjuste(a.fecha));
+    const fechasValidas = fechas.filter((f): f is Date => f !== null);
+
+    if (fechasValidas.length === 0) return null;
+    return new Date(Math.min(...fechasValidas.map(f => f.getTime())));
+  }, [alertasMotor]);
 
   const { data: empleadosData } = useQuery({
     queryKey: ['empleados-completos', { estado: true, limit: 1000 }],
@@ -45,7 +79,6 @@ export default function ConfiguracionProgramacion() {
     staleTime: 0,
     refetchOnMount: true,
   });
-
 
   const { data: areas } = useQuery({
     queryKey: ['areas'],
@@ -106,7 +139,7 @@ export default function ConfiguracionProgramacion() {
     const actualesEnDb = dataArray
       .filter((n: any) => Number(n.id_empleado) === idEmpleadoSeleccionado)
       .map((n: any) => ({
-        fecha: parseISO(n.fecha),
+        fecha: parseFechaSinAjuste(n.fecha)!,
         id_tipo: n.id_novedad_tipo,
         id_novedad_empleado: n.id_novedad_empleado
       }));
@@ -196,10 +229,16 @@ export default function ConfiguracionProgramacion() {
         });
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
-      queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
+      await queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
+      await queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
+
+      await queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
+      await refetchAlertas();
+
       setCambiosPendientes(new Map());
+      setBannerIgnorado(false);
       toast.success('Configuración sincronizada correctamente');
       setTimeout(() => { isSaving.current = false; }, 500);
     },
@@ -237,6 +276,16 @@ export default function ConfiguracionProgramacion() {
           </div>
         </div>
       </header>
+
+      {!bannerIgnorado && fechaConflicto && (
+        <BannerNecesidadRegenerar
+          fechaCorte={fechaConflicto}
+          mes={mesActual}
+          anio={anioActual}
+          modo="aviso"
+          onIgnore={() => setBannerIgnorado(true)}
+        />
+      )}
 
       <div className="bg-white p-6 rounded-2xl border shadow-sm border-slate-200">
         <div className="max-w-md space-y-2">
