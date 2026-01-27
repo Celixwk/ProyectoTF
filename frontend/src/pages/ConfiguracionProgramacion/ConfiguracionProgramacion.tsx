@@ -15,11 +15,11 @@ import { toast } from 'sonner';
 import type { EmpleadoCompleto, Area } from '@/types/api.types';
 
 const TIPOS_NOVEDAD = [
-  { id: 6, nombre: 'Descanso', color: 'bg-blue-600 text-white', corta: 'DES' },
-  { id: 1, nombre: 'Vacaciones', color: 'bg-emerald-600 text-white', corta: 'VAC' },
-  { id: 2, nombre: 'Incapacidad', color: 'bg-rose-600 text-white', corta: 'INC' },
-  { id: 3, nombre: 'Licencia', color: 'bg-amber-500 text-black', corta: 'LIC' },
-  { id: 4, nombre: 'Suspensión', color: 'bg-slate-800 text-white', corta: 'SUS' },
+  { id: 1, nombre: 'Descanso', color: 'bg-blue-600 text-white', corta: 'DES' },
+  { id: 2, nombre: 'Vacaciones', color: 'bg-emerald-600 text-white', corta: 'VAC' },
+  { id: 3, nombre: 'Incapacidad', color: 'bg-rose-600 text-white', corta: 'INC' },
+  { id: 4, nombre: 'Licencia', color: 'bg-amber-500 text-black', corta: 'LIC' },
+  { id: 5, nombre: 'Suspensión', color: 'bg-slate-800 text-white', corta: 'SUS' },
 ];
 
 const parseFechaSinAjuste = (fechaStr: string) => {
@@ -32,7 +32,7 @@ export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
   const [busquedaEmpleado, setBusquedaEmpleado] = useState('');
-  const [tipoSeleccionado, setTipoSeleccionado] = useState<number>(6);
+  const [tipoSeleccionado, setTipoSeleccionado] = useState<number>(1);
   const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number; id_novedad_empleado?: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});

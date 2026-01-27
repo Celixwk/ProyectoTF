@@ -102,7 +102,7 @@ model Empleado {
   apellido2            String?               @db.VarChar(50)
   edad                 Int?                  @db.SmallInt
   sexo                 String?               @db.Char(1)
-  vehiculo             Boolean?              @default(false)
+  vehiculo             String?               @default("No")
   id_cargo             Int
   id_estado            Int?                  @default(1)
   id_area              Int?

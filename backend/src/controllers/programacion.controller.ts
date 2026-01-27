@@ -28,7 +28,8 @@ export const verificarProgramacionExistente = async (req: Request, res: Response
 
 export const generarAutomatica = async (req: Request, res: Response) => {
     try {
-        const { mes, anio, configuracion, id_usuario_registro } = req.body;
+        const { mes, anio, id_usuario_registro } = req.body;
+
         if (!mes || !anio) return res.status(400).json({ success: false, error: 'Mes y año requeridos' });
 
         const fechaInicio = new Date(Date.UTC(Number(anio), Number(mes) - 1, 1));
@@ -41,15 +42,69 @@ export const generarAutomatica = async (req: Request, res: Response) => {
         if (existenciaPrevia > 0) {
             return res.status(409).json({
                 success: false,
-                error: `Ya existe una programación para este periodo con ${existenciaPrevia} registros. Use Gestión Mensual para modificarla o elimínela primero.`
+                error: `Ya existe una programación para este periodo. Use Gestión Mensual.`
             });
         }
 
-        const laborMes = await prisma.laborMes.findFirst({
-            where: { fecha_inicio: { lte: fechaInicio }, fecha_fin: { gte: fechaFin } }
+        const empleadosActivos = await prisma.empleado.findMany({
+            where: { id_estado: 1 },
+            select: { id_empleado: true }
         });
 
-        if (!laborMes) return res.status(400).json({ success: false, error: 'Periodo contable no encontrado.' });
+        if (empleadosActivos.length === 0) return res.status(400).json({ success: false, error: 'No hay empleados activos.' });
+
+        const periodosExistentes = await prisma.laborMes.findMany({
+            where: {
+                fecha_inicio: { lte: fechaInicio },
+                fecha_fin: { gte: fechaFin },
+                id_empleado: { in: empleadosActivos.map(e => e.id_empleado) }
+            },
+            select: { id_empleado: true }
+        });
+
+        const idsConPeriodo = new Set(periodosExistentes.map(p => p.id_empleado));
+        const empleadosSinPeriodo = empleadosActivos.filter(e => !idsConPeriodo.has(e.id_empleado));
+
+        if (empleadosSinPeriodo.length > 0) {
+            await prisma.laborMes.createMany({
+                data: empleadosSinPeriodo.map(e => ({
+                    id_empleado: e.id_empleado,
+                    fecha_inicio: fechaInicio,
+                    fecha_fin: fechaFin,
+                    estado: 'Abierto',
+                    horas_mes: 240
+                }))
+            });
+        }
+
+        const turnosBD = await prisma.turno.findMany();
+        const tIds: Record<string, number> = {};
+        turnosBD.forEach(t => {
+            if (t.tipo_turno) tIds[t.tipo_turno] = t.id_turno;
+        });
+
+        const getIds = (codigos: string[]) => codigos.map(c => tIds[c]).filter(id => id !== undefined);
+        const configReal: Record<number, { turnosIds: number[] }> = {};
+
+        configReal[1] = { turnosIds: getIds(['T1', 'T11']) };
+        configReal[2] = { turnosIds: getIds(['T11', 'T5']) };
+        configReal[3] = { turnosIds: getIds(['T5', 'T3']) };
+        configReal[4] = { turnosIds: getIds(['T5', 'T11']) };
+        configReal[5] = { turnosIds: getIds(['T5', 'T11']) };
+        configReal[6] = { turnosIds: getIds(['T5', 'T13', 'T11']) };
+        configReal[7] = { turnosIds: getIds(['T11', 'T5', 'T13']) };
+        configReal[8] = { turnosIds: getIds(['T11', 'T5']) };
+        configReal[9] = { turnosIds: getIds(['T13', 'T11', 'T5']) };
+        configReal[10] = { turnosIds: getIds(['T5', 'T11']) };
+        configReal[11] = { turnosIds: getIds(['T6', 'T8', 'T2']) };
+        configReal[12] = { turnosIds: getIds(['T6']) };
+
+        const todasLasAreas = await prisma.area.findMany();
+        todasLasAreas.forEach(area => {
+            if (!configReal[area.id_area]) {
+                configReal[area.id_area] = { turnosIds: getIds(['T5', 'T11']) };
+            }
+        });
 
         await prisma.detalleProgramacion.deleteMany({
             where: { fecha: { gte: fechaInicio, lte: fechaFin }, origen_registro: 'Automatico' }
@@ -63,8 +118,9 @@ export const generarAutomatica = async (req: Request, res: Response) => {
 
         for (let dia = 1; dia <= diasMes; dia++) {
             const fechaProceso = new Date(Date.UTC(Number(anio), Number(mes) - 1, dia));
+
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
-                configuracion,
+                configuracion: configReal,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea: 3
             });
@@ -105,6 +161,35 @@ export const regenerarDesdeFecha = async (req: Request, res: Response) => {
         const [anio, mes, dia] = fecha_inicio.split('-').map(Number);
         const inicioProceso = new Date(Date.UTC(anio, mes - 1, dia, 0, 0, 0, 0));
         const ultimoDiaMes = new Date(Date.UTC(anio, mes, 0, 23, 59, 59, 999));
+
+        const empleadosActivos = await prisma.empleado.findMany({
+            where: { id_estado: 1 },
+            select: { id_empleado: true }
+        });
+
+        const periodosExistentes = await prisma.laborMes.findMany({
+            where: {
+                fecha_inicio: { lte: inicioProceso },
+                fecha_fin: { gte: ultimoDiaMes },
+                id_empleado: { in: empleadosActivos.map(e => e.id_empleado) }
+            },
+            select: { id_empleado: true }
+        });
+
+        const idsConPeriodo = new Set(periodosExistentes.map(p => p.id_empleado));
+        const empleadosSinPeriodo = empleadosActivos.filter(e => !idsConPeriodo.has(e.id_empleado));
+
+        if (empleadosSinPeriodo.length > 0) {
+            await prisma.laborMes.createMany({
+                data: empleadosSinPeriodo.map(e => ({
+                    id_empleado: e.id_empleado,
+                    fecha_inicio: new Date(Date.UTC(anio, mes - 1, 1)),
+                    fecha_fin: new Date(Date.UTC(anio, mes, 0)),
+                    estado: 'Abierto',
+                    horas_mes: 240
+                }))
+            });
+        }
 
         await prisma.detalleProgramacion.deleteMany({
             where: {
@@ -221,13 +306,11 @@ export const validarProgramacion = async (req: Request, res: Response) => {
         const { inicio, fin } = req.query;
         if (!inicio || !fin) return res.status(400).json({ success: false, error: 'Faltan fechas' });
 
-
         const [yI, mI, dI] = (inicio as string).split('-').map(Number);
         const [yF, mF, dF] = (fin as string).split('-').map(Number);
 
         const fechaInicio = new Date(yI, mI - 1, dI);
         const fechaFin = new Date(yF, mF - 1, dF, 23, 59, 59);
-
 
         const programacion = await prisma.detalleProgramacion.findMany({
             where: {
@@ -239,7 +322,6 @@ export const validarProgramacion = async (req: Request, res: Response) => {
         if (programacion.length === 0) {
             return res.json({ success: true, data: [] });
         }
-
 
         const empleadosIds = [...new Set(programacion.map(p => p.id_empleado))];
 
@@ -255,13 +337,10 @@ export const validarProgramacion = async (req: Request, res: Response) => {
             }
         });
 
-
         const alertas = [];
 
         for (const prog of programacion) {
-
             const fechaProg = prog.fecha.toISOString().split('T')[0];
-
             const conflicto = novedades.find(nov =>
                 nov.novedad_empleado.id_empleado === prog.id_empleado &&
                 nov.fecha.toISOString().split('T')[0] === fechaProg

@@ -11,11 +11,11 @@ import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 const TIPOS_NOVEDAD = [
-    { id: 6, nombre: 'Descanso', color: 'bg-blue-600' },
-    { id: 1, nombre: 'Vacaciones', color: 'bg-emerald-600' },
-    { id: 2, nombre: 'Incapacidad', color: 'bg-rose-600' },
-    { id: 3, nombre: 'Licencia', color: 'bg-amber-500' },
-    { id: 4, nombre: 'Suspensión', color: 'bg-slate-800' },
+    { id: 1, nombre: 'Descanso', color: 'bg-blue-600' },
+    { id: 2, nombre: 'Vacaciones', color: 'bg-emerald-600' },
+    { id: 3, nombre: 'Incapacidad', color: 'bg-rose-600' },
+    { id: 4, nombre: 'Licencia', color: 'bg-amber-500' },
+    { id: 5, nombre: 'Suspensión', color: 'bg-slate-800' },
 ];
 
 interface ModalNovedadRapidaProps {

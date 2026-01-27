@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, LayoutDashboard, Info } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -27,6 +28,7 @@ export default function Programacion() {
 
   const [mes, setMes] = useState(hoy.getMonth() + 1);
   const [anio, setAnio] = useState(hoy.getFullYear());
+  const [filtro, setFiltro] = useState('');
 
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
@@ -46,11 +48,12 @@ export default function Programacion() {
   const fechaFin = new Date(anio, mes, 0).toISOString().split('T')[0];
 
   const { data: programacion = [], isLoading: loadingProg } = useQuery({
-    queryKey: ['programacion-lectura', mes, anio],
+    queryKey: ['programacion-mensual', mes, anio],
     queryFn: async () => {
       const res = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
       return Array.isArray(res) ? res : (res.data || []);
-    }
+    },
+    staleTime: 0
   });
 
   const { data: novedadesData = [] } = useQuery({
@@ -75,8 +78,6 @@ export default function Programacion() {
   }, [mes, anio]);
 
   const datosProcesados = useMemo(() => {
-    if (!programacion.length && !novedadesData.length) return [];
-
     const empleadosMap: Record<number, {
       nombre: string,
       cedula: string,
@@ -89,7 +90,6 @@ export default function Programacion() {
       const idArea = Number(asig.id_area);
       const nombreArea = areasMap.get(idArea) || 'General';
       const abreviacionArea = nombreArea.substring(0, 3).toUpperCase();
-
       const esRefuerzo = !asig.turno?.hora_entrada;
 
       if (!empleadosMap[idEmp]) {
@@ -121,21 +121,18 @@ export default function Programacion() {
     });
 
     const listaNovedades = Array.isArray(novedadesData) ? novedadesData : (novedadesData.novedades || []);
-
     listaNovedades.forEach((nov: any) => {
       if (!empleadosMap[nov.id_empleado]) {
         empleadosMap[nov.id_empleado] = {
-          nombre: nov.empleado ? `${nov.empleado.nombre1} ${nov.empleado.apellido1}` : nov.nombre_completo,
+          nombre: nov.empleado ? `${nov.empleado.nombre1} ${nov.empleado.apellido1}` : (nov.nombre_completo || 'Empleado'),
           cedula: nov.cedula_empleado || '',
           dias: {}
         };
       }
-
       if (nov.detalle_novedad && Array.isArray(nov.detalle_novedad)) {
         nov.detalle_novedad.forEach((det: any) => {
           const fecha = det.fecha.split('T')[0];
           const tipoNov = TIPOS_NOVEDAD[nov.tipo_novedad?.codigo] || TIPOS_NOVEDAD['LIC'];
-
           empleadosMap[nov.id_empleado].dias[fecha] = {
             tipo: 'NOVEDAD',
             valor: tipoNov.label,
@@ -147,8 +144,13 @@ export default function Programacion() {
       }
     });
 
-    return Object.values(empleadosMap).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [programacion, novedadesData, areasMap]);
+    let resultado = Object.values(empleadosMap);
+    if (filtro.trim()) {
+      const s = filtro.toLowerCase();
+      resultado = resultado.filter(e => e.nombre.toLowerCase().includes(s) || e.cedula.includes(s));
+    }
+    return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [programacion, novedadesData, areasMap, filtro]);
 
   return (
     <div className="space-y-6 max-w-full mx-auto pb-20 px-4 sm:px-6">
@@ -158,58 +160,78 @@ export default function Programacion() {
           <p className="text-slate-500 text-lg">Vista consolidada de asignaciones y novedades.</p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
-          <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
-            <SelectTrigger className="w-[160px] border-none shadow-none font-medium text-base"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)} className="text-base">{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="h-6 w-px bg-slate-200" />
-          <Select value={String(anio)} onValueChange={(v) => setAnio(parseInt(v))}>
-            <SelectTrigger className="w-[120px] border-none shadow-none font-medium text-base"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {anios.map(a => <SelectItem key={a} value={String(a)} className="text-base">{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
+            <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
+              <SelectTrigger className="w-[140px] border-none shadow-none font-medium"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="h-6 w-px bg-slate-200" />
+            <Select value={String(anio)} onValueChange={(v) => setAnio(parseInt(v))}>
+              <SelectTrigger className="w-[100px] border-none shadow-none font-medium"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <Button
-          onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}
-          className="bg-indigo-600 hover:bg-indigo-700 shadow-md font-bold text-base px-6 py-6"
-        >
-          <LayoutDashboard className="mr-2 h-5 w-5" />
-          Ir a Gestión Mensual
-        </Button>
+          <Button
+            onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}
+            className="bg-indigo-600 hover:bg-indigo-700 shadow-md font-bold"
+          >
+            <LayoutDashboard className="mr-2 h-5 w-5" />
+            Gestionar
+          </Button>
+        </div>
       </div>
+
+      {programacion.length > 0 && (
+        <div className="relative max-w-md">
+          <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Buscar colaborador..."
+            className="pl-10 bg-white"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+          />
+        </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 flex gap-3 items-start">
         <Info className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
         <div>
           <h5 className="font-bold text-blue-700 text-base mb-1">Modo Lectura</h5>
-          <p className="text-blue-600/90 text-sm leading-relaxed">
-            Esta vista consolida todos los empleados. Pase el mouse sobre las casillas para ver detalles del turno y el área asignada.
+          <p className="text-blue-600/90 text-sm">
+            Vista consolidada. Pase el mouse sobre las casillas para ver detalles del turno y el área asignada.
           </p>
         </div>
       </div>
 
       {loadingProg ? (
-        <div className="py-20 text-center text-slate-400 text-xl">Cargando programación...</div>
-      ) : datosProcesados.length === 0 ? (
+        <div className="py-20 text-center text-slate-400 text-xl flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+          Cargando datos frescos...
+        </div>
+      ) : programacion.length === 0 ? (
         <Card className="border-dashed py-16 text-center bg-slate-50/50">
           <div className="flex justify-center mb-6">
             <CalendarDays className="h-16 w-16 text-slate-300" />
           </div>
-          <h3 className="text-xl font-medium text-slate-900">Sin programación visible</h3>
-          <p className="text-slate-500 max-w-md mx-auto mt-2 text-lg">
+          <h3 className="text-xl font-medium text-slate-900">Sin programación generada</h3>
+          <p className="text-slate-500 max-w-md mx-auto mt-2 text-lg mb-6">
             No hay turnos asignados para {meses[mes - 1]} {anio}.
           </p>
+          <Button variant="outline" onClick={() => navigate('/programacion-areas')}>
+            Ir a Generar Programación <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
         </Card>
       ) : (
         <div className="border rounded-xl bg-white shadow-sm overflow-hidden animate-in fade-in duration-500">
           <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
             <span className="font-bold uppercase tracking-wider text-base">Personal Programado</span>
-            <Badge variant="secondary" className="bg-slate-700 text-slate-100 border-0 text-sm px-3 py-1">
+            <Badge variant="secondary" className="bg-slate-700 text-slate-100 border-0">
               {datosProcesados.length} Colaboradores
             </Badge>
           </div>
@@ -245,29 +267,18 @@ export default function Programacion() {
                     </td>
                     {diasDelMes.map(dia => {
                       let infoDia = emp.dias[dia.fechaISO];
-
                       if (!infoDia) {
                         infoDia = {
                           tipo: 'REFUERZO_DEFAULT',
                           valor: 'REF',
                           estilo: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold',
-                          detalle: 'Refuerzo (Por asignar)',
+                          detalle: 'Disponible / Refuerzo',
                           subvalor: ''
                         };
                       }
-
                       return (
-                        <td key={dia.dia} className={cn(
-                          "border-r border-b p-0 text-center h-16 w-14 relative"
-                        )}>
-                          {/* AQUI SE AGREGA LA CLASE 'group' AL CONTENEDOR INDIVIDUAL */}
-                          <div
-                            className={cn(
-                              "group w-full h-full flex flex-col items-center justify-center cursor-help transition-all p-1 border",
-                              infoDia.estilo
-                            )}
-                          >
-                            {/* TOOLTIP PERSONALIZADO (Aparece solo para este DIV) */}
+                        <td key={dia.dia} className="border-r border-b p-0 text-center h-16 w-14 relative">
+                          <div className={cn("group w-full h-full flex flex-col items-center justify-center cursor-help transition-all p-1 border", infoDia.estilo)}>
                             <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-2 w-max max-w-[220px] bg-slate-900 text-white p-3 rounded-lg shadow-2xl pointer-events-none">
                               <div className="text-base font-bold mb-1">{infoDia.detalle}</div>
                               {infoDia.tipo === 'TURNO' && (
@@ -276,10 +287,8 @@ export default function Programacion() {
                                   <div className="text-xs text-slate-400 mt-1 uppercase tracking-wide">{infoDia.areaCompleta}</div>
                                 </>
                               )}
-                              {/* Triángulo indicador */}
                               <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900"></div>
                             </div>
-
                             <span className="font-black text-xs leading-tight truncate max-w-full px-1">{infoDia.valor}</span>
                             {infoDia.tipo === 'TURNO' && (
                               <span className="text-[10px] font-semibold opacity-80 leading-tight mt-0.5">{infoDia.subvalor}</span>
@@ -312,3 +321,7 @@ export default function Programacion() {
     </div>
   );
 }
+
+const Loader2 = ({ className }: { className?: string }) => (
+  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+);

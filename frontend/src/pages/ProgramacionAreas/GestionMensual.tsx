@@ -10,8 +10,9 @@ import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2 } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -46,6 +47,7 @@ export default function GestionMensual() {
     const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
+    const [filtroEmpleado, setFiltroEmpleado] = useState('');
 
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
@@ -65,7 +67,6 @@ export default function GestionMensual() {
             return () => clearTimeout(timer);
         }
     }, [fechasRecienGeneradas]);
-
 
     useEffect(() => {
         setBannerIgnorado(false);
@@ -99,35 +100,35 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
-
     const fechaConflictoPersistente = useMemo(() => {
         const conflictos = alertasMotor.filter((a: any) => a.tipo === 'NOVEDAD');
         if (conflictos.length === 0) return null;
-
         const fechas = conflictos.map((a: any) => parseFechaSinAjuste(a.fecha));
         const fechasValidas = fechas.filter((f): f is Date => f !== null);
-
         if (fechasValidas.length === 0) return null;
         return new Date(Math.min(...fechasValidas.map(f => f.getTime())));
     }, [alertasMotor]);
 
     const programacion = useMemo(() => {
-        if (!programacionOriginal || cambiosLocales.length === 0) return programacionOriginal;
-        return programacionOriginal.map((asig: any) => {
-            const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
-            if (cambio) {
-                if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
-                return {
-                    ...asig,
-                    id_area: cambio.id_area_destino,
-                    id_turno: cambio.id_turno_destino,
-                    fecha: cambio.fecha,
-                    _modificado: true
-                };
-            }
-            return asig;
-        }).filter((asig: any) => !asig._eliminado);
-    }, [programacionOriginal, cambiosLocales]);
+        let base = !programacionOriginal || cambiosLocales.length === 0
+            ? programacionOriginal
+            : programacionOriginal.map((asig: any) => {
+                const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
+                if (cambio) {
+                    if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
+                    return { ...asig, id_area: cambio.id_area_destino, id_turno: cambio.id_turno_destino, fecha: cambio.fecha, _modificado: true };
+                }
+                return asig;
+            }).filter((asig: any) => !asig._eliminado);
+
+        if (filtroEmpleado.trim()) {
+            const search = filtroEmpleado.toLowerCase();
+            return base.filter((p: any) =>
+                (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search)
+            );
+        }
+        return base;
+    }, [programacionOriginal, cambiosLocales, filtroEmpleado]);
 
     const areas = useMemo(() => {
         if (!areasRaw) return [];
@@ -141,13 +142,13 @@ export default function GestionMensual() {
 
     const configAreasTurnos = useMemo(() => {
         const config: Record<number, number[]> = {};
-        if (!programacion || !Array.isArray(programacion)) return config;
+        if (!programacionOriginal || !Array.isArray(programacionOriginal)) return config;
         areas.forEach(area => {
-            const turnosUsados = new Set(programacion.filter((p: any) => Number(p.id_area) === area.id_area).map((p: any) => Number(p.id_turno)));
+            const turnosUsados = new Set(programacionOriginal.filter((p: any) => Number(p.id_area) === area.id_area).map((p: any) => Number(p.id_turno)));
             config[area.id_area] = Array.from(turnosUsados).sort((a, b) => a - b);
         });
         return config;
-    }, [programacion, areas]);
+    }, [programacionOriginal, areas]);
 
     const infoDias = useMemo(() => {
         const ultimoDia = new Date(anio, mes, 0).getDate();
@@ -175,35 +176,39 @@ export default function GestionMensual() {
     const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
+
+        const yaTieneAsignacion = programacionOriginal.some((p: any) =>
+            p.id_empleado === empleadoArrastrado.id_empleado &&
+            p.fecha.split('T')[0] === fechaDestino &&
+            p.id_detalle_programacion !== empleadoArrastrado.id_detalle_programacion &&
+            !cambiosLocales.some(c => c.id_detalle_programacion === p.id_detalle_programacion && c.id_area_destino === -1)
+        );
+
+        if (yaTieneAsignacion) {
+            toast.error(`${empleadoArrastrado.nombre_empleado || 'El empleado'} ya tiene un turno ese día`);
+            setEmpleadoArrastrado(null);
+            return;
+        }
+
         const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
         if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
-        const destinoAsignacion = programacion.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
+
+        const destinoAsignacion = programacionOriginal.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
         const cambioId = `${Date.now()}-${Math.random()}`;
+
         if (destinoAsignacion) {
-            const nombreArrastrado = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-            const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
-            const cambio1: CambioLocal = {
-                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArrastrado,
-                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
-            };
-            const cambio2: CambioLocal = {
-                id: cambioId, id_detalle_programacion: destinoAsignacion.id_detalle_programacion, empleado: nombreDestino,
-                fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino,
-                id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen
-            };
-            setCambiosLocales(prev => [...prev, cambio1, cambio2]);
+            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
+            const nombreDest = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo;
+            setCambiosLocales(prev => [...prev,
+            { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino },
+            { id: cambioId, id_detalle_programacion: destinoAsignacion.id_detalle_programacion, empleado: nombreDest, fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino, id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen }
+            ]);
         } else {
-            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-            const cambio: CambioLocal = {
-                id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
-                fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino
-            };
-            setCambiosLocales(prev => [...prev, cambio]);
+            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
+            setCambiosLocales(prev => [...prev, { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino }]);
         }
         setEmpleadoArrastrado(null);
     };
@@ -212,46 +217,21 @@ export default function GestionMensual() {
         e.preventDefault();
         if (!empleadoArrastrado) return;
         const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-        const cambio: CambioLocal = {
-            id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr,
-            fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen,
-            id_area_destino: -1, id_turno_destino: -1
-        };
-        setCambiosLocales(prev => [...prev, cambio]);
+        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
+        setCambiosLocales(prev => [...prev, { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: -1, id_turno_destino: -1 }]);
         setEmpleadoArrastrado(null);
     };
 
-    const handleRevertirCambios = () => {
-        setCambiosLocales([]);
-        toast.info('Cambios revertidos');
-    };
-
-    const handleConsultar = () => {
-        setPaso('detalle');
-        setCambiosLocales([]);
-        setBannerIgnorado(false);
-        refetch();
-    };
-
-    const handleExportar = () => {
-        const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
-        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`);
-    };
-
-    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
-        setEmpleadoSeleccionado({ id, nombre });
-        setFechaParaNovedad(fecha);
-        setModalNovedadOpen(true);
-    };
+    const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
+    const handleConsultar = () => { setPaso('detalle'); setCambiosLocales([]); setBannerIgnorado(false); setFiltroEmpleado(''); refetch(); };
+    const handleExportar = () => { const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos }); XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`); };
+    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => { setEmpleadoSeleccionado({ id, nombre }); setFechaParaNovedad(fecha); setModalNovedadOpen(true); };
 
     return (
         <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
-                <p className="text-slate-500">
-                    {paso === 'seleccion' ? 'Seleccione el periodo' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}
-                </p>
+                <p className="text-slate-500">{paso === 'seleccion' ? 'Seleccione el periodo' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}</p>
             </div>
 
             {paso === 'seleccion' && (
@@ -263,24 +243,18 @@ export default function GestionMensual() {
                                     <Label>Mes de Consulta</Label>
                                     <Select value={String(mes)} onValueChange={(v) => setMes(parseInt(v))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                                        </SelectContent>
+                                        <SelectContent>{meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Año</Label>
                                     <Select value={String(anio)} onValueChange={(v) => setAnio(parseInt(v))}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                                        </SelectContent>
+                                        <SelectContent>{anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
                                     </Select>
                                 </div>
                             </div>
-                            <Button className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700" size="lg" onClick={handleConsultar}>
-                                <Search className="mr-2 h-4 w-4" /> Consultar Programación
-                            </Button>
+                            <Button className="w-full mt-6 bg-indigo-600 hover:bg-indigo-700" size="lg" onClick={handleConsultar}><Search className="mr-2 h-4 w-4" /> Consultar Programación</Button>
                         </CardContent>
                     </Card>
                     <div className="bg-slate-50 border-dashed border-2 rounded-xl p-8 text-center">
@@ -294,46 +268,55 @@ export default function GestionMensual() {
 
             {paso === 'detalle' && (
                 <div className="space-y-6">
-                    <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm">
-                        <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
-
-                        {programacion.length > 0 && (
-                            <div className="flex gap-2">
-                                {cambiosLocales.length > 0 ? (
-                                    <>
-                                        <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir Todo</Button>
-                                        <Button className="bg-green-600 hover:bg-green-700" onClick={() => queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] })}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
-                                    </>
-                                ) : (
-                                    <BotonEliminarProgramacion
-                                        mes={mes}
-                                        anio={anio}
-                                        onSuccess={() => {
-                                            setCambiosLocales([]);
-                                            setPaso('seleccion');
-                                            queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
-                                        }}
-                                    />
-                                )}
-                                <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
-                            </div>
-                        )}
-                    </div>
-
                     {cargandoProg ? (
                         <div className="flex flex-col items-center justify-center py-20">
                             <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-4" />
                             <p className="text-slate-500 text-sm">Cargando programación ...</p>
                         </div>
-                    ) : programacion.length === 0 ? (
-                        <Card className="p-12 text-center border-dashed">
-                            <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
-                            <h3 className="text-xl font-bold">Sin Registros</h3>
-                            <p className="text-slate-500 mb-4">No se encontró programación para {meses[mes - 1]} del {anio}.</p>
-                            <Button onClick={() => navigate('/programacion-areas')}>Generar Ahora</Button>
-                        </Card>
+                    ) : programacionOriginal.length === 0 ? (
+                        <div className="space-y-6">
+                            <div className="flex justify-start bg-white p-4 border rounded-xl shadow-sm">
+                                <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
+                            </div>
+                            <Card className="p-12 text-center border-dashed">
+                                <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
+                                <h3 className="text-xl font-bold">Sin Registros</h3>
+                                <p className="text-slate-500 mb-4">No se encontró programación para {meses[mes - 1]} del {anio}.</p>
+                                <Button onClick={() => navigate('/programacion-areas')}>Generar Ahora</Button>
+                            </Card>
+                        </div>
                     ) : (
                         <>
+                            <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm gap-4">
+                                <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Periodo</Button>
+
+                                <div className="flex-1 max-w-sm relative">
+                                    <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <Input
+                                        placeholder="Buscar empleado..."
+                                        className="pl-10"
+                                        value={filtroEmpleado}
+                                        onChange={(e) => setFiltroEmpleado(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="flex gap-2">
+                                    {cambiosLocales.length > 0 ? (
+                                        <>
+                                            <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir Todo</Button>
+                                            <Button className="bg-green-600 hover:bg-green-700" onClick={() => queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] })}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
+                                        </>
+                                    ) : (
+                                        <BotonEliminarProgramacion
+                                            mes={mes}
+                                            anio={anio}
+                                            onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }}
+                                        />
+                                    )}
+                                    <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
+                                </div>
+                            </div>
+
                             {!bannerIgnorado && fechaConflictoPersistente && (
                                 <BannerNecesidadRegenerar
                                     fechaCorte={fechaConflictoPersistente}
@@ -393,36 +376,12 @@ export default function GestionMensual() {
                                                                 <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
                                                                 {infoDias.map((dia) => {
                                                                     const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                                    const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
-                                                                    const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     const tieneNovedad = alertasMotor.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
                                                                     return (
-                                                                        <td
-                                                                            key={dia.fechaISO}
-                                                                            className={cn(
-                                                                                "border p-2 min-h-[60px] transition-all duration-300",
-                                                                                tieneNovedad ? 'bg-red-300 border-red-500 shadow-inner' :
-                                                                                    esSucio ? 'bg-red-200' :
-                                                                                        esRegenerado ? 'bg-emerald-50/50 border-emerald-200' : ''
-                                                                            )}
-                                                                            onDragOver={handleDragOver}
-                                                                            onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}
-                                                                        >
+                                                                        <td key={dia.fechaISO} className={cn("border p-2 min-h-[60px] transition-all duration-300", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
                                                                             <div className="flex flex-col gap-1">
                                                                                 {asignados.map((asig: any, idx: number) => (
-                                                                                    <div
-                                                                                        key={idx}
-                                                                                        draggable
-                                                                                        onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)}
-                                                                                        onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)}
-                                                                                        className={cn(
-                                                                                            "px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm",
-                                                                                            tieneNovedad ? 'bg-white border-red-600 text-red-700 font-bold' :
-                                                                                                asig._modificado ? 'bg-amber-100 border-amber-400' :
-                                                                                                    esRegenerado ? 'bg-emerald-100 border-emerald-200 text-emerald-800' :
-                                                                                                        'bg-white border-slate-200 hover:border-indigo-300'
-                                                                                        )}
-                                                                                    >
+                                                                                    <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm bg-white border-slate-200", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500 font-bold')}>
                                                                                         {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                     </div>
                                                                                 ))}
@@ -440,48 +399,22 @@ export default function GestionMensual() {
                                 ))}
                             </div>
 
-                            <Card className={cn("mt-8 transition-all duration-500", fechaConflictoPersistente ? 'border-red-200 shadow-md' : 'border-slate-200')}>
-                                <CardContent className={cn("p-6", fechaConflictoPersistente ? 'bg-red-50/10' : 'bg-slate-50')}>
-                                    <h3 className={cn("text-sm font-bold mb-4", fechaConflictoPersistente ? 'text-red-900' : 'text-slate-900')}>Refuerzos / Disponibles</h3>
+                            <Card className="mt-8 border-slate-200 shadow-sm">
+                                <CardContent className="p-6 bg-slate-50">
+                                    <h3 className="text-sm font-bold mb-4 text-slate-900">Refuerzos / Disponibles</h3>
                                     <div className="overflow-x-auto">
                                         <table className="w-full border-collapse">
-                                            <thead>
-                                                <tr className={fechaConflictoPersistente ? 'bg-red-50' : 'bg-slate-100'}>
-                                                    <th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>
-                                                    {infoDias.map((dia) => {
-                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
-                                                        const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
-                                                        return (
-                                                            <th key={dia.fechaISO} className={cn(
-                                                                "border p-2 text-center text-[10px] min-w-[120px]",
-                                                                esSucio && 'bg-red-50 text-red-800 font-bold',
-                                                                esRegenerado && "bg-emerald-100 text-emerald-800 font-bold"
-                                                            )}>{dia.numero}</th>
-                                                        )
-                                                    })}
-                                                </tr>
-                                            </thead>
+                                            <thead><tr className="bg-slate-100"><th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>{infoDias.map((dia) => (<th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px]">{dia.numero}</th>))}</tr></thead>
                                             <tbody>
                                                 <tr>
                                                     <td className="border p-2 text-xs font-bold">Disponibles</td>
                                                     {infoDias.map((dia) => {
-                                                        const noAsignados = noAsignadosPorDia[dia.fechaISO] || [];
-                                                        const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
-                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                                                        const noAsignados = (noAsignadosPorDia[dia.fechaISO] || []).filter((emp: any) => !programacionOriginal.some((p: any) => p.id_empleado === emp.id_empleado && p.fecha.split('T')[0] === dia.fechaISO));
                                                         return (
-                                                            <td
-                                                                key={dia.fechaISO}
-                                                                className={cn("border p-2 bg-white min-h-[60px]", esSucio && 'bg-red-50/20', esRegenerado && "bg-emerald-50/30")}
-                                                                onDragOver={handleDragOver}
-                                                                onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}
-                                                            >
+                                                            <td key={dia.fechaISO} className="border p-2 bg-white min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
                                                                 <div className="flex flex-col gap-1">
                                                                     {noAsignados.map((emp: any) => (
-                                                                        <div
-                                                                            key={emp.id_empleado}
-                                                                            onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)}
-                                                                            className={cn("px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer hover:bg-amber-100", esRegenerado && "border-emerald-200 bg-emerald-50 text-emerald-800")}
-                                                                        >
+                                                                        <div key={emp.id_empleado} onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)} className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer">
                                                                             {emp.nombre_completo}
                                                                         </div>
                                                                     ))}

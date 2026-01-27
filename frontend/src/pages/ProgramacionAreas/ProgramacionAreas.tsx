@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
+import { VisualizacionAlertas } from '@/utils/VisualizacionAlertas';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
 
@@ -89,26 +90,32 @@ export default function ProgramacionAreas() {
     useEffect(() => {
         if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0) {
             const initialConfig: Record<number, { turnosIds: number[] }> = {};
-            const tIds = { T1: 5, T2: 6, T3: 7, T5: 8, T6: 9, T8: 11, T11: 14, T13: 15 };
+            const getTurnoId = (codigo: string) => {
+                const t = turnos.find(turno => turno.tipo_turno === codigo);
+                return t ? t.id_turno : undefined;
+            };
 
             areas.forEach((area) => {
-                let idsSeleccionados: number[] = [];
+                let codigosTurnos: string[] = [];
                 switch (area.id_area) {
-                    case 1: idsSeleccionados = [tIds.T1, tIds.T11]; break;
-                    case 2: idsSeleccionados = [tIds.T11, tIds.T5]; break;
-                    case 3: idsSeleccionados = [tIds.T5, tIds.T3]; break;
-                    case 5: idsSeleccionados = [tIds.T5, tIds.T11]; break;
-                    case 6: idsSeleccionados = [tIds.T5, tIds.T13, tIds.T11]; break;
-                    case 7: idsSeleccionados = [tIds.T11, tIds.T5, tIds.T13]; break;
-                    case 8: idsSeleccionados = [tIds.T11, tIds.T5]; break;
-                    case 9: idsSeleccionados = [tIds.T13, tIds.T11, tIds.T5]; break;
-                    case 10: idsSeleccionados = [tIds.T5, tIds.T11]; break;
-                    case 11: idsSeleccionados = [tIds.T6, tIds.T8, tIds.T2]; break;
-                    case 12: idsSeleccionados = [tIds.T6]; break;
-                    case 4: idsSeleccionados = [tIds.T5, tIds.T11]; break;
-                    default: idsSeleccionados = [tIds.T5, tIds.T11];
+                    case 1: codigosTurnos = ['T1', 'T11']; break;
+                    case 2: codigosTurnos = ['T11', 'T5']; break;
+                    case 3: codigosTurnos = ['T5', 'T3']; break;
+                    case 4: codigosTurnos = ['T5', 'T11']; break;
+                    case 5: codigosTurnos = ['T5', 'T11']; break;
+                    case 6: codigosTurnos = ['T5', 'T13', 'T11']; break;
+                    case 7: codigosTurnos = ['T11', 'T5', 'T13']; break;
+                    case 8: codigosTurnos = ['T11', 'T5']; break;
+                    case 9: codigosTurnos = ['T13', 'T11', 'T5']; break;
+                    case 10: codigosTurnos = ['T5', 'T11']; break;
+                    case 11: codigosTurnos = ['T6', 'T8', 'T2']; break;
+                    case 12: codigosTurnos = ['T6']; break;
+                    default: codigosTurnos = ['T5', 'T11'];
                 }
-                initialConfig[area.id_area] = { turnosIds: idsSeleccionados.filter(id => id !== undefined) };
+                const idsSeleccionados = codigosTurnos
+                    .map(codigo => getTurnoId(codigo))
+                    .filter((id): id is number => id !== undefined);
+                initialConfig[area.id_area] = { turnosIds: idsSeleccionados };
             });
             setConfigAreas(initialConfig);
         }
@@ -135,9 +142,7 @@ export default function ProgramacionAreas() {
             const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
             const result = await programacionService.generarAutomatica({ mes, anio, configuracion: configAreas });
             const data = await programacionService.listarPorPeriodo(inicio, fin);
-
             const fechasAfectadas = result.fechasProcesadas || infoDias.map(d => d.fechaISO);
-
             return { data, alertas: result.alertas || [], fechasAfectadas };
         },
         onSuccess: (res: any) => {
@@ -214,7 +219,6 @@ export default function ProgramacionAreas() {
                             </div>
                         </CardContent>
                     </Card>
-
                     <Card className="border-dashed border-2 bg-white hover:border-indigo-200 transition-colors">
                         <CardContent className="pt-6 flex flex-col items-center justify-center text-center py-12 gap-4">
                             <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center">
@@ -231,8 +235,7 @@ export default function ProgramacionAreas() {
                                 className="px-8"
                             >
                                 {verificandoExistente ? 'Verificando...' :
-                                    novedadesLoading ? 'Verificando Novedades...' :
-                                        'Siguiente Paso'}
+                                    novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </CardContent>
@@ -249,7 +252,6 @@ export default function ProgramacionAreas() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Periodo</Button>
                     </div>
-
                     <div className="grid gap-4">
                         {areas.map((area) => (
                             <Card key={area.id_area} className="border-l-4 border-l-indigo-500 overflow-hidden shadow-sm">
@@ -285,7 +287,6 @@ export default function ProgramacionAreas() {
                             </Card>
                         ))}
                     </div>
-
                     <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-2xl flex justify-end gap-3 z-50">
                         <Button variant="outline" onClick={() => setPaso('inicio')}>Atrás</Button>
                         <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
@@ -324,34 +325,7 @@ export default function ProgramacionAreas() {
                     </div>
 
                     {alertasMotor.length > 0 && (
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                <AlertCircle className="h-5 w-5 text-amber-500" />
-                                Problemas Detectados en la Generación
-                            </h3>
-                            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                                {alertasMotor.map((grupo, idx) => (
-                                    <Card key={idx} className="border-amber-100 bg-amber-50/30 overflow-hidden">
-                                        <div className="bg-amber-100 px-3 py-1.5 text-[10px] font-bold text-amber-800 uppercase tracking-wider flex justify-between items-center">
-                                            <span>Fecha: {grupo.fecha.split('T')[0]}</span>
-                                            <span className="bg-amber-200 px-1.5 py-0.5 rounded text-amber-900">{grupo.alertas.length} avisos</span>
-                                        </div>
-                                        <CardContent className="p-3 space-y-2">
-                                            {grupo.alertas.map((alerta: any, aIdx: number) => (
-                                                <div key={aIdx} className="flex items-start gap-2 text-[11px]">
-                                                    <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${alerta.tipo === 'error' ? 'bg-red-500' :
-                                                        alerta.tipo === 'advertencia' ? 'bg-amber-500' : 'bg-blue-500'
-                                                        }`} />
-                                                    <div className="space-y-0.5">
-                                                        <p className="font-semibold text-slate-800 leading-tight">{alerta.mensaje}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        </div>
+                        <VisualizacionAlertas alertas={alertasMotor} />
                     )}
 
                     {areas.map((area) => (
