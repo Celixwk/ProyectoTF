@@ -1,3 +1,4 @@
+// # VISUALIZACIÓN ALERTAS
 import { AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 

@@ -1,3 +1,4 @@
+// # PROGRAMACIÓN POR ÁREAS
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';

@@ -455,6 +455,31 @@ export const programacionService = {
     const { data } = await api.post('/programacion/generar', payload);
     return data.data || data;
   },
+  regenerarDesdeFecha: async (payload: {
+    fechaInicio: string;
+    configuracion: any;
+    idUsuario?: number;
+  }) => {
+    const { data } = await api.post('/programacion/regenerar-desde', {
+      fecha_inicio: payload.fechaInicio,
+      configuracion: payload.configuracion,
+      id_usuario_registro: payload.idUsuario
+    });
+    return data;
+  },
+  guardarCambios: async (cambios: Array<{
+    id_detalle_programacion: number;
+    id_empleado: number;
+    empleado: string;
+    fecha: string;
+    id_area_origen: number;
+    id_turno_origen: number;
+    id_area_destino: number;
+    id_turno_destino: number;
+  }>) => {
+    const { data } = await api.post('/programacion/guardar-cambios', { cambios });
+    return data;
+  },
   listarPorPeriodo: async (inicio: string, fin: string) => {
     const { data } = await api.get('/programacion/detalle', { params: { inicio, fin } });
     return data.data || data;
@@ -486,28 +511,7 @@ export const programacionService = {
       params: { mes, anio }
     });
     return data.data;
-  },
-  moverEmpleado: async (payload: {
-    id_detalle_programacion: number;
-    nuevo_id_area?: number;
-    nuevo_id_turno?: number;
-    nueva_fecha?: string;
-  }) => {
-    const { data } = await api.patch('/programacion/mover-empleado', payload);
-    return data;
-  },
-  regenerarDesdeFecha: async (payload: {
-    fechaInicio: string;
-    configuracion: any;
-    idUsuario?: number;
-  }) => {
-    const { data } = await api.post('/programacion/regenerar-desde', {
-      fecha_inicio: payload.fechaInicio,
-      configuracion: payload.configuracion,
-      id_usuario_registro: payload.idUsuario
-    });
-    return data;
-  },
+  }
 };
 
 export const alertasService = {

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch, AlertTriangle, X } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -22,6 +22,7 @@ interface CambioLocal {
     id: string;
     id_detalle_programacion: number;
     empleado: string;
+    id_empleado: number;
     fecha: string;
     id_area_origen: number;
     id_turno_origen: number;
@@ -40,7 +41,6 @@ export default function GestionMensual() {
     const queryClient = useQueryClient();
     const [searchParams] = useSearchParams();
     const hoy = new Date();
-
     const [mes, setMes] = useState(parseInt(searchParams.get('mes') || String(hoy.getMonth() + 1)));
     const [anio, setAnio] = useState(parseInt(searchParams.get('anio') || String(hoy.getFullYear())));
     const [paso, setPaso] = useState<'seleccion' | 'detalle'>(searchParams.get('mes') ? 'detalle' : 'seleccion');
@@ -49,8 +49,6 @@ export default function GestionMensual() {
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
-    const [mostrarAlertas, setMostrarAlertas] = useState(true);
-
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
     const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
@@ -63,16 +61,13 @@ export default function GestionMensual() {
 
     useEffect(() => {
         if (fechasRecienGeneradas.length > 0) {
-            const timer = setTimeout(() => {
-                setFechasRecienGeneradas([]);
-            }, 15000);
+            const timer = setTimeout(() => setFechasRecienGeneradas([]), 15000);
             return () => clearTimeout(timer);
         }
     }, [fechasRecienGeneradas]);
 
     useEffect(() => {
         setBannerIgnorado(false);
-        setMostrarAlertas(true);
     }, [mes, anio]);
 
     const { data: programacionOriginal = [], isLoading: cargandoProg, refetch } = useQuery({
@@ -93,7 +88,7 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
-    const { data: alertasMotor = [], isLoading: cargandoAlertas } = useQuery({
+    const { data: alertasMotor = [] } = useQuery({
         queryKey: ['alertas-programacion', mes, anio],
         queryFn: () => alertasService.obtener(mes, anio),
         enabled: paso === 'detalle',
@@ -112,19 +107,11 @@ export default function GestionMensual() {
 
     const alertasSeparadas = useMemo(() => {
         const alertasProcesadas = procesarAlertas(alertasMotor);
-
         return {
-            alertasEmpleados: alertasProcesadas.alertasEmpleados.filter(
-                alerta => alerta.codigo !== 'EMPLEADOS_SIN_ASIGNACION'
-            ),
+            alertasEmpleados: alertasProcesadas.alertasEmpleados.filter(alerta => alerta.codigo !== 'EMPLEADOS_SIN_ASIGNACION'),
             alertasPorArea: alertasProcesadas.alertasPorArea
         };
     }, [alertasMotor]);
-
-    const totalAlertas = useMemo(() => {
-        return alertasSeparadas.alertasEmpleados.length +
-            Object.values(alertasSeparadas.alertasPorArea).reduce((acc, arr) => acc + arr.length, 0);
-    }, [alertasSeparadas]);
 
     const fechaConflictoPersistente = useMemo(() => {
         const conflictos = validacionAlertas.filter((a: any) => a.tipo === 'NOVEDAD');
@@ -137,7 +124,7 @@ export default function GestionMensual() {
 
     const programacion = useMemo(() => {
         let base = !programacionOriginal || cambiosLocales.length === 0
-            ? programacionOriginal
+            ? [...programacionOriginal]
             : programacionOriginal.map((asig: any) => {
                 const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
                 if (cambio) {
@@ -147,11 +134,24 @@ export default function GestionMensual() {
                 return asig;
             }).filter((asig: any) => !asig._eliminado);
 
+        const nuevosTurnos = cambiosLocales
+            .filter(c => c.id_area_origen === -1 && c.id_area_destino !== -1)
+            .map(c => ({
+                id_detalle_programacion: c.id_detalle_programacion,
+                id_empleado: c.id_empleado,
+                nombre_empleado: c.empleado,
+                empleado: { nombre_completo: c.empleado, id_empleado: c.id_empleado },
+                id_area: c.id_area_destino,
+                id_turno: c.id_turno_destino,
+                fecha: c.fecha,
+                _modificado: true
+            }));
+
+        base = [...base, ...nuevosTurnos];
+
         if (filtroEmpleado.trim()) {
             const search = filtroEmpleado.toLowerCase();
-            return base.filter((p: any) =>
-                (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search)
-            );
+            return base.filter((p: any) => (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search));
         }
         return base;
     }, [programacionOriginal, cambiosLocales, filtroEmpleado]);
@@ -190,7 +190,24 @@ export default function GestionMensual() {
     }, [mes, anio]);
 
     const handleDragStart = (e: React.DragEvent, asignacion: any, idArea: number, idTurno: number) => {
-        setEmpleadoArrastrado({ ...asignacion, id_area_origen: idArea, id_turno_origen: idTurno });
+        const idEmp = asignacion.id_empleado || asignacion.empleado?.id_empleado;
+        if (!idEmp) {
+            console.error("No se pudo encontrar el ID del empleado en el objeto:", asignacion);
+            toast.error("Error de datos: Empleado sin ID identificable.");
+            e.preventDefault();
+            return;
+        }
+
+        const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
+
+        setEmpleadoArrastrado({
+            ...asignacion,
+            id_area_origen: idArea,
+            id_turno_origen: idTurno,
+            id_empleado: idEmp,
+            nombre_empleado: nombre
+        });
+
         e.dataTransfer.effectAllowed = 'move';
     };
 
@@ -202,12 +219,15 @@ export default function GestionMensual() {
     const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
+        if (!empleadoArrastrado.id_empleado) {
+            toast.error("Error crítico: Se perdió el ID del empleado al arrastrar.");
+            return;
+        }
 
-        const yaTieneAsignacion = programacionOriginal.some((p: any) =>
+        const yaTieneAsignacion = programacion.some((p: any) =>
             p.id_empleado === empleadoArrastrado.id_empleado &&
             p.fecha.split('T')[0] === fechaDestino &&
-            p.id_detalle_programacion !== empleadoArrastrado.id_detalle_programacion &&
-            !cambiosLocales.some(c => c.id_detalle_programacion === p.id_detalle_programacion && c.id_area_destino === -1)
+            p.id_detalle_programacion !== empleadoArrastrado.id_detalle_programacion
         );
 
         if (yaTieneAsignacion) {
@@ -216,49 +236,119 @@ export default function GestionMensual() {
             return;
         }
 
-        const fechaOrigen = empleadoArrastrado.fecha.split('T')[0];
+        const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaDestino;
         if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
 
-        const destinoAsignacion = programacionOriginal.find((p: any) => Number(p.id_area) === idAreaDestino && Number(p.id_turno) === idTurnoDestino && p.fecha.split('T')[0] === fechaDestino);
         const cambioId = `${Date.now()}-${Math.random()}`;
+        const esDesdeRefuerzo = empleadoArrastrado.id_area_origen === -1;
+        const idDetalle = esDesdeRefuerzo ? 99999999 : (empleadoArrastrado.id_detalle_programacion || 0);
 
-        if (destinoAsignacion) {
-            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
-            const nombreDest = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo;
-            setCambiosLocales(prev => [...prev,
-            { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino },
-            { id: cambioId, id_detalle_programacion: destinoAsignacion.id_detalle_programacion, empleado: nombreDest, fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino, id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen }
-            ]);
-        } else {
-            const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
-            setCambiosLocales(prev => [...prev, { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino }]);
-        }
+        const nuevoCambio: CambioLocal = {
+            id: cambioId,
+            id_detalle_programacion: idDetalle,
+            empleado: empleadoArrastrado.nombre_empleado,
+            id_empleado: empleadoArrastrado.id_empleado,
+            fecha: fechaDestino,
+            id_area_origen: empleadoArrastrado.id_area_origen,
+            id_turno_origen: empleadoArrastrado.id_turno_origen,
+            id_area_destino: idAreaDestino,
+            id_turno_destino: idTurnoDestino
+        };
+
+        setCambiosLocales(prev => [...prev, nuevoCambio]);
         setEmpleadoArrastrado(null);
+        toast.success(`${nuevoCambio.empleado} asignado`);
     };
 
     const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
+        if (!empleadoArrastrado.id_empleado) return;
+        if (empleadoArrastrado.id_area_origen === -1) {
+            setEmpleadoArrastrado(null);
+            return;
+        }
+
         const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo;
-        setCambiosLocales(prev => [...prev, { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion, empleado: nombreArr, fecha: fechaDestino, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: -1, id_turno_destino: -1 }]);
+        const nuevoCambio: CambioLocal = {
+            id: cambioId,
+            id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
+            empleado: empleadoArrastrado.nombre_empleado,
+            id_empleado: empleadoArrastrado.id_empleado,
+            fecha: fechaDestino,
+            id_area_origen: empleadoArrastrado.id_area_origen,
+            id_turno_origen: empleadoArrastrado.id_turno_origen,
+            id_area_destino: -1,
+            id_turno_destino: -1
+        };
+
+        setCambiosLocales(prev => [...prev, nuevoCambio]);
         setEmpleadoArrastrado(null);
     };
 
-    const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
-    const handleConsultar = () => { setPaso('detalle'); setCambiosLocales([]); setBannerIgnorado(false); setFiltroEmpleado(''); setMostrarAlertas(true); refetch(); };
-    const handleExportar = () => { const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos }); XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`); };
-    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => { setEmpleadoSeleccionado({ id, nombre }); setFechaParaNovedad(fecha); setModalNovedadOpen(true); };
+    const handleRevertirCambios = () => {
+        setCambiosLocales([]);
+        toast.info('Cambios revertidos');
+    };
+
+    const handleConsultar = () => {
+        setPaso('detalle');
+        setCambiosLocales([]);
+        setBannerIgnorado(false);
+        setFiltroEmpleado('');
+        refetch();
+    };
+
+    const handleExportar = () => {
+        const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
+        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`);
+    };
+
+    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
+        setEmpleadoSeleccionado({ id, nombre });
+        setFechaParaNovedad(fecha);
+        setModalNovedadOpen(true);
+    };
+
+    const handleGuardarCambios = async () => {
+        try {
+            const cambiosInvalidos = cambiosLocales.filter(c => !c.id_empleado);
+            if (cambiosInvalidos.length > 0) {
+                console.error("Cambios inválidos detectados:", cambiosInvalidos);
+                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID de empleado válido.`);
+                return;
+            }
+
+            toast.loading('Guardando cambios...');
+            await programacionService.guardarCambios(cambiosLocales);
+            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
+            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
+            const nuevasAlertas = await programacionService.validarPeriodo(inicio, fin);
+            await alertasService.guardar(mes, anio, nuevasAlertas);
+            setCambiosLocales([]);
+            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
+            queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] });
+            queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
+            toast.dismiss();
+            toast.success('Cambios aplicados');
+        } catch (error) {
+            toast.dismiss();
+            toast.error('Error al guardar los cambios');
+            console.error(error);
+        }
+    };
 
     return (
-        <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
-                <p className="text-slate-500">{paso === 'seleccion' ? 'Seleccione el periodo' : `Gestionando programación de ${meses[mes - 1]} ${anio}`}</p>
-            </div>
+        <div className="space-y-6 max-w-full mx-auto pb-6 px-6">
+            {paso === 'seleccion' ? (
+                <div className="flex flex-col gap-2">
+                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
+                    <p className="text-slate-500">Seleccione el periodo</p>
+                </div>
+            ) : null}
 
             {paso === 'seleccion' && (
                 <div className="max-w-4xl mx-auto space-y-6">
@@ -293,14 +383,18 @@ export default function GestionMensual() {
             )}
 
             {paso === 'detalle' && (
-                <div className="space-y-6">
+                <div className="flex flex-col min-h-screen">
                     {cargandoProg ? (
                         <div className="flex flex-col items-center justify-center py-20">
                             <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-4" />
                             <p className="text-slate-500 text-sm">Cargando programación ...</p>
                         </div>
                     ) : programacionOriginal.length === 0 ? (
-                        <div className="space-y-6">
+                        <div className="space-y-6 mt-6">
+                            <div className="flex flex-col gap-2 mb-4">
+                                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual</h1>
+                                <p className="text-slate-500">Gestionando programación de {meses[mes - 1]} {anio}</p>
+                            </div>
                             <div className="flex justify-start bg-white p-4 border rounded-xl shadow-sm">
                                 <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
                             </div>
@@ -313,195 +407,134 @@ export default function GestionMensual() {
                         </div>
                     ) : (
                         <>
-                            <div className="flex justify-between items-center bg-white p-4 border rounded-xl shadow-sm gap-4">
-                                <Button variant="ghost" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Periodo</Button>
-
+                            <div className="sticky top-0 z-50 flex justify-between items-center bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 p-3 border-b border-slate-300 shadow-sm gap-4">
+                                <div className="flex items-center gap-4">
+                                    <Button variant="ghost" size="sm" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Atrás</Button>
+                                    <h2 className="text-lg font-bold text-slate-800 hidden md:block">{meses[mes - 1]} {anio}</h2>
+                                </div>
                                 <div className="flex-1 max-w-sm relative">
                                     <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input
-                                        placeholder="Buscar empleado..."
-                                        className="pl-10"
-                                        value={filtroEmpleado}
-                                        onChange={(e) => setFiltroEmpleado(e.target.value)}
-                                    />
+                                    <Input placeholder="Buscar..." className="pl-10 h-9" value={filtroEmpleado} onChange={(e) => setFiltroEmpleado(e.target.value)} />
                                 </div>
-
                                 <div className="flex gap-2">
                                     {cambiosLocales.length > 0 ? (
                                         <>
-                                            <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir Todo</Button>
-                                            <Button className="bg-green-600 hover:bg-green-700" onClick={() => queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] })}><Save className="mr-2 h-4 w-4" /> Guardar Cambios ({cambiosLocales.length})</Button>
+                                            <Button variant="outline" size="sm" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir</Button>
+                                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleGuardarCambios}><Save className="mr-2 h-4 w-4" /> Guardar ({cambiosLocales.length})</Button>
                                         </>
                                     ) : (
-                                        <BotonEliminarProgramacion
-                                            mes={mes}
-                                            anio={anio}
-                                            onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }}
-                                        />
+                                        <BotonEliminarProgramacion mes={mes} anio={anio} onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }} />
                                     )}
-                                    <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar</Button>
+                                    <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</Button>
                                 </div>
                             </div>
 
-                            {!bannerIgnorado && fechaConflictoPersistente && (
-                                <BannerNecesidadRegenerar
-                                    fechaCorte={fechaConflictoPersistente}
-                                    mes={mes}
-                                    anio={anio}
-                                    programacionOriginal={programacionOriginal}
-                                    areas={areas}
-                                    modo="gestion"
-                                    onSuccess={(res) => {
-                                        refetch();
-                                        refetchNoAsignados();
-                                        refetchAlertas();
-                                        setBannerIgnorado(false);
-                                        const afectadas = res?.fechasProcesadas || infoDias
-                                            .filter(d => d.objetoFecha >= fechaConflictoPersistente)
-                                            .map(d => d.fechaISO);
-                                        setFechasRecienGeneradas(afectadas);
-                                        toast.success('Programación regenerada exitosamente');
-                                    }}
-                                    onIgnore={() => setBannerIgnorado(true)}
-                                />
-                            )}
+                            <div className="space-y-6 pt-6 pb-40">
+                                {!bannerIgnorado && fechaConflictoPersistente && (
+                                    <BannerNecesidadRegenerar fechaCorte={fechaConflictoPersistente} mes={mes} anio={anio} programacionOriginal={programacionOriginal} areas={areas} modo="gestion" onSuccess={(res) => { refetch(); refetchNoAsignados(); refetchAlertas(); setBannerIgnorado(false); const afectadas = res?.fechasProcesadas || infoDias.filter(d => d.objetoFecha >= fechaConflictoPersistente).map(d => d.fechaISO); setFechasRecienGeneradas(afectadas); toast.success('Programación regenerada exitosamente'); }} onIgnore={() => setBannerIgnorado(true)} />
+                                )}
 
-                            {!cargandoAlertas && totalAlertas > 0 && mostrarAlertas && (
-                                <Card className="border-l-4 border-l-amber-500 bg-amber-50/30">
-                                    <CardContent className="p-4">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div className="flex items-start gap-3 flex-1">
-                                                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
-                                                <div className="space-y-2 flex-1">
-                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="font-bold text-amber-900">
-                                                            Alertas de Generación Detectadas
-                                                        </h3>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => setMostrarAlertas(false)}
-                                                            className="h-6 w-6 p-0"
-                                                        >
-                                                            <X className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                    <p className="text-sm text-amber-800">
-                                                        Se encontraron <span className="font-bold">{totalAlertas} alertas</span> durante la generación de este mes.
-                                                    </p>
-                                                    <div className="pt-2">
-                                                        <VisualizacionAlertas alertas={alertasMotor} areas={areas} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            )}
+                                {alertasSeparadas.alertasEmpleados.length > 0 && <VisualizacionAlertas alertas={alertasMotor} />}
 
-                            <div className="space-y-8">
-                                {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
-                                    <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                                        <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full border-collapse">
-                                                <thead>
-                                                    <tr className="bg-slate-50">
-                                                        <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
-                                                        {infoDias.map((dia) => {
-                                                            const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
-                                                            const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
-                                                            return (
-                                                                <th key={dia.fechaISO} className={cn(
-                                                                    "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-500",
-                                                                    esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500',
-                                                                    esRegenerado && "bg-emerald-100 border-emerald-300"
-                                                                )}>
-                                                                    <div className="flex flex-col relative">
-                                                                        <span className={cn("font-bold", esSucio ? 'text-red-600 font-black' : 'text-indigo-600', esRegenerado && "text-emerald-700")}>{dia.nombreDia}</span>
-                                                                        <span className={cn(esSucio ? 'text-red-700 font-black text-xs' : '', esRegenerado && "text-emerald-600")}>{dia.numero}</span>
-                                                                        {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
-                                                                    </div>
-                                                                </th>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {configAreasTurnos[area.id_area]?.map((tId) => {
-                                                        const turnoInfo = turnos.find(t => t.id_turno === tId);
-                                                        return (
-                                                            <tr key={tId}>
-                                                                <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
+                                <div className="space-y-8">
+                                    {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
+                                        <div key={area.id_area} className="space-y-4">
+                                            {alertasSeparadas.alertasPorArea[area.id_area] && (
+                                                <VisualizacionAlertas alertas={alertasMotor} mostrarPorArea={true} idArea={area.id_area} nombreArea={area.nombre_area} />
+                                            )}
+                                            <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                                                <div className="bg-slate-800 text-white px-5 py-2 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full border-collapse">
+                                                        <thead>
+                                                            <tr className="bg-slate-50">
+                                                                <th className="border p-2 text-left w-24 sticky left-0 bg-slate-100 z-10 text-[10px] font-bold text-slate-600">TURNO</th>
                                                                 {infoDias.map((dia) => {
-                                                                    const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                                    const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
+                                                                    const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
+                                                                    const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     return (
-                                                                        <td key={dia.fechaISO} className={cn("border p-2 min-h-[60px] transition-all duration-300", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
-                                                                            <div className="flex flex-col gap-1">
-                                                                                {asignados.map((asig: any, idx: number) => (
-                                                                                    <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1.5 py-1 border rounded text-[9px] cursor-pointer transition-all shadow-sm bg-white border-slate-200", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500 font-bold')}>
-                                                                                        {asig.nombre_empleado || asig.empleado?.nombre_completo}
-                                                                                    </div>
-                                                                                ))}
+                                                                        <th key={dia.fechaISO} className={cn("border p-1 text-center text-[9px] min-w-[100px] transition-colors duration-500", esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500', esRegenerado && "bg-emerald-100 border-emerald-300")}>
+                                                                            <div className="flex flex-col relative">
+                                                                                <span className={cn("font-bold", esSucio ? 'text-red-600 font-black' : 'text-indigo-600', esRegenerado && "text-emerald-700")}>{dia.nombreDia}</span>
+                                                                                <span className={cn(esSucio ? 'text-red-700 font-black text-[9px]' : '', esRegenerado && "text-emerald-600")}>{dia.numero}</span>
+                                                                                {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
                                                                             </div>
-                                                                        </td>
+                                                                        </th>
                                                                     );
                                                                 })}
                                                             </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
+                                                        </thead>
+                                                        <tbody>
+                                                            {configAreasTurnos[area.id_area]?.map((tId) => {
+                                                                const turnoInfo = turnos.find(t => t.id_turno === tId);
+                                                                return (
+                                                                    <tr key={tId}>
+                                                                        <td className="border p-2 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-[10px]">{turnoInfo?.tipo_turno || `T${tId}`}</td>
+                                                                        {infoDias.map((dia) => {
+                                                                            const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
+                                                                            const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
+                                                                            return (
+                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px] transition-all duration-300", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        {asignados.map((asig: any, idx: number) => (
+                                                                                            <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer transition-all shadow-sm bg-white border-slate-200 truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500 font-bold')}>
+                                                                                                {asig.nombre_empleado || asig.empleado?.nombre_completo}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </td>
+                                                                            );
+                                                                        })}
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
 
-                            <Card className="mt-8 border-slate-200 shadow-sm">
-                                <CardContent className="p-6 bg-slate-50">
-                                    <h3 className="text-sm font-bold mb-4 text-slate-900">Refuerzos / Disponibles</h3>
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full border-collapse">
-                                            <thead><tr className="bg-slate-100"><th className="border p-2 text-left w-28 text-[11px] font-bold">REFUERZOS</th>{infoDias.map((dia) => (<th key={dia.fechaISO} className="border p-2 text-center text-[10px] min-w-[120px]">{dia.numero}</th>))}</tr></thead>
-                                            <tbody>
-                                                <tr>
-                                                    <td className="border p-2 text-xs font-bold">Disponibles</td>
-                                                    {infoDias.map((dia) => {
-                                                        const noAsignados = (noAsignadosPorDia[dia.fechaISO] || []).filter((emp: any) => !programacionOriginal.some((p: any) => p.id_empleado === emp.id_empleado && p.fecha.split('T')[0] === dia.fechaISO));
-                                                        return (
-                                                            <td key={dia.fechaISO} className="border p-2 bg-white min-h-[60px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
-                                                                <div className="flex flex-col gap-1">
-                                                                    {noAsignados.map((emp: any) => (
-                                                                        <div key={emp.id_empleado} onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)} className="px-1.5 py-1 border border-amber-200 rounded text-[9px] bg-amber-50 cursor-pointer">
-                                                                            {emp.nombre_completo}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                            <div className="sticky bottom-0 z-40 bg-white border-t-2 border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <tbody>
+                                            <tr className="bg-slate-50">
+                                                <td className="border p-2 text-[10px] font-bold w-24 sticky left-0 bg-slate-100 z-10 text-slate-700">REFUERZOS</td>
+                                                {infoDias.map((dia) => {
+                                                    const noAsignadosBase = noAsignadosPorDia[dia.fechaISO] || [];
+                                                    const movidosAqui = cambiosLocales.filter(c => c.fecha === dia.fechaISO && c.id_area_destino === -1);
+                                                    const idsMovidosAqui = new Set(movidosAqui.map(c => c.id_empleado));
+                                                    const empleadosMovidosAqui = programacionOriginal.filter((p: any) => idsMovidosAqui.has(p.id_empleado)).map((p: any) => ({ ...p, nombre_completo: p.nombre_empleado || p.empleado?.nombre_completo }));
+                                                    const poolRefuerzos = [...noAsignadosBase, ...empleadosMovidosAqui];
+                                                    const enGrid = new Set(programacion.filter((p: any) => p.fecha.split('T')[0] === dia.fechaISO).map((p: any) => p.id_empleado));
+                                                    const listaVisible = poolRefuerzos.filter(e => !enGrid.has(e.id_empleado));
+                                                    const unicos = Array.from(new Map(listaVisible.map((item: any) => [item.id_empleado, item])).values());
+                                                    return (
+                                                        <td key={dia.fechaISO} className="border p-1 bg-white min-w-[100px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
+                                                            <div className="flex flex-col gap-1 min-h-[30px]">
+                                                                {unicos.map((emp: any) => (
+                                                                    <div key={emp.id_empleado} draggable onDragStart={(e) => handleDragStart(e, { ...emp, id_detalle_programacion: emp.id_detalle_programacion || 99999999 }, -1, -1)} onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)} className="px-1 py-0.5 border border-amber-200 rounded text-[8px] bg-amber-50 cursor-pointer hover:bg-amber-100 truncate max-w-[95px]">
+                                                                        {emp.nombre_completo}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>
             )}
-            <ModalNovedadRapida
-                isOpen={modalNovedadOpen}
-                onClose={() => setModalNovedadOpen(false)}
-                empleado={empleadoSeleccionado}
-                fechaSeleccionada={fechaParaNovedad}
-                onSuccess={(fechaCorte) => {
-                    refetch();
-                    refetchNoAsignados();
-                    refetchAlertas();
-                }}
-            />
+
+            <ModalNovedadRapida isOpen={modalNovedadOpen} onClose={() => setModalNovedadOpen(false)} empleado={empleadoSeleccionado} fechaSeleccionada={fechaParaNovedad} onSuccess={(fechaCorte) => { refetch(); refetchNoAsignados(); refetchAlertas(); }} />
         </div>
     );
 }

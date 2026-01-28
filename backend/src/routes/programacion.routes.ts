@@ -3,14 +3,15 @@ import * as controller from '../controllers/programacion.controller';
 
 const router = Router();
 
-router.get('/verificar-existente', controller.verificarProgramacionExistente); // <-- Nueva ruta
+router.get('/verificar-existente', controller.verificarProgramacionExistente);
 router.post('/generar', controller.generarAutomatica);
 router.post('/automatica', controller.generarAutomatica);
+router.post('/regenerar-desde', controller.regenerarDesdeFecha);
+router.post('/guardar-cambios', controller.guardarCambiosManuales);
 router.get('/detalle', controller.obtenerDetalleProgramacion);
 router.get('/novedades-periodo', controller.obtenerNovedadesPeriodo);
-router.delete('/eliminar', controller.eliminarProgramacion);
 router.get('/validar', controller.validarProgramacion);
 router.get('/empleados-no-asignados-por-dia', controller.obtenerEmpleadosNoAsignadosPorDia);
-router.post('/regenerar-desde', controller.regenerarDesdeFecha);
+router.delete('/eliminar', controller.eliminarProgramacion);
 
 export default router;
