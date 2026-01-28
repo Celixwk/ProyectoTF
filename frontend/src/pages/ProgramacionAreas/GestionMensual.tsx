@@ -3,16 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
-import { areasService, turnosService, programacionService } from '@/services/api.service';
+import { areasService, turnosService, programacionService, alertasService } from '@/services/api.service';
 import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
+import { VisualizacionAlertas, procesarAlertas } from '@/utils/VisualizacionAlertas';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -48,6 +49,7 @@ export default function GestionMensual() {
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
+    const [mostrarAlertas, setMostrarAlertas] = useState(true);
 
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
@@ -70,6 +72,7 @@ export default function GestionMensual() {
 
     useEffect(() => {
         setBannerIgnorado(false);
+        setMostrarAlertas(true);
     }, [mes, anio]);
 
     const { data: programacionOriginal = [], isLoading: cargandoProg, refetch } = useQuery({
@@ -90,7 +93,14 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
-    const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
+    const { data: alertasMotor = [], isLoading: cargandoAlertas } = useQuery({
+        queryKey: ['alertas-programacion', mes, anio],
+        queryFn: () => alertasService.obtener(mes, anio),
+        enabled: paso === 'detalle',
+        staleTime: 5 * 60 * 1000
+    });
+
+    const { data: validacionAlertas = [], refetch: refetchAlertas } = useQuery({
         queryKey: ['validar-programacion', mes, anio],
         queryFn: async () => {
             const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
@@ -100,14 +110,30 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
+    const alertasSeparadas = useMemo(() => {
+        const alertasProcesadas = procesarAlertas(alertasMotor);
+
+        return {
+            alertasEmpleados: alertasProcesadas.alertasEmpleados.filter(
+                alerta => alerta.codigo !== 'EMPLEADOS_SIN_ASIGNACION'
+            ),
+            alertasPorArea: alertasProcesadas.alertasPorArea
+        };
+    }, [alertasMotor]);
+
+    const totalAlertas = useMemo(() => {
+        return alertasSeparadas.alertasEmpleados.length +
+            Object.values(alertasSeparadas.alertasPorArea).reduce((acc, arr) => acc + arr.length, 0);
+    }, [alertasSeparadas]);
+
     const fechaConflictoPersistente = useMemo(() => {
-        const conflictos = alertasMotor.filter((a: any) => a.tipo === 'NOVEDAD');
+        const conflictos = validacionAlertas.filter((a: any) => a.tipo === 'NOVEDAD');
         if (conflictos.length === 0) return null;
         const fechas = conflictos.map((a: any) => parseFechaSinAjuste(a.fecha));
         const fechasValidas = fechas.filter((f): f is Date => f !== null);
         if (fechasValidas.length === 0) return null;
         return new Date(Math.min(...fechasValidas.map(f => f.getTime())));
-    }, [alertasMotor]);
+    }, [validacionAlertas]);
 
     const programacion = useMemo(() => {
         let base = !programacionOriginal || cambiosLocales.length === 0
@@ -223,7 +249,7 @@ export default function GestionMensual() {
     };
 
     const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
-    const handleConsultar = () => { setPaso('detalle'); setCambiosLocales([]); setBannerIgnorado(false); setFiltroEmpleado(''); refetch(); };
+    const handleConsultar = () => { setPaso('detalle'); setCambiosLocales([]); setBannerIgnorado(false); setFiltroEmpleado(''); setMostrarAlertas(true); refetch(); };
     const handleExportar = () => { const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos }); XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`); };
     const abrirModalNovedad = (id: number, nombre: string, fecha: string) => { setEmpleadoSeleccionado({ id, nombre }); setFechaParaNovedad(fecha); setModalNovedadOpen(true); };
 
@@ -340,6 +366,39 @@ export default function GestionMensual() {
                                 />
                             )}
 
+                            {!cargandoAlertas && totalAlertas > 0 && mostrarAlertas && (
+                                <Card className="border-l-4 border-l-amber-500 bg-amber-50/30">
+                                    <CardContent className="p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex items-start gap-3 flex-1">
+                                                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                                                <div className="space-y-2 flex-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="font-bold text-amber-900">
+                                                            Alertas de Generación Detectadas
+                                                        </h3>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setMostrarAlertas(false)}
+                                                            className="h-6 w-6 p-0"
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                    <p className="text-sm text-amber-800">
+                                                        Se encontraron <span className="font-bold">{totalAlertas} alertas</span> durante la generación de este mes.
+                                                    </p>
+                                                    <div className="pt-2">
+                                                        <VisualizacionAlertas alertas={alertasMotor} areas={areas} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             <div className="space-y-8">
                                 {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
                                     <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
@@ -376,7 +435,7 @@ export default function GestionMensual() {
                                                                 <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs">{turnoInfo?.tipo_turno || `T${tId}`}</td>
                                                                 {infoDias.map((dia) => {
                                                                     const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
-                                                                    const tieneNovedad = alertasMotor.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
+                                                                    const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
                                                                     return (
                                                                         <td key={dia.fechaISO} className={cn("border p-2 min-h-[60px] transition-all duration-300", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
                                                                             <div className="flex flex-col gap-1">

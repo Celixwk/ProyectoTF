@@ -510,6 +510,21 @@ export const programacionService = {
   },
 };
 
+export const alertasService = {
+  guardar: async (mes: number, anio: number, alertas: any[]) => {
+    const { data } = await api.post('/alertas', { mes, anio, alertas });
+    return data;
+  },
+  obtener: async (mes: number, anio: number) => {
+    const { data } = await api.get('/alertas', { params: { mes, anio } });
+    return data.data || data;
+  },
+  eliminar: async (mes: number, anio: number) => {
+    const { data } = await api.delete('/alertas', { data: { mes, anio } });
+    return data;
+  },
+};
+
 const services = {
   authService,
   consultasService,
@@ -523,7 +538,8 @@ const services = {
   dashboardService,
   configuracionApi,
   calendarioService,
-  programacionService
+  programacionService,
+  alertasService,
 };
 
 export default services;

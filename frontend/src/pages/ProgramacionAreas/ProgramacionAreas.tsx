@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { areasService, turnosService, programacionService } from '@/services/api.service';
+import { areasService, turnosService, programacionService, alertasService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -11,21 +11,14 @@ import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard } from 'lucide-
 import { toast } from 'sonner';
 import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
-import { VisualizacionAlertas } from '@/utils/VisualizacionAlertas';
+import { VisualizacionAlertas, procesarAlertas } from '@/utils/VisualizacionAlertas';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
-
-const parseFechaSinAjuste = (fechaStr: string) => {
-    if (!fechaStr) return null;
-    const [y, m, d] = fechaStr.split('T')[0].split('-').map(Number);
-    return new Date(y, m - 1, d);
-};
 
 export default function ProgramacionAreas() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const hoy = new Date();
-
     const [mes, setMes] = useState(hoy.getMonth() + 1);
     const [anio, setAnio] = useState(hoy.getFullYear());
     const [paso, setPaso] = useState<'inicio' | 'configuracion' | 'resultado'>('inicio');
@@ -84,6 +77,8 @@ export default function ProgramacionAreas() {
         });
     }, [mes, anio]);
 
+    const alertasSeparadas = useMemo(() => procesarAlertas(alertasMotor), [alertasMotor]);
+
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() + i);
 
@@ -112,11 +107,14 @@ export default function ProgramacionAreas() {
                     case 12: codigosTurnos = ['T6']; break;
                     default: codigosTurnos = ['T5', 'T11'];
                 }
+
                 const idsSeleccionados = codigosTurnos
                     .map(codigo => getTurnoId(codigo))
                     .filter((id): id is number => id !== undefined);
+
                 initialConfig[area.id_area] = { turnosIds: idsSeleccionados };
             });
+
             setConfigAreas(initialConfig);
         }
     }, [areas, turnos]);
@@ -145,16 +143,26 @@ export default function ProgramacionAreas() {
             const fechasAfectadas = result.fechasProcesadas || infoDias.map(d => d.fechaISO);
             return { data, alertas: result.alertas || [], fechasAfectadas };
         },
-        onSuccess: (res: any) => {
+        onSuccess: async (res: any) => {
             setProgramacionGenerada(Array.isArray(res.data) ? res.data : (res.data.data || []));
             setAlertasMotor(res.alertas);
             setFechasRecienGeneradas(res.fechasAfectadas);
+
+            if (res.alertas && res.alertas.length > 0) {
+                try {
+                    await alertasService.guardar(mes, anio, res.alertas);
+                } catch (error) {
+                    console.error('Error guardando alertas:', error);
+                }
+            }
+
             setPaso('resultado');
             toast.success('Programación generada exitosamente');
             queryClient.invalidateQueries({ queryKey: ['turnos-asignados'] });
             queryClient.invalidateQueries({ queryKey: ['programacion-periodo'] });
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
+            queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] });
         },
         onError: () => toast.error('Error al generar la programación')
     });
@@ -173,6 +181,7 @@ export default function ProgramacionAreas() {
             );
             return;
         }
+
         if (novedadesData && novedadesData.length > 0) {
             setMostrarDialogoNovedades(true);
         } else {
@@ -219,6 +228,7 @@ export default function ProgramacionAreas() {
                             </div>
                         </CardContent>
                     </Card>
+
                     <Card className="border-dashed border-2 bg-white hover:border-indigo-200 transition-colors">
                         <CardContent className="pt-6 flex flex-col items-center justify-center text-center py-12 gap-4">
                             <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center">
@@ -234,8 +244,7 @@ export default function ProgramacionAreas() {
                                 disabled={novedadesLoading || verificandoExistente}
                                 className="px-8"
                             >
-                                {verificandoExistente ? 'Verificando...' :
-                                    novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'}
+                                {verificandoExistente ? 'Verificando...' : novedadesLoading ? 'Verificando Novedades...' : 'Siguiente Paso'}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </CardContent>
@@ -252,6 +261,7 @@ export default function ProgramacionAreas() {
                         </div>
                         <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Periodo</Button>
                     </div>
+
                     <div className="grid gap-4">
                         {areas.map((area) => (
                             <Card key={area.id_area} className="border-l-4 border-l-indigo-500 overflow-hidden shadow-sm">
@@ -287,6 +297,7 @@ export default function ProgramacionAreas() {
                             </Card>
                         ))}
                     </div>
+
                     <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-2xl flex justify-end gap-3 z-50">
                         <Button variant="outline" onClick={() => setPaso('inicio')}>Atrás</Button>
                         <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
@@ -324,86 +335,97 @@ export default function ProgramacionAreas() {
                         </div>
                     </div>
 
-                    {alertasMotor.length > 0 && (
+                    {alertasSeparadas.alertasEmpleados.length > 0 && (
                         <VisualizacionAlertas alertas={alertasMotor} />
                     )}
 
                     {areas.map((area) => (
-                        <div key={area.id_area} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                            <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
-                                {area.nombre_area}
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full border-collapse">
-                                    <thead>
-                                        <tr className="bg-slate-50">
-                                            <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
-                                            {infoDias.map((dia) => {
-                                                const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                        <div key={area.id_area} className="space-y-4">
+                            {alertasSeparadas.alertasPorArea[area.id_area] && (
+                                <VisualizacionAlertas
+                                    alertas={alertasMotor}
+                                    mostrarPorArea={true}
+                                    idArea={area.id_area}
+                                    nombreArea={area.nombre_area}
+                                />
+                            )}
+
+                            <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                                <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
+                                    {area.nombre_area}
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50">
+                                                <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
+                                                {infoDias.map((dia) => {
+                                                    const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                                                    return (
+                                                        <th
+                                                            key={dia.fechaISO}
+                                                            className={cn(
+                                                                "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-1000",
+                                                                esRegenerado ? "bg-emerald-100 border-emerald-300" : "text-slate-500"
+                                                            )}
+                                                        >
+                                                            <div className="flex flex-col">
+                                                                <span className={cn("font-bold", esRegenerado ? "text-emerald-700" : "text-indigo-600")}>
+                                                                    {dia.nombreDia}
+                                                                </span>
+                                                                <span className={esRegenerado ? "text-emerald-600" : ""}>
+                                                                    {dia.numero} de {meses[mes - 1].substring(0, 3)}
+                                                                </span>
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {configAreas[area.id_area]?.turnosIds.map((tId) => {
+                                                const turnoInfo = turnos.find(t => t.id_turno === tId);
                                                 return (
-                                                    <th
-                                                        key={dia.fechaISO}
-                                                        className={cn(
-                                                            "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-1000",
-                                                            esRegenerado ? "bg-emerald-100 border-emerald-300" : "text-slate-500"
-                                                        )}
-                                                    >
-                                                        <div className="flex flex-col">
-                                                            <span className={cn("font-bold", esRegenerado ? "text-emerald-700" : "text-indigo-600")}>
-                                                                {dia.nombreDia}
-                                                            </span>
-                                                            <span className={esRegenerado ? "text-emerald-600" : ""}>
-                                                                {dia.numero} de {meses[mes - 1].substring(0, 3)}
-                                                            </span>
-                                                        </div>
-                                                    </th>
+                                                    <tr key={tId} className="hover:bg-slate-50/50">
+                                                        <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                                            {turnoInfo?.tipo_turno}
+                                                        </td>
+                                                        {infoDias.map((dia) => {
+                                                            const asignados = programacionGenerada.filter(p =>
+                                                                Number(p.id_area) === area.id_area &&
+                                                                Number(p.id_turno) === tId &&
+                                                                p.fecha.split('T')[0] === dia.fechaISO
+                                                            );
+                                                            const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
+                                                            return (
+                                                                <td
+                                                                    key={dia.fechaISO}
+                                                                    className={cn(
+                                                                        "border p-2 min-h-[60px] transition-colors duration-1000",
+                                                                        esRegenerado && "bg-emerald-50/50 border-emerald-200"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex flex-col gap-1">
+                                                                        {asignados.length > 0 ? asignados.map((asig, idx) => (
+                                                                            <div key={idx} className={cn(
+                                                                                "px-1.5 py-1 border rounded text-[9px] leading-tight font-medium truncate",
+                                                                                esRegenerado
+                                                                                    ? "bg-emerald-100 border-emerald-200 text-emerald-800"
+                                                                                    : "bg-slate-50 border-slate-200 text-slate-700"
+                                                                            )}>
+                                                                                {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
+                                                                            </div>
+                                                                        )) : <span className="text-slate-200 text-center text-xs">-</span>}
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
                                                 );
                                             })}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {configAreas[area.id_area]?.turnosIds.map((tId) => {
-                                            const turnoInfo = turnos.find(t => t.id_turno === tId);
-                                            return (
-                                                <tr key={tId} className="hover:bg-slate-50/50">
-                                                    <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                                        {turnoInfo?.tipo_turno}
-                                                    </td>
-                                                    {infoDias.map((dia) => {
-                                                        const asignados = programacionGenerada.filter(p =>
-                                                            Number(p.id_area) === area.id_area &&
-                                                            Number(p.id_turno) === tId &&
-                                                            p.fecha.split('T')[0] === dia.fechaISO
-                                                        );
-                                                        const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
-                                                        return (
-                                                            <td
-                                                                key={dia.fechaISO}
-                                                                className={cn(
-                                                                    "border p-2 min-h-[60px] transition-colors duration-1000",
-                                                                    esRegenerado && "bg-emerald-50/50 border-emerald-200"
-                                                                )}
-                                                            >
-                                                                <div className="flex flex-col gap-1">
-                                                                    {asignados.length > 0 ? asignados.map((asig, idx) => (
-                                                                        <div key={idx} className={cn(
-                                                                            "px-1.5 py-1 border rounded text-[9px] leading-tight font-medium truncate",
-                                                                            esRegenerado
-                                                                                ? "bg-emerald-100 border-emerald-200 text-emerald-800"
-                                                                                : "bg-slate-50 border-slate-200 text-slate-700"
-                                                                        )}>
-                                                                            {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
-                                                                        </div>
-                                                                    )) : <span className="text-slate-200 text-center text-xs">-</span>}
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     ))}

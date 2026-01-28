@@ -13,8 +13,9 @@ import calendarioRoutes from './routes/calendario.routes';
 import novedadesRoutes from './routes/novedades.routes';
 import programacionRoutes from './routes/programacion.routes';
 
-dotenv.config();
+import alertasRoutes from './routes/alertas.routes';
 
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -32,6 +33,7 @@ app.use('/api/areas', areasRoutes);
 app.use('/api/calendario', calendarioRoutes);
 app.use('/api/novedades', novedadesRoutes);
 app.use('/api/programacion', programacionRoutes);
+app.use('/api/alertas', alertasRoutes);
 
 app.get('/health', (req, res) => res.send('Backend operativo ✅'));
 

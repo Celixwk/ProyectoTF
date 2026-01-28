@@ -313,6 +313,21 @@ model empleado_area {
   @@id([id_empleado, id_area])
 }
 
+model AlertasProgramacion {
+  id_alerta       Int      @id @default(autoincrement())
+  mes             Int
+  anio            Int
+  fecha           DateTime
+  tipo            String
+  codigo          String?
+  mensaje         String
+  id_area         Int?
+  id_empleado     Int?
+  datos_completos Json?
+
+  @@map("alertas_programacion")
+}
+
 view vw_empleados_completos {
   id_empleado      Int?      @unique
   cedula           String?   @db.VarChar(20)
