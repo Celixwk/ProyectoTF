@@ -511,7 +511,11 @@ export const programacionService = {
       params: { mes, anio }
     });
     return data.data;
-  }
+  },
+  obtenerEmpleadosConAreas: async () => {
+    const { data } = await api.get('/programacion/empleados-con-areas');
+    return data.data || [];
+  },
 };
 
 export const alertasService = {

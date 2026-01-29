@@ -13,5 +13,6 @@ router.get('/novedades-periodo', controller.obtenerNovedadesPeriodo);
 router.get('/validar', controller.validarProgramacion);
 router.get('/empleados-no-asignados-por-dia', controller.obtenerEmpleadosNoAsignadosPorDia);
 router.delete('/eliminar', controller.eliminarProgramacion);
+router.get('/empleados-con-areas', controller.obtenerEmpleadosConAreas);
 
 export default router;

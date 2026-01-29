@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
-import { areasService, turnosService, programacionService, alertasService } from '@/services/api.service';
+import { areasService, turnosService, programacionService, alertasService, consultasService } from '@/services/api.service';
 import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
@@ -17,6 +17,8 @@ import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreads
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
+import { validarMovimiento, validarCapacidadArea } from '@/utils/ValidadorMovimientos';
+import { ModalConfirmacionCambio } from '@/components/ModalConfirmacionCambio';
 
 interface CambioLocal {
     id: string;
@@ -41,6 +43,7 @@ export default function GestionMensual() {
     const queryClient = useQueryClient();
     const [searchParams] = useSearchParams();
     const hoy = new Date();
+
     const [mes, setMes] = useState(parseInt(searchParams.get('mes') || String(hoy.getMonth() + 1)));
     const [anio, setAnio] = useState(parseInt(searchParams.get('anio') || String(hoy.getFullYear())));
     const [paso, setPaso] = useState<'seleccion' | 'detalle'>(searchParams.get('mes') ? 'detalle' : 'seleccion');
@@ -49,9 +52,13 @@ export default function GestionMensual() {
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
+
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
     const [fechaParaNovedad, setFechaParaNovedad] = useState<string | null>(null);
+
+    const [cambioPendiente, setCambioPendiente] = useState<CambioLocal[] | null>(null);
+    const [advertenciasPendientes, setAdvertenciasPendientes] = useState<string[]>([]);
 
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
@@ -61,7 +68,9 @@ export default function GestionMensual() {
 
     useEffect(() => {
         if (fechasRecienGeneradas.length > 0) {
-            const timer = setTimeout(() => setFechasRecienGeneradas([]), 15000);
+            const timer = setTimeout(() => {
+                setFechasRecienGeneradas([]);
+            }, 15000);
             return () => clearTimeout(timer);
         }
     }, [fechasRecienGeneradas]);
@@ -105,10 +114,28 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
+    // ✅ CORRECCIÓN CLAVE: Usar consultasService y procesar data.empleados
+    const { data: empleadosData } = useQuery({
+        queryKey: ['empleados-completos-validacion'],
+        queryFn: () => consultasService.obtenerEmpleadosCompletos({ estado: true }),
+        enabled: paso === 'detalle',
+        staleTime: 0
+    });
+
+    const empleadosInfo = useMemo(() => {
+        if (!empleadosData?.empleados) return [];
+        return empleadosData.empleados.map((emp: any) => ({
+            id_empleado: emp.id_empleado,
+            areas_habilitadas: emp.areas_permitidas || []
+        }));
+    }, [empleadosData]);
+
     const alertasSeparadas = useMemo(() => {
         const alertasProcesadas = procesarAlertas(alertasMotor);
         return {
-            alertasEmpleados: alertasProcesadas.alertasEmpleados.filter(alerta => alerta.codigo !== 'EMPLEADOS_SIN_ASIGNACION'),
+            alertasEmpleados: alertasProcesadas.alertasEmpleados.filter(
+                alerta => alerta.codigo !== 'EMPLEADOS_SIN_ASIGNACION'
+            ),
             alertasPorArea: alertasProcesadas.alertasPorArea
         };
     }, [alertasMotor]);
@@ -151,7 +178,9 @@ export default function GestionMensual() {
 
         if (filtroEmpleado.trim()) {
             const search = filtroEmpleado.toLowerCase();
-            return base.filter((p: any) => (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search));
+            return base.filter((p: any) =>
+                (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search)
+            );
         }
         return base;
     }, [programacionOriginal, cambiosLocales, filtroEmpleado]);
@@ -191,29 +220,51 @@ export default function GestionMensual() {
 
     const handleDragStart = (e: React.DragEvent, asignacion: any, idArea: number, idTurno: number) => {
         const idEmp = asignacion.id_empleado || asignacion.empleado?.id_empleado;
+
         if (!idEmp) {
             console.error("No se pudo encontrar el ID del empleado en el objeto:", asignacion);
-            toast.error("Error de datos: Empleado sin ID identificable.");
+            toast.error("Error de datos: Empleado sin ID identificable. Recargue la página.");
             e.preventDefault();
             return;
         }
-
-        const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
 
         setEmpleadoArrastrado({
             ...asignacion,
             id_area_origen: idArea,
             id_turno_origen: idTurno,
             id_empleado: idEmp,
-            nombre_empleado: nombre
+            nombre_empleado: asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado'
         });
-
         e.dataTransfer.effectAllowed = 'move';
+
+        const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
+
+        const ghost = document.createElement('div');
+        ghost.textContent = nombre;
+        ghost.style.position = 'absolute';
+        ghost.style.top = '-1000px';
+        ghost.style.backgroundColor = 'white';
+        ghost.style.padding = '5px';
+        ghost.style.border = '1px solid black';
+        ghost.style.zIndex = '1000';
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 0, 0);
+        setTimeout(() => document.body.removeChild(ghost), 0);
     };
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+    };
+
+    const aplicarCambios = (cambios: CambioLocal[]) => {
+        setCambiosLocales(prev => {
+            const idsACambiar = new Set(cambios.map(c => c.id_detalle_programacion));
+            const filtrados = prev.filter(c => !idsACambiar.has(c.id_detalle_programacion) || c.id_detalle_programacion === 0);
+            return [...filtrados, ...cambios];
+        });
+        setEmpleadoArrastrado(null);
+        toast.success(`Cambios aplicados`);
     };
 
     const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
@@ -224,59 +275,137 @@ export default function GestionMensual() {
             return;
         }
 
-        const yaTieneAsignacion = programacion.some((p: any) =>
-            p.id_empleado === empleadoArrastrado.id_empleado &&
-            p.fecha.split('T')[0] === fechaDestino &&
-            p.id_detalle_programacion !== empleadoArrastrado.id_detalle_programacion
-        );
-
-        if (yaTieneAsignacion) {
-            toast.error(`${empleadoArrastrado.nombre_empleado || 'El empleado'} ya tiene un turno ese día`);
-            setEmpleadoArrastrado(null);
-            return;
-        }
-
         const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaDestino;
+
         if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
 
+        const destinoAsignacion = programacion.find((p: any) =>
+            Number(p.id_area) === idAreaDestino &&
+            Number(p.id_turno) === idTurnoDestino &&
+            p.fecha.split('T')[0] === fechaDestino
+        );
+
         const cambioId = `${Date.now()}-${Math.random()}`;
-        const esDesdeRefuerzo = empleadoArrastrado.id_area_origen === -1;
-        const idDetalle = esDesdeRefuerzo ? 99999999 : (empleadoArrastrado.id_detalle_programacion || 0);
+        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
+        const cambiosAGenerar: CambioLocal[] = [];
 
-        const nuevoCambio: CambioLocal = {
-            id: cambioId,
-            id_detalle_programacion: idDetalle,
-            empleado: empleadoArrastrado.nombre_empleado,
-            id_empleado: empleadoArrastrado.id_empleado,
-            fecha: fechaDestino,
-            id_area_origen: empleadoArrastrado.id_area_origen,
-            id_turno_origen: empleadoArrastrado.id_turno_origen,
-            id_area_destino: idAreaDestino,
-            id_turno_destino: idTurnoDestino
-        };
+        if (destinoAsignacion) {
+            const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
 
-        setCambiosLocales(prev => [...prev, nuevoCambio]);
-        setEmpleadoArrastrado(null);
-        toast.success(`${nuevoCambio.empleado} asignado`);
+            const cambioOrigenADestino: CambioLocal = {
+                id: cambioId,
+                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
+                empleado: nombreArr,
+                id_empleado: empleadoArrastrado.id_empleado,
+                fecha: fechaDestino,
+                id_area_origen: empleadoArrastrado.id_area_origen,
+                id_turno_origen: empleadoArrastrado.id_turno_origen,
+                id_area_destino: idAreaDestino,
+                id_turno_destino: idTurnoDestino
+            };
+
+            const cambioDestinoAOrigen: CambioLocal = {
+                id: cambioId,
+                id_detalle_programacion: destinoAsignacion.id_detalle_programacion,
+                empleado: nombreDestino,
+                id_empleado: destinoAsignacion.id_empleado,
+                fecha: fechaOrigen,
+                id_area_origen: idAreaDestino,
+                id_turno_origen: idTurnoDestino,
+                id_area_destino: empleadoArrastrado.id_area_origen,
+                id_turno_destino: empleadoArrastrado.id_turno_origen
+            };
+
+            cambiosAGenerar.push(cambioOrigenADestino, cambioDestinoAOrigen);
+
+        } else {
+            const maximosAreas = new Map<number, number>();
+            areas.forEach(area => {
+                maximosAreas.set(area.id_area, area.max_trabajadores);
+            });
+
+            const validacionCapacidad = validarCapacidadArea(
+                idAreaDestino,
+                idTurnoDestino,
+                fechaDestino,
+                programacion,
+                maximosAreas,
+                empleadoArrastrado.id_empleado
+            );
+
+            if (!validacionCapacidad.valido) {
+                toast.error(validacionCapacidad.mensaje || 'El área ya está llena.');
+                setEmpleadoArrastrado(null);
+                return;
+            }
+
+            const cambioSimple: CambioLocal = {
+                id: cambioId,
+                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
+                empleado: nombreArr,
+                id_empleado: empleadoArrastrado.id_empleado,
+                fecha: fechaDestino,
+                id_area_origen: empleadoArrastrado.id_area_origen,
+                id_turno_origen: empleadoArrastrado.id_turno_origen,
+                id_area_destino: idAreaDestino,
+                id_turno_destino: idTurnoDestino
+            };
+            cambiosAGenerar.push(cambioSimple);
+        }
+
+        const programacionActualMix = programacion.map((p: any) => ({
+            id_empleado: p.id_empleado,
+            fecha: p.fecha,
+            id_area: p.id_area
+        }));
+
+        let advertenciasAcumuladas: string[] = [];
+
+        for (const cambio of cambiosAGenerar) {
+            // ✅ BUSQUEDA CORREGIDA: Usando id_empleado numérico
+            const infoEmp = empleadosInfo.find((e: any) => e.id_empleado === Number(cambio.id_empleado));
+            const advertencias = validarMovimiento(
+                cambio.id_empleado,
+                cambio.fecha,
+                cambio.id_area_destino,
+                programacionActualMix,
+                infoEmp
+            );
+            if (advertencias.length > 0) {
+                advertenciasAcumuladas = [...advertenciasAcumuladas, ...advertencias];
+            }
+        }
+
+        if (advertenciasAcumuladas.length > 0) {
+            setCambioPendiente(cambiosAGenerar);
+            setAdvertenciasPendientes(advertenciasAcumuladas);
+            setEmpleadoArrastrado(null);
+            return;
+        }
+
+        aplicarCambios(cambiosAGenerar);
     };
 
     const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
         if (!empleadoArrastrado.id_empleado) return;
+
         if (empleadoArrastrado.id_area_origen === -1) {
             setEmpleadoArrastrado(null);
             return;
         }
 
         const cambioId = `${Date.now()}-${Math.random()}`;
+        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || empleadoArrastrado.nombre_completo || 'Sin Nombre';
+
         const nuevoCambio: CambioLocal = {
             id: cambioId,
             id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
-            empleado: empleadoArrastrado.nombre_empleado,
+            empleado: nombreArr,
             id_empleado: empleadoArrastrado.id_empleado,
             fecha: fechaDestino,
             id_area_origen: empleadoArrastrado.id_area_origen,
@@ -289,51 +418,36 @@ export default function GestionMensual() {
         setEmpleadoArrastrado(null);
     };
 
-    const handleRevertirCambios = () => {
-        setCambiosLocales([]);
-        toast.info('Cambios revertidos');
-    };
-
-    const handleConsultar = () => {
-        setPaso('detalle');
-        setCambiosLocales([]);
-        setBannerIgnorado(false);
-        setFiltroEmpleado('');
-        refetch();
-    };
-
-    const handleExportar = () => {
-        const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
-        XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`);
-    };
-
-    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => {
-        setEmpleadoSeleccionado({ id, nombre });
-        setFechaParaNovedad(fecha);
-        setModalNovedadOpen(true);
-    };
+    const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
+    const handleConsultar = () => { setPaso('detalle'); setCambiosLocales([]); setBannerIgnorado(false); setFiltroEmpleado(''); refetch(); };
+    const handleExportar = () => { const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos }); XLSX.writeFile(wb, `programacion_${meses[mes - 1]}_${anio}.xlsx`); };
+    const abrirModalNovedad = (id: number, nombre: string, fecha: string) => { setEmpleadoSeleccionado({ id, nombre }); setFechaParaNovedad(fecha); setModalNovedadOpen(true); };
 
     const handleGuardarCambios = async () => {
         try {
             const cambiosInvalidos = cambiosLocales.filter(c => !c.id_empleado);
             if (cambiosInvalidos.length > 0) {
-                console.error("Cambios inválidos detectados:", cambiosInvalidos);
-                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID de empleado válido.`);
+                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID de empleado válido. Por favor, revierta e intente de nuevo.`);
                 return;
             }
 
-            toast.loading('Guardando cambios...');
+            toast.loading('Guardando cambios y recalculando alertas...');
             await programacionService.guardarCambios(cambiosLocales);
+
             const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
             const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
+
             const nuevasAlertas = await programacionService.validarPeriodo(inicio, fin);
             await alertasService.guardar(mes, anio, nuevasAlertas);
+
             setCambiosLocales([]);
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] });
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
+
             toast.dismiss();
-            toast.success('Cambios aplicados');
+            toast.success('Cambios aplicados y alertas actualizadas');
+
         } catch (error) {
             toast.dismiss();
             toast.error('Error al guardar los cambios');
@@ -412,10 +526,17 @@ export default function GestionMensual() {
                                     <Button variant="ghost" size="sm" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Atrás</Button>
                                     <h2 className="text-lg font-bold text-slate-800 hidden md:block">{meses[mes - 1]} {anio}</h2>
                                 </div>
+
                                 <div className="flex-1 max-w-sm relative">
                                     <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input placeholder="Buscar..." className="pl-10 h-9" value={filtroEmpleado} onChange={(e) => setFiltroEmpleado(e.target.value)} />
+                                    <Input
+                                        placeholder="Buscar..."
+                                        className="pl-10 h-9"
+                                        value={filtroEmpleado}
+                                        onChange={(e) => setFiltroEmpleado(e.target.value)}
+                                    />
                                 </div>
+
                                 <div className="flex gap-2">
                                     {cambiosLocales.length > 0 ? (
                                         <>
@@ -423,7 +544,11 @@ export default function GestionMensual() {
                                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleGuardarCambios}><Save className="mr-2 h-4 w-4" /> Guardar ({cambiosLocales.length})</Button>
                                         </>
                                     ) : (
-                                        <BotonEliminarProgramacion mes={mes} anio={anio} onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }} />
+                                        <BotonEliminarProgramacion
+                                            mes={mes}
+                                            anio={anio}
+                                            onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }}
+                                        />
                                     )}
                                     <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</Button>
                                 </div>
@@ -431,17 +556,44 @@ export default function GestionMensual() {
 
                             <div className="space-y-6 pt-6 pb-40">
                                 {!bannerIgnorado && fechaConflictoPersistente && (
-                                    <BannerNecesidadRegenerar fechaCorte={fechaConflictoPersistente} mes={mes} anio={anio} programacionOriginal={programacionOriginal} areas={areas} modo="gestion" onSuccess={(res) => { refetch(); refetchNoAsignados(); refetchAlertas(); setBannerIgnorado(false); const afectadas = res?.fechasProcesadas || infoDias.filter(d => d.objetoFecha >= fechaConflictoPersistente).map(d => d.fechaISO); setFechasRecienGeneradas(afectadas); toast.success('Programación regenerada exitosamente'); }} onIgnore={() => setBannerIgnorado(true)} />
+                                    <BannerNecesidadRegenerar
+                                        fechaCorte={fechaConflictoPersistente}
+                                        mes={mes}
+                                        anio={anio}
+                                        programacionOriginal={programacionOriginal}
+                                        areas={areas}
+                                        modo="gestion"
+                                        onSuccess={(res) => {
+                                            refetch();
+                                            refetchNoAsignados();
+                                            refetchAlertas();
+                                            setBannerIgnorado(false);
+                                            const afectadas = res?.fechasProcesadas || infoDias
+                                                .filter(d => d.objetoFecha >= fechaConflictoPersistente)
+                                                .map(d => d.fechaISO);
+                                            setFechasRecienGeneradas(afectadas);
+                                            toast.success('Programación regenerada exitosamente');
+                                        }}
+                                        onIgnore={() => setBannerIgnorado(true)}
+                                    />
                                 )}
 
-                                {alertasSeparadas.alertasEmpleados.length > 0 && <VisualizacionAlertas alertas={alertasMotor} />}
+                                {alertasSeparadas.alertasEmpleados.length > 0 && (
+                                    <VisualizacionAlertas alertas={alertasMotor} />
+                                )}
 
                                 <div className="space-y-8">
                                     {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
                                         <div key={area.id_area} className="space-y-4">
                                             {alertasSeparadas.alertasPorArea[area.id_area] && (
-                                                <VisualizacionAlertas alertas={alertasMotor} mostrarPorArea={true} idArea={area.id_area} nombreArea={area.nombre_area} />
+                                                <VisualizacionAlertas
+                                                    alertas={alertasMotor}
+                                                    mostrarPorArea={true}
+                                                    idArea={area.id_area}
+                                                    nombreArea={area.nombre_area}
+                                                />
                                             )}
+
                                             <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
                                                 <div className="bg-slate-800 text-white px-5 py-2 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
                                                 <div className="overflow-x-auto">
@@ -453,7 +605,11 @@ export default function GestionMensual() {
                                                                     const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
                                                                     const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     return (
-                                                                        <th key={dia.fechaISO} className={cn("border p-1 text-center text-[9px] min-w-[100px] transition-colors duration-500", esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500', esRegenerado && "bg-emerald-100 border-emerald-300")}>
+                                                                        <th key={dia.fechaISO} className={cn(
+                                                                            "border p-1 text-center text-[9px] min-w-[100px] transition-colors duration-500",
+                                                                            esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500',
+                                                                            esRegenerado && "bg-emerald-100 border-emerald-300"
+                                                                        )}>
                                                                             <div className="flex flex-col relative">
                                                                                 <span className={cn("font-bold", esSucio ? 'text-red-600 font-black' : 'text-indigo-600', esRegenerado && "text-emerald-700")}>{dia.nombreDia}</span>
                                                                                 <span className={cn(esSucio ? 'text-red-700 font-black text-[9px]' : '', esRegenerado && "text-emerald-600")}>{dia.numero}</span>
@@ -507,11 +663,19 @@ export default function GestionMensual() {
                                                     const noAsignadosBase = noAsignadosPorDia[dia.fechaISO] || [];
                                                     const movidosAqui = cambiosLocales.filter(c => c.fecha === dia.fechaISO && c.id_area_destino === -1);
                                                     const idsMovidosAqui = new Set(movidosAqui.map(c => c.id_empleado));
-                                                    const empleadosMovidosAqui = programacionOriginal.filter((p: any) => idsMovidosAqui.has(p.id_empleado)).map((p: any) => ({ ...p, nombre_completo: p.nombre_empleado || p.empleado?.nombre_completo }));
+
+                                                    const empleadosMovidosAqui = programacionOriginal
+                                                        .filter((p: any) => idsMovidosAqui.has(p.id_empleado))
+                                                        .map((p: any) => ({
+                                                            ...p,
+                                                            nombre_completo: p.nombre_empleado || p.empleado?.nombre_completo
+                                                        }));
+
                                                     const poolRefuerzos = [...noAsignadosBase, ...empleadosMovidosAqui];
                                                     const enGrid = new Set(programacion.filter((p: any) => p.fecha.split('T')[0] === dia.fechaISO).map((p: any) => p.id_empleado));
                                                     const listaVisible = poolRefuerzos.filter(e => !enGrid.has(e.id_empleado));
                                                     const unicos = Array.from(new Map(listaVisible.map((item: any) => [item.id_empleado, item])).values());
+
                                                     return (
                                                         <td key={dia.fechaISO} className="border p-1 bg-white min-w-[100px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
                                                             <div className="flex flex-col gap-1 min-h-[30px]">
@@ -533,8 +697,29 @@ export default function GestionMensual() {
                     )}
                 </div>
             )}
-
-            <ModalNovedadRapida isOpen={modalNovedadOpen} onClose={() => setModalNovedadOpen(false)} empleado={empleadoSeleccionado} fechaSeleccionada={fechaParaNovedad} onSuccess={(fechaCorte) => { refetch(); refetchNoAsignados(); refetchAlertas(); }} />
+            <ModalNovedadRapida
+                isOpen={modalNovedadOpen}
+                onClose={() => setModalNovedadOpen(false)}
+                empleado={empleadoSeleccionado}
+                fechaSeleccionada={fechaParaNovedad}
+                onSuccess={(fechaCorte) => {
+                    refetch();
+                    refetchNoAsignados();
+                    refetchAlertas();
+                }}
+            />
+            <ModalConfirmacionCambio
+                open={!!cambioPendiente}
+                onOpenChange={(open) => !open && setCambioPendiente(null)}
+                advertencias={advertenciasPendientes}
+                onConfirm={() => {
+                    if (cambioPendiente) {
+                        aplicarCambios(cambioPendiente);
+                        setCambioPendiente(null);
+                        setAdvertenciasPendientes([]);
+                    }
+                }}
+            />
         </div>
     );
 }

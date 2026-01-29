@@ -1,3 +1,4 @@
+// # Programacion.controller
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { capa6_generarProgramacionDia } from '../services/programacion/capa6.integracion';
@@ -488,6 +489,31 @@ export const obtenerEmpleadosNoAsignadosPorDia = async (req: Request, res: Respo
             }));
         }
         res.json({ success: true, data: resultado });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+export const obtenerEmpleadosConAreas = async (req: Request, res: Response) => {
+    try {
+        const empleados = await prisma.empleado.findMany({
+            where: { id_estado: 1 },
+            select: {
+                id_empleado: true,
+                empleado_area: {
+                    select: {
+                        id_area: true
+                    }
+                }
+            }
+        });
+
+        const empleadosInfo = empleados.map(emp => ({
+            id_empleado: emp.id_empleado,
+            areas_habilitadas: emp.empleado_area.map(ea => ea.id_area)
+        }));
+
+        res.json({ success: true, data: empleadosInfo });
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
     }
