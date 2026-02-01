@@ -114,7 +114,6 @@ export default function GestionMensual() {
         enabled: paso === 'detalle'
     });
 
-    // ✅ CORRECCIÓN CLAVE: Usar consultasService y procesar data.empleados
     const { data: empleadosData } = useQuery({
         queryKey: ['empleados-completos-validacion'],
         queryFn: () => consultasService.obtenerEmpleadosCompletos({ estado: true }),
@@ -126,6 +125,7 @@ export default function GestionMensual() {
         if (!empleadosData?.empleados) return [];
         return empleadosData.empleados.map((emp: any) => ({
             id_empleado: emp.id_empleado,
+            nombre: emp.nombre_completo || emp.nombre || 'Empleado',
             areas_habilitadas: emp.areas_permitidas || []
         }));
     }, [empleadosData]);
@@ -185,6 +185,30 @@ export default function GestionMensual() {
         return base;
     }, [programacionOriginal, cambiosLocales, filtroEmpleado]);
 
+    const obtenerProgramacionParaValidar = () => {
+        let base = [...programacionOriginal];
+
+        base = base.map((asig: any) => {
+            const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
+            if (cambio) {
+                if (cambio.id_area_destino === -1) return null;
+                return { ...asig, id_area: cambio.id_area_destino, id_turno: cambio.id_turno_destino, fecha: cambio.fecha };
+            }
+            return asig;
+        }).filter(Boolean);
+
+        const nuevos = cambiosLocales
+            .filter(c => c.id_area_origen === -1 && c.id_area_destino !== -1)
+            .map(c => ({
+                id_empleado: c.id_empleado,
+                fecha: c.fecha,
+                id_area: c.id_area_destino,
+                id_turno: c.id_turno_destino
+            }));
+
+        return [...base, ...nuevos];
+    };
+
     const areas = useMemo(() => {
         if (!areasRaw) return [];
         return areasRaw.filter(a => a.id_area !== 13);
@@ -219,11 +243,12 @@ export default function GestionMensual() {
     }, [mes, anio]);
 
     const handleDragStart = (e: React.DragEvent, asignacion: any, idArea: number, idTurno: number) => {
-        const idEmp = asignacion.id_empleado || asignacion.empleado?.id_empleado;
+        const idEmp = Number(asignacion.id_empleado || asignacion.empleado?.id_empleado);
+        const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
 
-        if (!idEmp) {
-            console.error("No se pudo encontrar el ID del empleado en el objeto:", asignacion);
-            toast.error("Error de datos: Empleado sin ID identificable. Recargue la página.");
+        if (!idEmp || isNaN(idEmp)) {
+            console.error("⛔ ERROR DRAG: ID Inválido", asignacion);
+            toast.error("Error de datos: ID de empleado no encontrado. Recargue la página.");
             e.preventDefault();
             return;
         }
@@ -233,11 +258,10 @@ export default function GestionMensual() {
             id_area_origen: idArea,
             id_turno_origen: idTurno,
             id_empleado: idEmp,
-            nombre_empleado: asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado'
+            nombre_empleado: nombre
         });
-        e.dataTransfer.effectAllowed = 'move';
 
-        const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
+        e.dataTransfer.effectAllowed = 'move';
 
         const ghost = document.createElement('div');
         ghost.textContent = nombre;
@@ -270,118 +294,79 @@ export default function GestionMensual() {
     const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
         e.preventDefault();
         if (!empleadoArrastrado) return;
-        if (!empleadoArrastrado.id_empleado) {
-            toast.error("Error crítico: Se perdió el ID del empleado al arrastrar.");
-            return;
-        }
 
-        const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaDestino;
+        const fechaNorm = fechaDestino.split('T')[0];
+        const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaNorm;
 
-        if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaDestino) {
+
+        if (empleadoArrastrado.id_area_origen === idAreaDestino &&
+            empleadoArrastrado.id_turno_origen === idTurnoDestino &&
+            fechaOrigen === fechaNorm) {
             setEmpleadoArrastrado(null);
             return;
         }
 
-        const destinoAsignacion = programacion.find((p: any) =>
-            Number(p.id_area) === idAreaDestino &&
-            Number(p.id_turno) === idTurnoDestino &&
-            p.fecha.split('T')[0] === fechaDestino
+        const cambioId = `${Date.now()}-${Math.random()}`;
+        const cambiosAGenerar: CambioLocal[] = [];
+        const programacionBase = obtenerProgramacionParaValidar();
+        const areaInfo = areas.find(a => a.id_area === idAreaDestino);
+        const maxPermitido = areaInfo?.max_trabajadores ?? 0;
+
+        const empleadosEnAreaHoy = programacionBase.filter(p =>
+            Number(p.id_area) === Number(idAreaDestino) && p.fecha.split('T')[0] === fechaNorm
         );
 
-        const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || 'Desconocido';
-        const cambiosAGenerar: CambioLocal[] = [];
+        const esMovimientoMismaAreaYDia = empleadoArrastrado.id_area_origen === idAreaDestino && fechaOrigen === fechaNorm;
+        const ocupacionGlobal = esMovimientoMismaAreaYDia ? empleadosEnAreaHoy.length : empleadosEnAreaHoy.length + 1;
 
-        if (destinoAsignacion) {
-            const nombreDestino = destinoAsignacion.nombre_empleado || destinoAsignacion.empleado?.nombre_completo || 'Desconocido';
 
-            const cambioOrigenADestino: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
-                empleado: nombreArr,
-                id_empleado: empleadoArrastrado.id_empleado,
-                fecha: fechaDestino,
-                id_area_origen: empleadoArrastrado.id_area_origen,
-                id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino,
-                id_turno_destino: idTurnoDestino
-            };
-
-            const cambioDestinoAOrigen: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: destinoAsignacion.id_detalle_programacion,
-                empleado: nombreDestino,
-                id_empleado: destinoAsignacion.id_empleado,
-                fecha: fechaOrigen,
-                id_area_origen: idAreaDestino,
-                id_turno_origen: idTurnoDestino,
-                id_area_destino: empleadoArrastrado.id_area_origen,
-                id_turno_destino: empleadoArrastrado.id_turno_origen
-            };
-
-            cambiosAGenerar.push(cambioOrigenADestino, cambioDestinoAOrigen);
-
-        } else {
-            const maximosAreas = new Map<number, number>();
-            areas.forEach(area => {
-                maximosAreas.set(area.id_area, area.max_trabajadores);
-            });
-
-            const validacionCapacidad = validarCapacidadArea(
-                idAreaDestino,
-                idTurnoDestino,
-                fechaDestino,
-                programacion,
-                maximosAreas,
-                empleadoArrastrado.id_empleado
-            );
-
-            if (!validacionCapacidad.valido) {
-                toast.error(validacionCapacidad.mensaje || 'El área ya está llena.');
+        if (maxPermitido > 0 && ocupacionGlobal > maxPermitido) {
+            const destinoDirecto = empleadosEnAreaHoy.find(p => Number(p.id_turno) === Number(idTurnoDestino));
+            if (!destinoDirecto) {
+                toast.error(`⛔ AREA LLENA: El área ${areaInfo?.nombre_area} tiene un límite de ${maxPermitido} personas.`);
                 setEmpleadoArrastrado(null);
                 return;
             }
-
-            const cambioSimple: CambioLocal = {
-                id: cambioId,
-                id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
-                empleado: nombreArr,
-                id_empleado: empleadoArrastrado.id_empleado,
-                fecha: fechaDestino,
-                id_area_origen: empleadoArrastrado.id_area_origen,
-                id_turno_origen: empleadoArrastrado.id_turno_origen,
-                id_area_destino: idAreaDestino,
-                id_turno_destino: idTurnoDestino
-            };
-            cambiosAGenerar.push(cambioSimple);
+            cambiosAGenerar.push(
+                { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0, empleado: empleadoArrastrado.nombre_empleado, id_empleado: empleadoArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino },
+                { id: cambioId, id_detalle_programacion: destinoDirecto.id_detalle_programacion, empleado: destinoDirecto.nombre_empleado || destinoDirecto.empleado?.nombre_completo || 'Empleado', id_empleado: destinoDirecto.id_empleado, fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino, id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen }
+            );
+        } else {
+            cambiosAGenerar.push({ id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0, empleado: empleadoArrastrado.nombre_empleado, id_empleado: empleadoArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino });
         }
 
-        const programacionActualMix = programacion.map((p: any) => ({
-            id_empleado: p.id_empleado,
-            fecha: p.fecha,
-            id_area: p.id_area
-        }));
 
-        let advertenciasAcumuladas: string[] = [];
-
+        let advertenciasFinales: string[] = [];
         for (const cambio of cambiosAGenerar) {
-            // ✅ BUSQUEDA CORREGIDA: Usando id_empleado numérico
-            const infoEmp = empleadosInfo.find((e: any) => e.id_empleado === Number(cambio.id_empleado));
-            const advertencias = validarMovimiento(
+            const infoEmp = empleadosInfo.find(e => Number(e.id_empleado) === Number(cambio.id_empleado));
+
+
+            const advs = validarMovimiento(
                 cambio.id_empleado,
                 cambio.fecha,
                 cambio.id_area_destino,
-                programacionActualMix,
-                infoEmp
+                programacionBase,
+                infoEmp,
+                cambio.fecha === fechaNorm && cambio.id_area_origen === idAreaDestino ? fechaOrigen : cambio.fecha,
+                cambio.id_area_origen
             );
-            if (advertencias.length > 0) {
-                advertenciasAcumuladas = [...advertenciasAcumuladas, ...advertencias];
-            }
+
+            // Limpiar y asegurar que el mensaje tenga el nombre correcto del empleado
+            advs.forEach(msg => {
+                let limpio = msg.replace(/^⛔\s(PROHIBIDO|CONFLICTO|FATIGA):\s/i, '');
+                // Si el mensaje limpio aún contiene "El empleado", lo reemplazamos por el nombre real
+                limpio = limpio.replace(/El empleado/i, cambio.empleado);
+
+                if (msg.includes('PROHIBIDO')) advertenciasFinales.push(`⛔ PROHIBIDO: ${limpio}`);
+                else if (msg.includes('CONFLICTO')) advertenciasFinales.push(`⛔ CONFLICTO: ${limpio}`);
+                else if (msg.includes('FATIGA')) advertenciasFinales.push(`⛔ FATIGA: ${limpio}`);
+                else advertenciasFinales.push(msg);
+            });
         }
 
-        if (advertenciasAcumuladas.length > 0) {
+        if (advertenciasFinales.length > 0) {
             setCambioPendiente(cambiosAGenerar);
-            setAdvertenciasPendientes(advertenciasAcumuladas);
+            setAdvertenciasPendientes(Array.from(new Set(advertenciasFinales)));
             setEmpleadoArrastrado(null);
             return;
         }
@@ -400,7 +385,7 @@ export default function GestionMensual() {
         }
 
         const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado || empleadoArrastrado.empleado?.nombre_completo || empleadoArrastrado.nombre_completo || 'Sin Nombre';
+        const nombreArr = empleadoArrastrado.nombre_empleado;
 
         const nuevoCambio: CambioLocal = {
             id: cambioId,
@@ -427,16 +412,15 @@ export default function GestionMensual() {
         try {
             const cambiosInvalidos = cambiosLocales.filter(c => !c.id_empleado);
             if (cambiosInvalidos.length > 0) {
-                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID de empleado válido. Por favor, revierta e intente de nuevo.`);
+                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID. Revierta.`);
                 return;
             }
 
-            toast.loading('Guardando cambios y recalculando alertas...');
+            toast.loading('Guardando cambios...');
             await programacionService.guardarCambios(cambiosLocales);
 
             const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
             const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-
             const nuevasAlertas = await programacionService.validarPeriodo(inicio, fin);
             await alertasService.guardar(mes, anio, nuevasAlertas);
 
@@ -446,11 +430,10 @@ export default function GestionMensual() {
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
 
             toast.dismiss();
-            toast.success('Cambios aplicados y alertas actualizadas');
-
+            toast.success('Cambios guardados correctamente');
         } catch (error) {
             toast.dismiss();
-            toast.error('Error al guardar los cambios');
+            toast.error('Error al guardar');
             console.error(error);
         }
     };
