@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+dist/
+build/
+logs/
+*.log
+.DS_Store
+package-lock.json
+node_modules/
+node_modules/electron/
+backend/release/*.exe
+backend/release/win-unpacked/*.exe
+backend/release/
+release/
+dist/
+*.exe

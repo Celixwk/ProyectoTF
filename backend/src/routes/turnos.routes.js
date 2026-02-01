@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const turno_controller_1 = require("../controllers/turno.controller");
+const router = (0, express_1.Router)();
+router.get('/', turno_controller_1.getTurnos);
+router.get('/asignados', turno_controller_1.obtenerTurnosAsignados);
+router.get('/:id', turno_controller_1.getTurnoById);
+router.post('/', turno_controller_1.createTurno);
+router.post('/asignar', turno_controller_1.asignarTurno);
+router.put('/:id', turno_controller_1.updateTurno);
+router.delete('/:id', turno_controller_1.deleteTurno);
+exports.default = router;

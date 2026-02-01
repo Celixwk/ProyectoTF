@@ -1,0 +1,489 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Cargo {
+  id_cargo     Int        @id @default(autoincrement())
+  nombre_cargo String     @unique @db.VarChar(100)
+  salario_base Decimal    @db.Decimal(10, 2)
+  descripcion  String?
+  estado       String?    @default("Activo") @db.VarChar(10)
+  created_at   DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?  @default(now()) @updatedAt @db.Timestamp(6)
+  empleados    Empleado[]
+
+  @@map("cargo")
+}
+
+model Area {
+  id_area              Int                   @id @default(autoincrement())
+  nombre_area          String                @unique @db.VarChar(100)
+  descripcion          String?
+  max_trabajadores     Int                   @default(5)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+  empleado_area        empleado_area[]
+
+  @@map("area")
+}
+
+model Turno {
+  id_turno             Int                   @id @default(autoincrement())
+  hora_entrada         DateTime              @db.Time(6)
+  hora_salida          DateTime              @db.Time(6)
+  tipo_turno           String                @unique(map: "turno_tipo_turno_unique") @db.VarChar(10)
+  duracion_horas       Decimal?              @db.Decimal(4, 2)
+  estado               String?               @default("Activo") @db.VarChar(10)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  hora_entrada_2       DateTime?             @db.Time(6)
+  hora_salida_2        DateTime?             @db.Time(6)
+  detalle_programacion DetalleProgramacion[]
+
+  @@map("turno")
+}
+
+model TipoNovedad {
+  id_novedad_tipo  Int               @id @default(autoincrement())
+  codigo           String            @unique @db.VarChar(10)
+  nombre_novedad   String            @db.VarChar(60)
+  descripcion      String?
+  afecta_pago      Boolean?          @default(false)
+  activo           Boolean?          @default(true)
+  created_at       DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado NovedadEmpleado[]
+
+  @@map("tipo_novedad")
+}
+
+model TipoRecargo {
+  id_recargo_tipo    Int              @id @default(autoincrement())
+  codigo             String           @unique @db.VarChar(10)
+  nombre_recargo     String           @db.VarChar(60)
+  porcentaje_recargo Decimal          @db.Decimal(5, 2)
+  descripcion        String?
+  activo             Boolean?         @default(true)
+  created_at         DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_recargo    DetalleRecargo[]
+
+  @@map("tipo_recargo")
+}
+
+model Parametrizacion {
+  id_parametro        Int       @id @default(autoincrement())
+  nombre_parametro    String    @unique @db.VarChar(100)
+  horas_maximas       Decimal?  @db.Decimal(6, 2)
+  descripcion         String?
+  periodicidad        String?   @db.VarChar(20)
+  fecha_actualizacion DateTime? @db.Date
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  updated_at          DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+  valor_texto         String?
+  activo              Boolean?  @default(true)
+
+  @@map("parametrizacion")
+}
+
+model Empleado {
+  id_empleado          Int                   @id @default(autoincrement())
+  cedula               String                @unique @db.VarChar(20)
+  nombre1              String                @db.VarChar(50)
+  nombre2              String?               @db.VarChar(50)
+  apellido1            String                @db.VarChar(50)
+  apellido2            String?               @db.VarChar(50)
+  edad                 Int?                  @db.SmallInt
+  sexo                 String?               @db.Char(1)
+  vehiculo             String?               @default("No")
+  id_cargo             Int
+  id_estado            Int?                  @default(1)
+  id_area              Int?
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+  cargo                Cargo                 @relation(fields: [id_cargo], references: [id_cargo], onUpdate: NoAction)
+  estados_empleado     estados_empleado?     @relation(fields: [id_estado], references: [id_estado], onDelete: Restrict, onUpdate: NoAction)
+  empleado_area        empleado_area[]
+  labor_mes            LaborMes[]
+  novedad_empleado     NovedadEmpleado[]
+  usuario              Usuario?
+  descansos            Descanso[]
+
+  @@index([id_cargo], map: "idx_empleado_cargo")
+  @@index([id_estado], map: "idx_empleado_estado")
+  @@index([cedula], map: "idx_empleado_cedula")
+  @@map("empleado")
+}
+
+model Descanso {
+  id_descanso   Int      @id @default(autoincrement())
+  id_empleado   Int
+  mes           Int
+  anio          Int
+  dias_descanso Int[]
+  observaciones String?  @db.Text
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  empleado      Empleado @relation(fields: [id_empleado], references: [id_empleado])
+
+  @@unique([id_empleado, mes, anio])
+  @@map("descanso")
+}
+
+model Usuario {
+  id_usuario       Int               @id @default(autoincrement())
+  usuario          String            @unique @db.VarChar(50)
+  contrasenia      String            @db.VarChar(255)
+  tipo_usuario     String            @db.VarChar(20)
+  nombre_completo  String            @db.VarChar(120)
+  estado           String?           @default("Activo") @db.VarChar(10)
+  fecha_creacion   DateTime?         @default(now()) @db.Timestamp(6)
+  id_empleado      Int?              @unique
+  created_at       DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado NovedadEmpleado[]
+  detalle_programacion DetalleProgramacion[]
+  empleado         Empleado?         @relation(fields: [id_empleado], references: [id_empleado], onUpdate: NoAction)
+
+  @@index([id_empleado], map: "idx_usuario_empleado")
+  @@map("usuario")
+}
+
+model LaborMes {
+  id_labor_mes         Int                   @id @default(autoincrement())
+  id_empleado          Int
+  fecha_inicio         DateTime              @db.Date
+  fecha_fin            DateTime              @db.Date
+  horas_mes            Decimal?              @db.Decimal(6, 2)
+  estado               String?               @default("Abierto") @db.VarChar(15)
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_programacion DetalleProgramacion[]
+  empleado             Empleado              @relation(fields: [id_empleado], references: [id_empleado], onDelete: Cascade, onUpdate: NoAction)
+  novedad_empleado     NovedadEmpleado[]
+
+  @@index([id_empleado], map: "idx_labor_mes_empleado")
+  @@index([fecha_inicio, fecha_fin], map: "idx_labor_mes_fechas")
+  @@map("labor_mes")
+}
+
+model NovedadEmpleado {
+  id_novedad_empleado Int              @id @default(autoincrement())
+  id_empleado         Int
+  id_novedad_tipo     Int
+  id_labor_mes        Int?
+  fecha_solicitud     DateTime         @db.Date
+  fecha_registro      DateTime         @db.Date
+  fecha_vencimiento   DateTime?        @db.Date
+  etapa               String           @db.VarChar(15)
+  id_usuario          Int?
+  created_at          DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?        @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_novedad     DetalleNovedad[]
+  empleado            Empleado         @relation(fields: [id_empleado], references: [id_empleado], onDelete: Cascade, onUpdate: NoAction)
+  labor_mes           LaborMes?        @relation(fields: [id_labor_mes], references: [id_labor_mes], onUpdate: NoAction)
+  tipo_novedad        TipoNovedad      @relation(fields: [id_novedad_tipo], references: [id_novedad_tipo], onUpdate: NoAction)
+  usuario             Usuario?         @relation(fields: [id_usuario], references: [id_usuario], onUpdate: NoAction)
+
+  @@index([id_empleado], map: "idx_novedad_empleado")
+  @@index([id_novedad_tipo], map: "idx_novedad_tipo")
+  @@map("novedad_empleado")
+}
+
+model DetalleProgramacion {
+  id_detalle_programacion Int       @id @default(autoincrement())
+  id_labor_mes            Int?
+  id_turno                Int?
+  id_area                 Int?
+  fecha                   DateTime  @db.Date
+  tipo_dia                String?   @db.VarChar(10)
+  total_horas_laboradas   Decimal?  @db.Decimal(5, 2)
+  observaciones           String?
+  estado                  String?   @default("Activo") @db.VarChar(20)
+  created_at              DateTime? @default(now()) @db.Timestamp(6)
+  updated_at              DateTime? @default(now()) @updatedAt @db.Timestamp(6)
+  id_empleado             Int
+
+  area                    Area?     @relation(fields: [id_area], references: [id_area])
+  empleado                Empleado  @relation(fields: [id_empleado], references: [id_empleado])
+  labor_mes               LaborMes? @relation(fields: [id_labor_mes], references: [id_labor_mes])
+  turno                   Turno?    @relation(fields: [id_turno], references: [id_turno])
+  usuario_registro        Usuario?  @relation(fields: [id_usuario_registro], references: [id_usuario])
+  recargo                 Recargo[]
+
+  id_usuario_registro     Int?
+  origen_registro         String?   @default("Sistema") @db.VarChar(20)
+
+  @@unique([id_empleado, fecha], name: "uq_empleado_fecha")
+  @@index([fecha], map: "idx_detalle_prog_fecha")
+  @@map("detalle_programacion")
+}
+
+model DetalleNovedad {
+  id_detalle_novedad  Int             @id @default(autoincrement())
+  id_novedad_empleado Int
+  fecha               DateTime        @db.Date
+  cantidad            Decimal?        @db.Decimal(5, 2)
+  observaciones       String?
+  created_at          DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?       @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado    NovedadEmpleado @relation(fields: [id_novedad_empleado], references: [id_novedad_empleado], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([id_novedad_empleado], map: "idx_detalle_novedad_nov")
+  @@map("detalle_novedad")
+}
+
+model Recargo {
+  id_recargo              Int                 @id @default(autoincrement())
+  id_detalle_programacion Int
+  fecha_inicio            DateTime            @db.Date
+  fecha_fin               DateTime            @db.Date
+  total_horas             Decimal?            @db.Decimal(5, 2)
+  total_dinero            Decimal?            @db.Decimal(10, 2)
+  total_diurno            Decimal?            @db.Decimal(5, 2)
+  dominicales             Int?                @default(0) @db.SmallInt
+  festivos                Int?                @default(0) @db.SmallInt
+  hed                     Decimal?            @default(0) @db.Decimal(5, 2)
+  hen                     Decimal?            @default(0) @db.Decimal(5, 2)
+  rno                     Decimal?            @default(0) @db.Decimal(5, 2)
+  rnf                     Decimal?            @default(0) @db.Decimal(5, 2)
+  heon                    Decimal?            @default(0) @db.Decimal(5, 2)
+  hefd                    Decimal?            @default(0) @db.Decimal(5, 2)
+  hefn                    Decimal?            @default(0) @db.Decimal(5, 2)
+  created_at              DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at              DateTime?           @default(now()) @updatedAt @db.Timestamp(6)
+  detalle_recargo         DetalleRecargo[]
+  detalle_programacion    DetalleProgramacion @relation(fields: [id_detalle_programacion], references: [id_detalle_programacion], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([id_detalle_programacion], map: "idx_recargo_detalle")
+  @@map("recargo")
+}
+
+model DetalleRecargo {
+  id_detalle_recargo Int         @id @default(autoincrement())
+  id_recargo         Int
+  id_recargo_tipo    Int
+  horas_registradas  Decimal     @db.Decimal(5, 2)
+  observaciones      String?
+  created_at         DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?   @default(now()) @updatedAt @db.Timestamp(6)
+  recargo            Recargo     @relation(fields: [id_recargo], references: [id_recargo], onDelete: Cascade, onUpdate: NoAction)
+  tipo_recargo       TipoRecargo @relation(fields: [id_recargo_tipo], references: [id_recargo_tipo], onUpdate: NoAction)
+
+  @@unique([id_recargo, id_recargo_tipo])
+  @@index([id_recargo], map: "idx_detalle_recargo_recargo")
+  @@map("detalle_recargo")
+}
+
+model estados_empleado {
+  id_estado     Int        @id @default(autoincrement())
+  nombre_estado String     @unique @db.VarChar(30)
+  created_at    DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?  @default(now()) @db.Timestamp(6)
+  empleado      Empleado[]
+}
+
+model mes {
+  id_mes       Int       @id @default(autoincrement())
+  nombre_mes   String    @db.VarChar(20)
+  numero_mes   Int       @db.SmallInt
+  anio         Int       @db.SmallInt
+  fecha_inicio DateTime  @db.Date
+  fecha_fin    DateTime  @db.Date
+  estado       String?   @default("Abierto") @db.VarChar(15)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([numero_mes, anio])
+}
+
+model empleado_area {
+  id_empleado Int
+  id_area     Int
+  area        Area     @relation(fields: [id_area], references: [id_area], onDelete: Cascade, onUpdate: NoAction, map: "fk_ea_area")
+  empleado    Empleado @relation(fields: [id_empleado], references: [id_empleado], onDelete: Cascade, onUpdate: NoAction, map: "fk_ea_empleado")
+
+  @@id([id_empleado, id_area])
+}
+
+model AlertasProgramacion {
+  id_alerta       Int      @id @default(autoincrement())
+  mes             Int
+  anio            Int
+  fecha           DateTime
+  tipo            String
+  codigo          String?
+  mensaje         String
+  id_area         Int?
+  id_empleado     Int?
+  datos_completos Json?
+
+  @@map("alertas_programacion")
+}
+
+view vw_empleados_completos {
+  id_empleado      Int?      @unique
+  cedula           String?   @db.VarChar(20)
+  nombre_completo  String?
+  edad             Int?      @db.SmallInt
+  sexo             String?   @db.Char(1)
+  vehiculo         Boolean?
+  estado           Boolean?
+  id_cargo         Int?
+  nombre_cargo     String?   @db.VarChar(100)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  areas_permitidas Int[]
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+}
+
+view vw_novedades_completas {
+  id_novedad_registro Int?      @unique
+  fecha_solicitud     DateTime? @db.Date
+  fecha_registro      DateTime? @db.Date
+  fecha_vencimiento   DateTime? @db.Date
+  etapa               String?   @db.VarChar(15)
+  id_empleado         Int?
+  empleado            String?
+  cedula              String?   @db.VarChar(20)
+  nombre_cargo        String?   @db.VarChar(100)
+  id_novedad_tipo     Int?
+  codigo_novedad      String?   @db.VarChar(10)
+  tipo                String?   @db.VarChar(60)
+  afecta_pago         Boolean?
+  fecha_inicio        DateTime? @db.Date
+  cantidad            Decimal?  @db.Decimal
+  observaciones       String?
+  usuario_registro    String?   @db.VarChar
+  created_at          DateTime? @db.Timestamp(6)
+  updated_at          DateTime? @db.Timestamp(6)
+}
+
+view vw_empleados_activos_areas {
+  id_empleado      Int?      @unique
+  nombre_completo  String?
+  cedula           String?   @db.VarChar(20)
+  estado           Boolean?
+  nombre_cargo     String?   @db.VarChar(100)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  areas_permitidas Int[]
+  cantidad_areas   BigInt?
+}
+
+view vw_resumen_labor_mes {
+  id_labor_mes      Int?      @unique
+  fecha_inicio      DateTime? @db.Date
+  fecha_fin         DateTime? @db.Date
+  periodo           String?
+  id_empleado       Int?
+  nombre_completo   String?
+  cedula            String?   @db.VarChar(20)
+  nombre_cargo      String?   @db.VarChar(100)
+  salario_base      Decimal?  @db.Decimal(10, 2)
+  horas_ordinarias  Decimal?  @db.Decimal
+  total_horas       Decimal?  @db.Decimal
+  total_recargos    Decimal?  @db.Decimal
+  total_turnos      BigInt?
+  total_dominicales BigInt?
+  total_festivos    BigInt?
+  created_at        DateTime? @db.Timestamp(6)
+  updated_at        DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_labor_mes {
+  id_labor_mes       Int?      @unique
+  id_empleado        Int?
+  nombre_empleado    String?
+  fecha_inicio       DateTime? @db.Date
+  fecha_fin          DateTime? @db.Date
+  horas_mes          Decimal?  @db.Decimal(6, 2)
+  estado             String?   @db.VarChar(15)
+  fecha_modificacion DateTime? @db.Timestamp(6)
+  fecha_creacion     DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_recargos {
+  id_recargo              Int?      @unique
+  id_detalle_programacion Int?
+  fecha_inicio            DateTime? @db.Date
+  fecha_fin               DateTime? @db.Date
+  total_horas             Decimal?  @db.Decimal(5, 2)
+  total_dinero            Decimal?  @db.Decimal(10, 2)
+  id_empleado             Int?
+  nombre_empleado         String?
+  fecha_modificacion      DateTime? @db.Timestamp(6)
+  fecha_creacion          DateTime? @db.Timestamp(6)
+}
+
+view vw_auditoria_novedades {
+  id_novedad_registro Int?      @unique
+  id_empleado         Int?
+  nombre_empleado     String?
+  id_novedad_tipo     Int?
+  tipo_novedad        String?   @db.VarChar(60)
+  fecha_solicitud     DateTime? @db.Date
+  fecha_registro      DateTime? @db.Date
+  etapa               String?   @db.VarChar(15)
+  fecha_modificacion  DateTime? @db.Timestamp(6)
+  fecha_creacion      DateTime? @db.Timestamp(6)
+}
+
+view vw_turnos_asignados {
+  id_detalle_turno Int?      @unique
+  fecha            DateTime? @db.Date
+  dia_semana       String?
+  es_domingo       Boolean?
+  es_festivo       Boolean?
+  id_turno         Int?
+  codigo_turno     String?
+  hora_entrada     String?
+  hora_salida      String?
+  tipo_turno       String?   @db.VarChar(10)
+  thl              Decimal?  @db.Decimal(5, 2)
+  id_area          Int?
+  nombre_area      String?   @db.VarChar
+  id_labor_mes     Int?
+  id_empleado      Int?
+  nombre_completo  String?
+  cedula           String?   @db.VarChar(20)
+  nombre_cargo     String?   @db.VarChar(100)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+}
+
+view vw_recargos_completos {
+  id_recargo       Int?      @unique
+  fecha_inicio     DateTime? @db.Date
+  fecha_fin        DateTime? @db.Date
+  total_horas      Decimal?  @db.Decimal(5, 2)
+  total_dinero     Decimal?  @db.Decimal(10, 2)
+  dominicales      Int?      @db.SmallInt
+  festivos         Int?      @db.SmallInt
+  rno              Decimal?  @db.Decimal(5, 2)
+  rnf              Decimal?  @db.Decimal(5, 2)
+  heon             Decimal?  @db.Decimal(5, 2)
+  heod             Decimal?  @db.Decimal(5, 2)
+  hefd             Decimal?  @db.Decimal(5, 2)
+  hefn             Decimal?  @db.Decimal(5, 2)
+  id_detalle_turno Int?
+  fecha            DateTime? @db.Date
+  codigo_turno     String?
+  hora_entrada     String?
+  hora_salida      String?
+  nombre_area      String?   @db.VarChar
+  id_empleado      Int?
+  nombre_completo  String?
+  cedula           String?   @db.VarChar(20)
+  salario_base     Decimal?  @db.Decimal(10, 2)
+  id_labor_mes     Int?
+  created_at       DateTime? @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+}

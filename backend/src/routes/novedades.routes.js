@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const novedad_controller_1 = require("../controllers/novedad.controller");
+const router = (0, express_1.Router)();
+router.get('/tipos', novedad_controller_1.novedadController.listarTipos);
+router.get('/', novedad_controller_1.novedadController.listar);
+router.post('/', novedad_controller_1.novedadController.crear);
+router.post('/sincronizar', novedad_controller_1.novedadController.sincronizarNovedades);
+router.post('/masivo', novedad_controller_1.novedadController.guardarMasivo);
+router.delete('/:id', novedad_controller_1.novedadController.eliminar);
+exports.default = router;

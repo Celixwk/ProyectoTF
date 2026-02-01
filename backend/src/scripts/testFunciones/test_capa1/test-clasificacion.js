@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const capa1_especializacion_1 = require("../../../services/programacion/capa1.especializacion");
+console.log("Resultado 1:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(1));
+console.log("Resultado 2:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(2));
+console.log("Resultado 3:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(3));
+console.log("Resultado 4:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(4));
+console.log("Resultado 5:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(5));
+console.log("Resultado 6:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(6));
+console.log("Resultado 7:", (0, capa1_especializacion_1.obtenerClasificacionEmpleado)(7));
