@@ -1,4 +1,3 @@
-// # Programacion.controller
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { capa6_generarProgramacionDia } from '../services/programacion/capa6.integracion';
@@ -370,59 +369,60 @@ export const validarProgramacion = async (req: Request, res: Response) => {
     try {
         const { inicio, fin } = req.query;
         if (!inicio || !fin) return res.status(400).json({ success: false, error: 'Faltan fechas' });
+
         const fechaInicio = normalizarFechaUTC(inicio as string);
         const fechaFin = normalizarFechaUTC(fin as string);
         fechaFin.setUTCHours(23, 59, 59);
+
+        console.log('📊 VALIDACIÓN INICIADA:', { inicio, fin, timestamp: new Date().toISOString() });
+
         const programacion = await prisma.detalleProgramacion.findMany({
-            where: {
-                fecha: { gte: fechaInicio, lte: fechaFin }
-            },
+            where: { fecha: { gte: fechaInicio, lte: fechaFin } },
             select: { id_empleado: true, fecha: true, id_area: true }
         });
+
+        console.log('📦 REGISTROS LEÍDOS:', programacion.length);
+
         const alertas = [];
-        if (programacion.length > 0) {
-            const empleadosIds = [...new Set(programacion.map(p => p.id_empleado))];
-            const novedades = await prisma.detalleNovedad.findMany({
-                where: {
-                    fecha: { gte: fechaInicio, lte: fechaFin },
-                    novedad_empleado: { id_empleado: { in: empleadosIds } }
-                },
-                include: { novedad_empleado: true }
-            });
-            for (const prog of programacion) {
-                const f = prog.fecha.toISOString().split('T')[0];
-                const conflicto = novedades.find(nov =>
-                    nov.novedad_empleado.id_empleado === prog.id_empleado &&
-                    nov.fecha.toISOString().split('T')[0] === f
-                );
-                if (conflicto) {
-                    alertas.push({
-                        tipo: 'NOVEDAD',
-                        fecha: f,
-                        id_empleado: prog.id_empleado,
-                        mensaje: 'Conflicto: Turno y novedad simultánea'
-                    });
-                }
-            }
-        }
+
         const areas = await prisma.area.findMany();
+
+        const programacionNormalizada = programacion.map(p => ({
+            ...p,
+            fechaStr: new Date(p.fecha).toISOString().split('T')[0]
+        }));
+
+        console.log('📅 EJEMPLO FECHA NORMALIZADA:', programacionNormalizada[0]);
+
         const diasDelPeriodo = Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
         for (let i = 0; i < diasDelPeriodo; i++) {
             const diaEvaluar = new Date(fechaInicio);
             diaEvaluar.setUTCDate(fechaInicio.getUTCDate() + i);
             const fechaStr = diaEvaluar.toISOString().split('T')[0];
+
             for (const area of areas) {
                 if (area.id_area === 13) continue;
-                const asignados = programacion.filter(p =>
-                    p.fecha.toISOString().split('T')[0] === fechaStr &&
-                    p.id_area === area.id_area
+
+                const asignados = programacionNormalizada.filter(p =>
+                    p.fechaStr === fechaStr && p.id_area === area.id_area
                 ).length;
+
+                if (i === 0 && area.id_area <= 3) {
+                    console.log(`📊 DÍA ${fechaStr} - ÁREA ${area.nombre_area}:`, {
+                        asignados,
+                        requeridos: area.max_trabajadores,
+                        hayDeficit: asignados < area.max_trabajadores
+                    });
+                }
+
                 if (asignados < area.max_trabajadores) {
                     alertas.push({
                         tipo: 'COBERTURA',
                         codigo: 'DEFICIT_PERSONAL',
                         fecha: fechaStr,
                         id_area: area.id_area,
+                        area: area.id_area,
                         mensaje: `Área "${area.nombre_area}" tiene déficit: ${asignados}/${area.max_trabajadores}`,
                         datos_completos: {
                             requeridos: area.max_trabajadores,
@@ -432,8 +432,66 @@ export const validarProgramacion = async (req: Request, res: Response) => {
                 }
             }
         }
-        res.json({ success: true, data: alertas });
+
+
+        if (programacion.length > 0) {
+            const empleadosIds = [...new Set(programacion.map(p => p.id_empleado))];
+
+            const novedades = await prisma.detalleNovedad.findMany({
+                where: {
+                    fecha: { gte: fechaInicio, lte: fechaFin },
+                    novedad_empleado: { id_empleado: { in: empleadosIds } }
+                },
+                include: { novedad_empleado: true }
+            });
+
+            for (const prog of programacion) {
+                const fechaStr = new Date(prog.fecha).toISOString().split('T')[0];
+                const conflicto = novedades.find(nov =>
+                    nov.novedad_empleado.id_empleado === prog.id_empleado &&
+                    new Date(nov.fecha).toISOString().split('T')[0] === fechaStr
+                );
+
+                if (conflicto) {
+                    alertas.push({
+                        tipo: 'NOVEDAD',
+                        fecha: fechaStr,
+                        id_empleado: prog.id_empleado,
+                        empleado: prog.id_empleado,
+                        mensaje: 'Conflicto: Turno y novedad simultánea'
+                    });
+                }
+            }
+        }
+
+        console.log('⚠️ ALERTAS GENERADAS:', alertas.length);
+        console.log('📋 ESTRUCTURA PRIMERA ALERTA:', alertas[0]);
+
+        const tiposAlertas = alertas.reduce((acc, a) => {
+            acc[a.tipo] = (acc[a.tipo] || 0) + 1;
+            return acc;
+        }, {});
+        console.log('📊 DISTRIBUCIÓN:', tiposAlertas);
+
+
+        const alertasAgrupadas = alertas.reduce((acc: any[], alerta: any) => {
+            const fechaKey = alerta.fecha;
+            let grupo = acc.find(g => g.fecha === fechaKey);
+
+            if (!grupo) {
+                grupo = { fecha: fechaKey, alertas: [] };
+                acc.push(grupo);
+            }
+
+            grupo.alertas.push(alerta);
+            return acc;
+        }, []);
+
+        console.log('📦 ALERTAS AGRUPADAS:', alertasAgrupadas.length, 'grupos');
+
+        res.json({ success: true, data: alertasAgrupadas });
     } catch (error: any) {
+        console.error('❌ ERROR EN VALIDACIÓN:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 };

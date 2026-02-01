@@ -7,6 +7,18 @@ export const guardarAlertas = async (req: Request, res: Response) => {
     try {
         const { mes, anio, alertas } = req.body;
 
+
+        console.log('💾 GUARDAR ALERTAS - RECIBIDO:', {
+            mes,
+            anio,
+            cantidadAlertas: Array.isArray(alertas) ? alertas.length : 0,
+            timestamp: new Date().toISOString()
+        });
+
+
+        console.log('📋 PRIMERA ALERTA RECIBIDA:', alertas[0]);
+        console.log('🔍 ¿TIENE PROPIEDAD alertas?:', alertas[0]?.alertas !== undefined);
+
         if (!mes || !anio || !Array.isArray(alertas)) {
             return res.status(400).json({
                 success: false,
@@ -15,9 +27,16 @@ export const guardarAlertas = async (req: Request, res: Response) => {
         }
 
         const dataParaInsertar: any[] = [];
+
+
+        let iteracionesGrupo = 0;
+        let iteracionesAlerta = 0;
+
         alertas.forEach((grupo: any) => {
+            iteracionesGrupo++;
             if (grupo.alertas && Array.isArray(grupo.alertas)) {
                 grupo.alertas.forEach((alerta: any) => {
+                    iteracionesAlerta++;
                     dataParaInsertar.push({
                         mes: Number(mes),
                         anio: Number(anio),
@@ -33,19 +52,27 @@ export const guardarAlertas = async (req: Request, res: Response) => {
             }
         });
 
+
+        console.log('🔄 PROCESAMIENTO:', {
+            gruposIterados: iteracionesGrupo,
+            alertasIteradas: iteracionesAlerta,
+            registrosParaInsertar: dataParaInsertar.length
+        });
+
         const resultado = await prisma.$transaction(async (tx) => {
-            await tx.alertasProgramacion.deleteMany({
-                where: {
-                    mes: Number(mes),
-                    anio: Number(anio)
-                }
+            const eliminadas = await tx.alertasProgramacion.deleteMany({
+                where: { mes: Number(mes), anio: Number(anio) }
             });
+            console.log('🗑️ ALERTAS ELIMINADAS:', eliminadas.count);
 
             if (dataParaInsertar.length > 0) {
-                return await tx.alertasProgramacion.createMany({
+                const insertadas = await tx.alertasProgramacion.createMany({
                     data: dataParaInsertar
                 });
+                console.log('✅ ALERTAS INSERTADAS:', insertadas.count);
+                return insertadas;
             }
+            console.log('⚠️ NO HAY ALERTAS PARA INSERTAR');
             return { count: 0 };
         });
 
@@ -55,7 +82,7 @@ export const guardarAlertas = async (req: Request, res: Response) => {
             data: { total: resultado.count }
         });
     } catch (error: any) {
-        console.error('Error al guardar alertas:', error);
+        console.error('❌ ERROR AL GUARDAR ALERTAS:', error);
         res.status(500).json({
             success: false,
             message: 'Error al guardar las alertas',

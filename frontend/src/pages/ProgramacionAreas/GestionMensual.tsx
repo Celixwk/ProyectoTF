@@ -17,7 +17,7 @@ import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreads
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
-import { validarMovimiento, validarCapacidadArea } from '@/utils/ValidadorMovimientos';
+import { validarMovimiento } from '@/utils/ValidadorMovimientos';
 import { ModalConfirmacionCambio } from '@/components/ModalConfirmacionCambio';
 
 interface CambioLocal {
@@ -150,21 +150,22 @@ export default function GestionMensual() {
     }, [validacionAlertas]);
 
     const programacion = useMemo(() => {
-        let base = !programacionOriginal || cambiosLocales.length === 0
-            ? [...programacionOriginal]
-            : programacionOriginal.map((asig: any) => {
-                const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
-                if (cambio) {
-                    if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
-                    return { ...asig, id_area: cambio.id_area_destino, id_turno: cambio.id_turno_destino, fecha: cambio.fecha, _modificado: true };
-                }
-                return asig;
-            }).filter((asig: any) => !asig._eliminado);
+        if (!programacionOriginal) return [];
+        let base = programacionOriginal.map((asig: any) => {
+            const cambio = cambiosLocales.find(c =>
+                c.id_detalle_programacion === asig.id_detalle_programacion && asig.id_detalle_programacion !== 0
+            );
+            if (cambio) {
+                if (cambio.id_area_destino === -1) return { ...asig, _eliminado: true };
+                return { ...asig, id_area: cambio.id_area_destino, id_turno: cambio.id_turno_destino, fecha: cambio.fecha, _modificado: true };
+            }
+            return asig;
+        }).filter((asig: any) => !asig._eliminado);
 
-        const nuevosTurnos = cambiosLocales
+        const nuevosDesdeRefuerzo = cambiosLocales
             .filter(c => c.id_area_origen === -1 && c.id_area_destino !== -1)
             .map(c => ({
-                id_detalle_programacion: c.id_detalle_programacion,
+                id_detalle_programacion: 0,
                 id_empleado: c.id_empleado,
                 nombre_empleado: c.empleado,
                 empleado: { nombre_completo: c.empleado, id_empleado: c.id_empleado },
@@ -174,7 +175,7 @@ export default function GestionMensual() {
                 _modificado: true
             }));
 
-        base = [...base, ...nuevosTurnos];
+        base = [...base, ...nuevosDesdeRefuerzo];
 
         if (filtroEmpleado.trim()) {
             const search = filtroEmpleado.toLowerCase();
@@ -186,10 +187,8 @@ export default function GestionMensual() {
     }, [programacionOriginal, cambiosLocales, filtroEmpleado]);
 
     const obtenerProgramacionParaValidar = () => {
-        let base = [...programacionOriginal];
-
-        base = base.map((asig: any) => {
-            const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion);
+        let base = programacionOriginal.map((asig: any) => {
+            const cambio = cambiosLocales.find(c => c.id_detalle_programacion === asig.id_detalle_programacion && asig.id_detalle_programacion !== 0);
             if (cambio) {
                 if (cambio.id_area_destino === -1) return null;
                 return { ...asig, id_area: cambio.id_area_destino, id_turno: cambio.id_turno_destino, fecha: cambio.fecha };
@@ -247,8 +246,7 @@ export default function GestionMensual() {
         const nombre = asignacion.nombre_empleado || asignacion.empleado?.nombre_completo || asignacion.nombre_completo || 'Empleado';
 
         if (!idEmp || isNaN(idEmp)) {
-            console.error("⛔ ERROR DRAG: ID Inválido", asignacion);
-            toast.error("Error de datos: ID de empleado no encontrado. Recargue la página.");
+            toast.error("Error de datos: ID de empleado no encontrado.");
             e.preventDefault();
             return;
         }
@@ -262,18 +260,6 @@ export default function GestionMensual() {
         });
 
         e.dataTransfer.effectAllowed = 'move';
-
-        const ghost = document.createElement('div');
-        ghost.textContent = nombre;
-        ghost.style.position = 'absolute';
-        ghost.style.top = '-1000px';
-        ghost.style.backgroundColor = 'white';
-        ghost.style.padding = '5px';
-        ghost.style.border = '1px solid black';
-        ghost.style.zIndex = '1000';
-        document.body.appendChild(ghost);
-        e.dataTransfer.setDragImage(ghost, 0, 0);
-        setTimeout(() => document.body.removeChild(ghost), 0);
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -281,14 +267,16 @@ export default function GestionMensual() {
         e.dataTransfer.dropEffect = 'move';
     };
 
-    const aplicarCambios = (cambios: CambioLocal[]) => {
+    const aplicarCambios = (nuevos: CambioLocal[]) => {
         setCambiosLocales(prev => {
-            const idsACambiar = new Set(cambios.map(c => c.id_detalle_programacion));
-            const filtrados = prev.filter(c => !idsACambiar.has(c.id_detalle_programacion) || c.id_detalle_programacion === 0);
-            return [...filtrados, ...cambios];
+            const mapa = new Map(prev.map(c => [`${c.id_empleado}-${c.id_detalle_programacion}`, c]));
+            nuevos.forEach(n => {
+                mapa.set(`${n.id_empleado}-${n.id_detalle_programacion}`, n);
+            });
+            return Array.from(mapa.values());
         });
         setEmpleadoArrastrado(null);
-        toast.success(`Cambios aplicados`);
+        toast.success(`Cambio registrado`);
     };
 
     const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
@@ -298,10 +286,7 @@ export default function GestionMensual() {
         const fechaNorm = fechaDestino.split('T')[0];
         const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaNorm;
 
-
-        if (empleadoArrastrado.id_area_origen === idAreaDestino &&
-            empleadoArrastrado.id_turno_origen === idTurnoDestino &&
-            fechaOrigen === fechaNorm) {
+        if (empleadoArrastrado.id_area_origen === idAreaDestino && empleadoArrastrado.id_turno_origen === idTurnoDestino && fechaOrigen === fechaNorm) {
             setEmpleadoArrastrado(null);
             return;
         }
@@ -312,13 +297,9 @@ export default function GestionMensual() {
         const areaInfo = areas.find(a => a.id_area === idAreaDestino);
         const maxPermitido = areaInfo?.max_trabajadores ?? 0;
 
-        const empleadosEnAreaHoy = programacionBase.filter(p =>
-            Number(p.id_area) === Number(idAreaDestino) && p.fecha.split('T')[0] === fechaNorm
-        );
-
-        const esMovimientoMismaAreaYDia = empleadoArrastrado.id_area_origen === idAreaDestino && fechaOrigen === fechaNorm;
-        const ocupacionGlobal = esMovimientoMismaAreaYDia ? empleadosEnAreaHoy.length : empleadosEnAreaHoy.length + 1;
-
+        const empleadosEnAreaHoy = programacionBase.filter(p => Number(p.id_area) === Number(idAreaDestino) && p.fecha.split('T')[0] === fechaNorm);
+        const esMismoDiaYArea = empleadoArrastrado.id_area_origen === idAreaDestino && fechaOrigen === fechaNorm;
+        const ocupacionGlobal = esMismoDiaYArea ? empleadosEnAreaHoy.length : empleadosEnAreaHoy.length + 1;
 
         if (maxPermitido > 0 && ocupacionGlobal > maxPermitido) {
             const destinoDirecto = empleadosEnAreaHoy.find(p => Number(p.id_turno) === Number(idTurnoDestino));
@@ -335,28 +316,12 @@ export default function GestionMensual() {
             cambiosAGenerar.push({ id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0, empleado: empleadoArrastrado.nombre_empleado, id_empleado: empleadoArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino });
         }
 
-
         let advertenciasFinales: string[] = [];
         for (const cambio of cambiosAGenerar) {
             const infoEmp = empleadosInfo.find(e => Number(e.id_empleado) === Number(cambio.id_empleado));
-
-
-            const advs = validarMovimiento(
-                cambio.id_empleado,
-                cambio.fecha,
-                cambio.id_area_destino,
-                programacionBase,
-                infoEmp,
-                cambio.fecha === fechaNorm && cambio.id_area_origen === idAreaDestino ? fechaOrigen : cambio.fecha,
-                cambio.id_area_origen
-            );
-
-            // Limpiar y asegurar que el mensaje tenga el nombre correcto del empleado
+            const advs = validarMovimiento(cambio.id_empleado, cambio.fecha, cambio.id_area_destino, programacionBase, infoEmp, cambio.id_empleado === empleadoArrastrado.id_empleado ? fechaOrigen : cambio.fecha, cambio.id_area_origen);
             advs.forEach(msg => {
-                let limpio = msg.replace(/^⛔\s(PROHIBIDO|CONFLICTO|FATIGA):\s/i, '');
-                // Si el mensaje limpio aún contiene "El empleado", lo reemplazamos por el nombre real
-                limpio = limpio.replace(/El empleado/i, cambio.empleado);
-
+                let limpio = msg.replace(/^⛔\s(PROHIBIDO|CONFLICTO|FATIGA):\s/i, '').replace(/El empleado/i, cambio.empleado);
                 if (msg.includes('PROHIBIDO')) advertenciasFinales.push(`⛔ PROHIBIDO: ${limpio}`);
                 else if (msg.includes('CONFLICTO')) advertenciasFinales.push(`⛔ CONFLICTO: ${limpio}`);
                 else if (msg.includes('FATIGA')) advertenciasFinales.push(`⛔ FATIGA: ${limpio}`);
@@ -370,27 +335,21 @@ export default function GestionMensual() {
             setEmpleadoArrastrado(null);
             return;
         }
-
         aplicarCambios(cambiosAGenerar);
     };
 
     const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
         e.preventDefault();
-        if (!empleadoArrastrado) return;
-        if (!empleadoArrastrado.id_empleado) return;
-
-        if (empleadoArrastrado.id_area_origen === -1) {
+        if (!empleadoArrastrado || !empleadoArrastrado.id_empleado) return;
+        if (empleadoArrastrado.id_area_origen === -1 && empleadoArrastrado.fecha === fechaDestino) {
             setEmpleadoArrastrado(null);
             return;
         }
-
         const cambioId = `${Date.now()}-${Math.random()}`;
-        const nombreArr = empleadoArrastrado.nombre_empleado;
-
         const nuevoCambio: CambioLocal = {
             id: cambioId,
-            id_detalle_programacion: empleadoArrastrado.id_detalle_programacion,
-            empleado: nombreArr,
+            id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
+            empleado: empleadoArrastrado.nombre_empleado,
             id_empleado: empleadoArrastrado.id_empleado,
             fecha: fechaDestino,
             id_area_origen: empleadoArrastrado.id_area_origen,
@@ -398,9 +357,7 @@ export default function GestionMensual() {
             id_area_destino: -1,
             id_turno_destino: -1
         };
-
-        setCambiosLocales(prev => [...prev, nuevoCambio]);
-        setEmpleadoArrastrado(null);
+        aplicarCambios([nuevoCambio]);
     };
 
     const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
@@ -410,31 +367,58 @@ export default function GestionMensual() {
 
     const handleGuardarCambios = async () => {
         try {
-            const cambiosInvalidos = cambiosLocales.filter(c => !c.id_empleado);
-            if (cambiosInvalidos.length > 0) {
-                toast.error(`Error: Hay ${cambiosInvalidos.length} cambios sin ID. Revierta.`);
-                return;
-            }
+            if (cambiosLocales.length === 0) return;
 
-            toast.loading('Guardando cambios...');
+            console.log('🎯 INICIO GUARDADO:', new Date().toISOString());
+            toast.loading('Sincronizando cambios y revisando cobertura...');
+
+
+            console.log('💾 Guardando cambios físicos...');
             await programacionService.guardarCambios(cambiosLocales);
+            console.log('✅ Cambios guardados');
+
+
+            console.log('⏳ Pausa de 800ms...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+            console.log('✅ Pausa completada');
+
 
             const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
             const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-            const nuevasAlertas = await programacionService.validarPeriodo(inicio, fin);
-            await alertasService.guardar(mes, anio, nuevasAlertas);
+
+            console.log('🔍 Validando período:', { inicio, fin });
+            const alertasNuevas = await programacionService.validarPeriodo(inicio, fin);
+            console.log('📊 ALERTAS RECIBIDAS:', {
+                cantidad: alertasNuevas?.length || 0,
+                estructura: alertasNuevas?.[0],
+                esArray: Array.isArray(alertasNuevas)
+            });
+
+
+            console.log('💾 Enviando alertas a guardar...');
+            await alertasService.guardar(mes, anio, alertasNuevas);
+            console.log('✅ Alertas guardadas');
+
 
             setCambiosLocales([]);
-            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
-            queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] });
-            queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
+            queryClient.removeQueries({ queryKey: ['alertas-programacion'] });
+
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] }),
+                queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] }),
+                queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] })
+            ]);
+
+            refetchAlertas();
+            refetch();
 
             toast.dismiss();
-            toast.success('Cambios guardados correctamente');
-        } catch (error) {
+            toast.success('Cambios aplicados y alertas actualizadas');
+            console.log('🎉 PROCESO COMPLETADO:', new Date().toISOString());
+        } catch (error: any) {
+            console.error('❌ ERROR EN handleGuardarCambios:', error);
             toast.dismiss();
-            toast.error('Error al guardar');
-            console.error(error);
+            toast.error('Error en la sincronización');
         }
     };
 
@@ -509,17 +493,10 @@ export default function GestionMensual() {
                                     <Button variant="ghost" size="sm" onClick={() => setPaso('seleccion')}><ChevronLeft className="mr-2 h-4 w-4" /> Atrás</Button>
                                     <h2 className="text-lg font-bold text-slate-800 hidden md:block">{meses[mes - 1]} {anio}</h2>
                                 </div>
-
                                 <div className="flex-1 max-w-sm relative">
                                     <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input
-                                        placeholder="Buscar..."
-                                        className="pl-10 h-9"
-                                        value={filtroEmpleado}
-                                        onChange={(e) => setFiltroEmpleado(e.target.value)}
-                                    />
+                                    <Input placeholder="Buscar..." className="pl-10 h-9" value={filtroEmpleado} onChange={(e) => setFiltroEmpleado(e.target.value)} />
                                 </div>
-
                                 <div className="flex gap-2">
                                     {cambiosLocales.length > 0 ? (
                                         <>
@@ -527,11 +504,7 @@ export default function GestionMensual() {
                                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleGuardarCambios}><Save className="mr-2 h-4 w-4" /> Guardar ({cambiosLocales.length})</Button>
                                         </>
                                     ) : (
-                                        <BotonEliminarProgramacion
-                                            mes={mes}
-                                            anio={anio}
-                                            onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }}
-                                        />
+                                        <BotonEliminarProgramacion mes={mes} anio={anio} onSuccess={() => { setCambiosLocales([]); setPaso('seleccion'); queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] }); }} />
                                     )}
                                     <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</Button>
                                 </div>
@@ -539,44 +512,15 @@ export default function GestionMensual() {
 
                             <div className="space-y-6 pt-6 pb-40">
                                 {!bannerIgnorado && fechaConflictoPersistente && (
-                                    <BannerNecesidadRegenerar
-                                        fechaCorte={fechaConflictoPersistente}
-                                        mes={mes}
-                                        anio={anio}
-                                        programacionOriginal={programacionOriginal}
-                                        areas={areas}
-                                        modo="gestion"
-                                        onSuccess={(res) => {
-                                            refetch();
-                                            refetchNoAsignados();
-                                            refetchAlertas();
-                                            setBannerIgnorado(false);
-                                            const afectadas = res?.fechasProcesadas || infoDias
-                                                .filter(d => d.objetoFecha >= fechaConflictoPersistente)
-                                                .map(d => d.fechaISO);
-                                            setFechasRecienGeneradas(afectadas);
-                                            toast.success('Programación regenerada exitosamente');
-                                        }}
-                                        onIgnore={() => setBannerIgnorado(true)}
-                                    />
+                                    <BannerNecesidadRegenerar fechaCorte={fechaConflictoPersistente} mes={mes} anio={anio} programacionOriginal={programacionOriginal} areas={areas} modo="gestion" onSuccess={(res) => { refetch(); refetchNoAsignados(); refetchAlertas(); setBannerIgnorado(false); const afectadas = res?.fechasProcesadas || infoDias.filter(d => d.objetoFecha >= fechaConflictoPersistente).map(d => d.fechaISO); setFechasRecienGeneradas(afectadas); toast.success('Programación regenerada'); }} onIgnore={() => setBannerIgnorado(true)} />
                                 )}
 
-                                {alertasSeparadas.alertasEmpleados.length > 0 && (
-                                    <VisualizacionAlertas alertas={alertasMotor} />
-                                )}
+                                {alertasSeparadas.alertasEmpleados.length > 0 && <VisualizacionAlertas alertas={alertasMotor} />}
 
                                 <div className="space-y-8">
                                     {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
                                         <div key={area.id_area} className="space-y-4">
-                                            {alertasSeparadas.alertasPorArea[area.id_area] && (
-                                                <VisualizacionAlertas
-                                                    alertas={alertasMotor}
-                                                    mostrarPorArea={true}
-                                                    idArea={area.id_area}
-                                                    nombreArea={area.nombre_area}
-                                                />
-                                            )}
-
+                                            {alertasSeparadas.alertasPorArea[area.id_area] && <VisualizacionAlertas alertas={alertasMotor} mostrarPorArea={true} idArea={area.id_area} nombreArea={area.nombre_area} />}
                                             <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
                                                 <div className="bg-slate-800 text-white px-5 py-2 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
                                                 <div className="overflow-x-auto">
@@ -588,15 +532,10 @@ export default function GestionMensual() {
                                                                     const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
                                                                     const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     return (
-                                                                        <th key={dia.fechaISO} className={cn(
-                                                                            "border p-1 text-center text-[9px] min-w-[100px] transition-colors duration-500",
-                                                                            esSucio ? 'bg-red-50/50 border-x-red-100' : 'text-slate-500',
-                                                                            esRegenerado && "bg-emerald-100 border-emerald-300"
-                                                                        )}>
+                                                                        <th key={dia.fechaISO} className={cn("border p-1 text-center text-[9px] min-w-[100px]", esSucio ? 'bg-red-50/50' : 'text-slate-500', esRegenerado && "bg-emerald-100")}>
                                                                             <div className="flex flex-col relative">
-                                                                                <span className={cn("font-bold", esSucio ? 'text-red-600 font-black' : 'text-indigo-600', esRegenerado && "text-emerald-700")}>{dia.nombreDia}</span>
-                                                                                <span className={cn(esSucio ? 'text-red-700 font-black text-[9px]' : '', esRegenerado && "text-emerald-600")}>{dia.numero}</span>
-                                                                                {esSucio && <div className="absolute -top-2 left-0 w-full h-0.5 bg-red-400" />}
+                                                                                <span className={cn("font-bold", esSucio ? 'text-red-600' : 'text-indigo-600')}>{dia.nombreDia}</span>
+                                                                                <span>{dia.numero}</span>
                                                                             </div>
                                                                         </th>
                                                                     );
@@ -613,10 +552,10 @@ export default function GestionMensual() {
                                                                             const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
                                                                             const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
                                                                             return (
-                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px] transition-all duration-300", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
+                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px]", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
                                                                                     <div className="flex flex-col gap-1">
                                                                                         {asignados.map((asig: any, idx: number) => (
-                                                                                            <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer transition-all shadow-sm bg-white border-slate-200 truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500 font-bold')}>
+                                                                                            <div key={idx} draggable onDragStart={(e) => handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500')}>
                                                                                                 {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                             </div>
                                                                                         ))}
@@ -636,34 +575,22 @@ export default function GestionMensual() {
                                 </div>
                             </div>
 
-                            <div className="sticky bottom-0 z-40 bg-white border-t-2 border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                            <div className="sticky bottom-0 z-40 bg-white border-t-2 border-slate-200 shadow-md">
                                 <div className="overflow-x-auto">
                                     <table className="w-full border-collapse">
                                         <tbody>
                                             <tr className="bg-slate-50">
-                                                <td className="border p-2 text-[10px] font-bold w-24 sticky left-0 bg-slate-100 z-10 text-slate-700">REFUERZOS</td>
+                                                <td className="border p-2 text-[10px] font-bold w-24 sticky left-0 bg-slate-100 z-10">REFUERZOS</td>
                                                 {infoDias.map((dia) => {
                                                     const noAsignadosBase = noAsignadosPorDia[dia.fechaISO] || [];
-                                                    const movidosAqui = cambiosLocales.filter(c => c.fecha === dia.fechaISO && c.id_area_destino === -1);
-                                                    const idsMovidosAqui = new Set(movidosAqui.map(c => c.id_empleado));
-
-                                                    const empleadosMovidosAqui = programacionOriginal
-                                                        .filter((p: any) => idsMovidosAqui.has(p.id_empleado))
-                                                        .map((p: any) => ({
-                                                            ...p,
-                                                            nombre_completo: p.nombre_empleado || p.empleado?.nombre_completo
-                                                        }));
-
-                                                    const poolRefuerzos = [...noAsignadosBase, ...empleadosMovidosAqui];
+                                                    const poolRefuerzos = [...noAsignadosBase];
                                                     const enGrid = new Set(programacion.filter((p: any) => p.fecha.split('T')[0] === dia.fechaISO).map((p: any) => p.id_empleado));
                                                     const listaVisible = poolRefuerzos.filter(e => !enGrid.has(e.id_empleado));
-                                                    const unicos = Array.from(new Map(listaVisible.map((item: any) => [item.id_empleado, item])).values());
-
                                                     return (
                                                         <td key={dia.fechaISO} className="border p-1 bg-white min-w-[100px]" onDragOver={handleDragOver} onDrop={(e) => handleDropRefuerzo(e, dia.fechaISO)}>
                                                             <div className="flex flex-col gap-1 min-h-[30px]">
-                                                                {unicos.map((emp: any) => (
-                                                                    <div key={emp.id_empleado} draggable onDragStart={(e) => handleDragStart(e, { ...emp, id_detalle_programacion: emp.id_detalle_programacion || 99999999 }, -1, -1)} onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)} className="px-1 py-0.5 border border-amber-200 rounded text-[8px] bg-amber-50 cursor-pointer hover:bg-amber-100 truncate max-w-[95px]">
+                                                                {listaVisible.map((emp: any) => (
+                                                                    <div key={emp.id_empleado} draggable onDragStart={(e) => handleDragStart(e, { ...emp, id_detalle_programacion: emp.id_detalle_programacion || 0 }, -1, -1)} onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, dia.fechaISO)} className="px-1 py-0.5 border border-amber-200 rounded text-[8px] bg-amber-50 cursor-pointer hover:bg-amber-100 truncate">
                                                                         {emp.nombre_completo}
                                                                     </div>
                                                                 ))}
@@ -680,29 +607,8 @@ export default function GestionMensual() {
                     )}
                 </div>
             )}
-            <ModalNovedadRapida
-                isOpen={modalNovedadOpen}
-                onClose={() => setModalNovedadOpen(false)}
-                empleado={empleadoSeleccionado}
-                fechaSeleccionada={fechaParaNovedad}
-                onSuccess={(fechaCorte) => {
-                    refetch();
-                    refetchNoAsignados();
-                    refetchAlertas();
-                }}
-            />
-            <ModalConfirmacionCambio
-                open={!!cambioPendiente}
-                onOpenChange={(open) => !open && setCambioPendiente(null)}
-                advertencias={advertenciasPendientes}
-                onConfirm={() => {
-                    if (cambioPendiente) {
-                        aplicarCambios(cambioPendiente);
-                        setCambioPendiente(null);
-                        setAdvertenciasPendientes([]);
-                    }
-                }}
-            />
+            <ModalNovedadRapida isOpen={modalNovedadOpen} onClose={() => setModalNovedadOpen(false)} empleado={empleadoSeleccionado} fechaSeleccionada={fechaParaNovedad} onSuccess={() => { refetch(); refetchNoAsignados(); refetchAlertas(); }} />
+            <ModalConfirmacionCambio open={!!cambioPendiente} onOpenChange={(open) => !open && setCambioPendiente(null)} advertencias={advertenciasPendientes} onConfirm={() => { if (cambioPendiente) { aplicarCambios(cambioPendiente); setCambioPendiente(null); setAdvertenciasPendientes([]); } }} />
         </div>
     );
 }
