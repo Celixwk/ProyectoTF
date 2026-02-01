@@ -7,6 +7,21 @@ let mainWindow;
 let serverProcess;
 const isDev = !app.isPackaged;
 
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    console.log('⚠️ Ya hay una instancia de la aplicación corriendo');
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
+
 const userDataPath = app.getPath('userData');
 const pgDataDir = path.join(userDataPath, 'pgdata');
 const pgBinDir = isDev
@@ -70,7 +85,6 @@ async function ensureDatabaseExists() {
         psql.on('close', (code) => {
             console.log('📍 ensureDatabaseExists - psql cerrado con código:', code);
             console.log('📍 ensureDatabaseExists - Output:', output);
-
 
             if (output.includes('(1 row)') || output.includes('(1 fila)') || output.includes('1')) {
                 console.log(`✅ Base de datos "${DB_NAME}" ya existe`);
@@ -143,7 +157,7 @@ async function stopPostgres() {
     const pgctlPath = path.join(pgBinDir, 'pg_ctl.exe');
 
     return new Promise((resolve) => {
-        const pgctl = spawn(pgctlPath, ['stop', '-D', pgDataDir, '-m', 'fast']);
+        const pgctl = spawn(pgctlPath, ['stop', '-D', pgDataDir, '-m', 'fast', '-w']);
 
         pgctl.stdout.on('data', (data) => console.log(`[PGCTL-STOP-OUT] ${data}`));
         pgctl.stderr.on('data', (data) => console.log(`[PGCTL-STOP-ERR] ${data}`));
@@ -154,7 +168,7 @@ async function stopPostgres() {
             resolve();
         });
 
-        setTimeout(() => resolve(), 2000);
+        setTimeout(() => resolve(), 5000);
     });
 }
 
@@ -188,11 +202,9 @@ function startExpressServer() {
             FRONTEND_PATH: frontendPath
         },
         cwd: path.dirname(serverPath),
-
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: false
     });
-
 
     serverProcess.stdout.on('data', (data) => {
         console.log('[EXPRESS-OUT]', data.toString().trim());
@@ -230,7 +242,6 @@ async function waitForServer(url, timeout) {
             const result = await new Promise((resolve, reject) => {
                 const req = http.get(url, (res) => {
                     console.log(`📍 waitForServer - Intento ${attempts}: Status ${res.statusCode}`);
-
 
                     res.on('data', () => { });
                     res.on('end', () => {
@@ -333,7 +344,6 @@ async function createWindow() {
         app.quit();
     }
 }
-
 
 app.whenReady().then(createWindow);
 
