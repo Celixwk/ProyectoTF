@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/client';
 import { capa6_generarProgramacionDia } from '../services/programacion/capa6.integracion';
 
 const prisma = new PrismaClient();

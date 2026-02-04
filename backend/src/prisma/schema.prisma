@@ -1,6 +1,7 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["views"]
+  output          = "../generated/client"
 }
 
 datasource db {
@@ -138,19 +139,19 @@ model Descanso {
 }
 
 model Usuario {
-  id_usuario       Int               @id @default(autoincrement())
-  usuario          String            @unique @db.VarChar(50)
-  contrasenia      String            @db.VarChar(255)
-  tipo_usuario     String            @db.VarChar(20)
-  nombre_completo  String            @db.VarChar(120)
-  estado           String?           @default("Activo") @db.VarChar(10)
-  fecha_creacion   DateTime?         @default(now()) @db.Timestamp(6)
-  id_empleado      Int?              @unique
-  created_at       DateTime?         @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?         @default(now()) @updatedAt @db.Timestamp(6)
-  novedad_empleado NovedadEmpleado[]
+  id_usuario           Int                   @id @default(autoincrement())
+  usuario              String                @unique @db.VarChar(50)
+  contrasenia          String                @db.VarChar(255)
+  tipo_usuario         String                @db.VarChar(20)
+  nombre_completo      String                @db.VarChar(120)
+  estado               String?               @default("Activo") @db.VarChar(10)
+  fecha_creacion       DateTime?             @default(now()) @db.Timestamp(6)
+  id_empleado          Int?                  @unique
+  created_at           DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?             @default(now()) @updatedAt @db.Timestamp(6)
+  novedad_empleado     NovedadEmpleado[]
   detalle_programacion DetalleProgramacion[]
-  empleado         Empleado?         @relation(fields: [id_empleado], references: [id_empleado], onUpdate: NoAction)
+  empleado             Empleado?             @relation(fields: [id_empleado], references: [id_empleado], onUpdate: NoAction)
 
   @@index([id_empleado], map: "idx_usuario_empleado")
   @@map("usuario")
@@ -211,15 +212,15 @@ model DetalleProgramacion {
   updated_at              DateTime? @default(now()) @updatedAt @db.Timestamp(6)
   id_empleado             Int
 
-  area                    Area?     @relation(fields: [id_area], references: [id_area])
-  empleado                Empleado  @relation(fields: [id_empleado], references: [id_empleado])
-  labor_mes               LaborMes? @relation(fields: [id_labor_mes], references: [id_labor_mes])
-  turno                   Turno?    @relation(fields: [id_turno], references: [id_turno])
-  usuario_registro        Usuario?  @relation(fields: [id_usuario_registro], references: [id_usuario])
-  recargo                 Recargo[]
+  area             Area?     @relation(fields: [id_area], references: [id_area])
+  empleado         Empleado  @relation(fields: [id_empleado], references: [id_empleado])
+  labor_mes        LaborMes? @relation(fields: [id_labor_mes], references: [id_labor_mes])
+  turno            Turno?    @relation(fields: [id_turno], references: [id_turno])
+  usuario_registro Usuario?  @relation(fields: [id_usuario_registro], references: [id_usuario])
+  recargo          Recargo[]
 
-  id_usuario_registro     Int?
-  origen_registro         String?   @default("Sistema") @db.VarChar(20)
+  id_usuario_registro Int?
+  origen_registro     String? @default("Sistema") @db.VarChar(20)
 
   @@unique([id_empleado, fecha], name: "uq_empleado_fecha")
   @@index([fecha], map: "idx_detalle_prog_fecha")
@@ -367,12 +368,12 @@ view vw_novedades_completas {
 }
 
 view vw_empleados_activos_areas {
-  id_empleado      Int?      @unique
+  id_empleado      Int?     @unique
   nombre_completo  String?
-  cedula           String?   @db.VarChar(20)
+  cedula           String?  @db.VarChar(20)
   estado           Boolean?
-  nombre_cargo     String?   @db.VarChar(100)
-  salario_base     Decimal?  @db.Decimal(10, 2)
+  nombre_cargo     String?  @db.VarChar(100)
+  salario_base     Decimal? @db.Decimal(10, 2)
   areas_permitidas Int[]
   cantidad_areas   BigInt?
 }

@@ -7,7 +7,6 @@ let mainWindow;
 let serverProcess;
 const isDev = !app.isPackaged;
 
-
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -193,17 +192,22 @@ function startExpressServer() {
         return;
     }
 
-    console.log('📍 startExpressServer - Spawning node process...');
-    serverProcess = spawn('node', [serverPath], {
+    console.log('📍 startExpressServer - Usando Node.js embebido de Electron');
+    console.log('📍 startExpressServer - Ejecutable:', process.execPath);
+
+    serverProcess = spawn(process.execPath, [serverPath], {
         env: {
             ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
             NODE_ENV: 'production',
             PORT: '5000',
+            DATABASE_URL: process.env.DATABASE_URL,
             FRONTEND_PATH: frontendPath
         },
         cwd: path.dirname(serverPath),
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false
+        shell: false,
+        windowsHide: true
     });
 
     serverProcess.stdout.on('data', (data) => {

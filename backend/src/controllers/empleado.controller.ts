@@ -43,15 +43,12 @@ export const empleadoController = {
         try {
             const { areas_permitidas, ...rawEmpleadoData } = req.body;
 
-            // Sanitización ligera (convertir números)
             const empleadoData = {
                 ...rawEmpleadoData,
                 edad: Number(rawEmpleadoData.edad),
                 id_cargo: Number(rawEmpleadoData.id_cargo),
-                // Si no hay area, va a Refuerzos (13)
                 id_area: rawEmpleadoData.id_area ? Number(rawEmpleadoData.id_area) : 13,
                 id_estado: 1,
-                // AHORA ES MÁS SIMPLE: Pasamos el string directo. Si es vacío, enviamos null.
                 vehiculo: rawEmpleadoData.vehiculo && rawEmpleadoData.vehiculo.trim() !== ""
                     ? rawEmpleadoData.vehiculo
                     : null
@@ -97,7 +94,6 @@ export const empleadoController = {
             if (rawEmpleadoData.id_area) empleadoData.id_area = Number(rawEmpleadoData.id_area);
             if (rawEmpleadoData.id_estado) empleadoData.id_estado = Number(rawEmpleadoData.id_estado);
 
-            // Lógica de Vehículo (String o Null)
             if (rawEmpleadoData.vehiculo !== undefined) {
                 empleadoData.vehiculo = rawEmpleadoData.vehiculo && rawEmpleadoData.vehiculo.trim() !== ""
                     ? rawEmpleadoData.vehiculo
@@ -141,10 +137,11 @@ export const empleadoController = {
     async eliminar(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            await prisma.empleado.delete({
-                where: { id_empleado: Number(id) }
+            await prisma.empleado.update({
+                where: { id_empleado: Number(id) },
+                data: { id_estado: 2 }
             });
-            res.status(200).json({ success: true, message: 'Empleado eliminado' });
+            res.status(200).json({ success: true, message: 'Empleado desactivado correctamente' });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }
@@ -194,7 +191,7 @@ export const vistasController = {
                 salario_base: emp.cargo?.salario_base || 0,
                 estado: emp.id_estado === 1,
                 sexo: emp.sexo?.trim(),
-                vehiculo: emp.vehiculo, // AHORA ES TEXTO (LA PLACA)
+                vehiculo: emp.vehiculo,
                 areas_permitidas: emp.empleado_area.map(ea => ea.id_area),
                 areas: emp.empleado_area.map(ea => ea.area.nombre_area).join(', ')
             }));

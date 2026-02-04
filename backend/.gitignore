@@ -15,3 +15,21 @@ backend/release/
 release/
 dist/
 *.exe
+# Builds y Distribuciones
+dist/
+release/
+frontend-build/
+
+# Archivos grandes
+*.zip
+*.exe
+*.dmg
+
+# Base de Datos Viva
+pgdata/
+
+# Prisma Generado
+src/generated/
+
+# Dependencias
+node_modules/
