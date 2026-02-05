@@ -160,6 +160,7 @@ export interface Cargo {
   id_cargo: number;
   nombre_cargo: string;
   salario_base: string;
+  areas_permitidas?: number[];
   created_at: string;
   updated_at: string;
 }
@@ -199,6 +200,13 @@ export interface TipoRecargo {
   codigo: string;
   nombre_recargo: string;
   porcentaje_recargo: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EstadoEmpleado {
+  id_estado: number;
+  nombre_estado: string;
   created_at: string;
   updated_at: string;
 }

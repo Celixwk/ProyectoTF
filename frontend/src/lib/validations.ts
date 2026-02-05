@@ -46,3 +46,9 @@ export const tipoNovedadSchema = z.object({
 });
 
 export type TipoNovedadFormData = z.infer<typeof tipoNovedadSchema>;
+
+export const estadoSchema = z.object({
+  nombre_estado: z.string().min(1, 'El nombre del estado es requerido').max(30, 'Máximo 30 caracteres'),
+});
+
+export type EstadoFormData = z.infer<typeof estadoSchema>;

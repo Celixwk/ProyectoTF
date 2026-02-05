@@ -9,6 +9,7 @@ import type {
   Cargo,
   Area,
   Turno,
+  EstadoEmpleado,
 } from '../types/api.types';
 
 export const authService = {
@@ -398,6 +399,26 @@ export const recargosService = {
   },
 };
 
+
+export const estadosService = {
+  listar: async () => {
+    const { data } = await api.get<{ success: boolean; data: EstadoEmpleado[] }>('/estados');
+    return data.data;
+  },
+  crear: async (estado: Partial<EstadoEmpleado>) => {
+    const { data } = await api.post('/estados', estado);
+    return data;
+  },
+  actualizar: async (id: number, estado: Partial<EstadoEmpleado>) => {
+    const { data } = await api.put(`/estados/${id}`, estado);
+    return data;
+  },
+  eliminar: async (id: number) => {
+    const { data } = await api.delete(`/estados/${id}`);
+    return data;
+  },
+};
+
 export const dashboardService = {
   obtenerEstadisticas: async (): Promise<any> => {
     const { data } = await api.get('/dashboard/estadisticas');
@@ -543,6 +564,7 @@ const services = {
   turnosService,
   novedadesService,
   recargosService,
+  estadosService,
   dashboardService,
   configuracionApi,
   calendarioService,

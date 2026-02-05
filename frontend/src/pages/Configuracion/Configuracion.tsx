@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cargosService, areasService, turnosService, novedadesService } from '@/services/api.service';
+import { cargosService, areasService, turnosService, novedadesService, estadosService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,11 +20,12 @@ import { CargoForm } from '@/components/forms/CargoForm';
 import { AreaForm } from '@/components/forms/AreaForm';
 import { TurnoForm } from '@/components/forms/TurnoForm';
 import { TipoNovedadForm } from '@/components/forms/TipoNovedadForm';
-import { Briefcase, Building2, Clock, FileText, Plus, Edit, Trash2 } from 'lucide-react';
+import { EstadoForm } from '@/components/forms/EstadoForm';
+import { Briefcase, Building2, Clock, FileText, Plus, Edit, Trash2, Activity } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
-import type { Cargo, Area, Turno, TipoNovedad } from '@/types/api.types';
-import type { CargoFormData, AreaFormData, TurnoFormData, TipoNovedadFormData } from '@/lib/validations';
+import type { Cargo, Area, Turno, TipoNovedad, EstadoEmpleado } from '@/types/api.types';
+import type { CargoFormData, AreaFormData, TurnoFormData, TipoNovedadFormData, EstadoFormData } from '@/lib/validations';
 
 export default function Configuracion() {
   const [activeTab, setActiveTab] = useState('cargos');
@@ -54,6 +55,12 @@ export default function Configuracion() {
   const [tipoNovedadDeleteDialogOpen, setTipoNovedadDeleteDialogOpen] = useState(false);
   const [tipoNovedadAEliminar, setTipoNovedadAEliminar] = useState<TipoNovedad | null>(null);
 
+  // Estados para diálogos de Estados de Empleado
+  const [estadoDialogOpen, setEstadoDialogOpen] = useState(false);
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState<EstadoEmpleado | null>(null);
+  const [estadoDeleteDialogOpen, setEstadoDeleteDialogOpen] = useState(false);
+  const [estadoAEliminar, setEstadoAEliminar] = useState<EstadoEmpleado | null>(null);
+
   // Obtener datos
   const { data: cargos, isLoading: cargosLoading } = useQuery({
     queryKey: ['cargos'],
@@ -75,13 +82,22 @@ export default function Configuracion() {
     queryFn: () => novedadesService.listarTipos(),
   });
 
+  const { data: estados, isLoading: estadosLoading } = useQuery({
+    queryKey: ['estados'],
+    queryFn: () => estadosService.listar(),
+  });
+
   // Mutaciones para Cargos
   const cargoSaveMutation = useMutation({
     mutationFn: async (data: CargoFormData) => {
+      const payload = {
+        ...data,
+        salario_base: data.salario_base.toString(),
+      };
       if (cargoSeleccionado) {
-        return cargosService.actualizar(cargoSeleccionado.id_cargo, data);
+        return cargosService.actualizar(cargoSeleccionado.id_cargo, payload);
       } else {
-        return cargosService.crear(data);
+        return cargosService.crear(payload);
       }
     },
     onSuccess: () => {
@@ -215,6 +231,41 @@ export default function Configuracion() {
     },
   });
 
+  // Mutaciones para Estados
+  const estadoSaveMutation = useMutation({
+    mutationFn: async (data: EstadoFormData) => {
+      if (estadoSeleccionado) {
+        return estadosService.actualizar(estadoSeleccionado.id_estado, data);
+      } else {
+        return estadosService.crear(data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estados'] });
+      toast.success(
+        estadoSeleccionado ? 'Estado actualizado exitosamente' : 'Estado creado exitosamente'
+      );
+      setEstadoDialogOpen(false);
+      setEstadoSeleccionado(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Error al guardar estado');
+    },
+  });
+
+  const estadoDeleteMutation = useMutation({
+    mutationFn: (id: number) => estadosService.eliminar(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['estados'] });
+      toast.success('Estado eliminado exitosamente');
+      setEstadoDeleteDialogOpen(false);
+      setEstadoAEliminar(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Error al eliminar estado');
+    },
+  });
+
   // Handlers Cargos
   const handleNuevoCargo = () => {
     setCargoSeleccionado(null);
@@ -279,6 +330,22 @@ export default function Configuracion() {
     setTipoNovedadDeleteDialogOpen(true);
   };
 
+  // Handlers Estados
+  const handleNuevoEstado = () => {
+    setEstadoSeleccionado(null);
+    setEstadoDialogOpen(true);
+  };
+
+  const handleEditarEstado = (estado: EstadoEmpleado) => {
+    setEstadoSeleccionado(estado);
+    setEstadoDialogOpen(true);
+  };
+
+  const handleEliminarEstado = (estado: EstadoEmpleado) => {
+    setEstadoAEliminar(estado);
+    setEstadoDeleteDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -309,6 +376,10 @@ export default function Configuracion() {
           <TabsTrigger value="novedades">
             <FileText className="h-4 w-4 mr-2" />
             Novedades
+          </TabsTrigger>
+          <TabsTrigger value="estados">
+            <Activity className="h-4 w-4 mr-2" />
+            Estados
           </TabsTrigger>
         </TabsList>
 
@@ -548,16 +619,15 @@ export default function Configuracion() {
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <span className="font-mono font-bold text-lg">{turno.codigo}</span>
+                              <span className="font-mono font-bold text-lg">{turno.tipo_turno}</span>
                               <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
                                 {turno.tipo_turno}
                               </span>
                               <span
-                                className={`px-2 py-1 rounded text-xs ${
-                                  turno.estado
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                }`}
+                                className={`px-2 py-1 rounded text-xs ${turno.estado
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  }`}
                               >
                                 {turno.estado ? 'Activo' : 'Inactivo'}
                               </span>
@@ -602,7 +672,7 @@ export default function Configuracion() {
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
                                     Esta acción eliminará el turno{' '}
-                                    <strong>{turno.codigo}</strong>. Esta acción no se puede
+                                    <strong>{turno.tipo_turno}</strong>. Esta acción no se puede
                                     deshacer.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
@@ -673,11 +743,10 @@ export default function Configuracion() {
                                 {tipo.nombre_novedad}
                               </span>
                               <span
-                                className={`px-2 py-1 rounded text-xs ${
-                                  tipo.afecta_pago
-                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                    : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                }`}
+                                className={`px-2 py-1 rounded text-xs ${tipo.afecta_pago
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  }`}
                               >
                                 {tipo.afecta_pago ? 'Afecta pago' : 'No afecta pago'}
                               </span>
@@ -754,6 +823,107 @@ export default function Configuracion() {
             </CardContent>
           </Card>
         </TabsContent>
+
+
+        {/* Estados Tab */}
+        <TabsContent value="estados" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Estados de Empleados</CardTitle>
+              <Button onClick={handleNuevoEstado}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo Estado
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {estadosLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <Card key={i}>
+                      <CardContent className="pt-6">
+                        <Skeleton className="h-6 w-3/4" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : estados && estados.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {estados.map((estado: EstadoEmpleado) => (
+                    <Card key={estado.id_estado}>
+                      <CardContent className="pt-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-semibold text-lg">{estado.nombre_estado}</h3>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditarEstado(estado)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog
+                              open={
+                                estadoDeleteDialogOpen &&
+                                estadoAEliminar?.id_estado === estado.id_estado
+                              }
+                              onOpenChange={(open) => {
+                                if (!open) {
+                                  setEstadoDeleteDialogOpen(false);
+                                  setEstadoAEliminar(null);
+                                }
+                              }}
+                            >
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEliminarEstado(estado)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>
+                                    ¿Estás seguro de eliminar este estado?
+                                  </AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción eliminará el estado{' '}
+                                    <strong>{estado.nombre_estado}</strong>. Esta acción no se puede
+                                    deshacer.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      estadoAEliminar &&
+                                      estadoDeleteMutation.mutate(estadoAEliminar.id_estado)
+                                    }
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    {estadoDeleteMutation.isPending
+                                      ? 'Eliminando...'
+                                      : 'Eliminar'}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay estados registrados</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Form Dialogs */}
@@ -808,6 +978,20 @@ export default function Configuracion() {
         tipoNovedad={tipoNovedadSeleccionado}
         loading={tipoNovedadSaveMutation.isPending}
       />
-    </div>
+
+
+      <EstadoForm
+        open={estadoDialogOpen}
+        onOpenChange={(open) => {
+          setEstadoDialogOpen(open);
+          if (!open) setEstadoSeleccionado(null);
+        }}
+        onSubmit={async (data) => {
+          await estadoSaveMutation.mutateAsync(data);
+        }}
+        estado={estadoSeleccionado}
+        loading={estadoSaveMutation.isPending}
+      />
+    </div >
   );
 }
