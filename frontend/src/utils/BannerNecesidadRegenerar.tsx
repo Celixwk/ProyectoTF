@@ -50,8 +50,7 @@ export function BannerNecesidadRegenerar({
                 {modo === 'gestion' ? (
                     <BotonRegeneracion
                         fechaCorte={fechaCorte}
-                        mes={mes}
-                        anio={anio}
+
                         programacionOriginal={programacionOriginal}
                         areas={areas}
                         onSuccess={onSuccess}

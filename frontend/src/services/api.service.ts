@@ -171,7 +171,7 @@ export const consultasService = {
     return Array.isArray(content) ? novedadesAplanadas : { ...content, novedades: novedadesAplanadas };
   },
 
-  obtenerRecargosCompletas: async (params?: {
+  obtenerRecargosCompletos: async (params?: {
     id_empleado?: number;
     fecha_inicio?: string;
     fecha_fin?: string;
@@ -234,6 +234,8 @@ export const consultasService = {
 
 export const vistasService = {
   obtenerEmpleadosCompletos: consultasService.obtenerEmpleadosCompletos,
+  obtenerNovedadesCompletas: consultasService.obtenerNovedadesCompletas,
+  obtenerRecargosCompletos: consultasService.obtenerRecargosCompletos,
 };
 
 export const empleadosService = {

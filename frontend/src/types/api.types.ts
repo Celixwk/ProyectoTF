@@ -76,6 +76,9 @@ export interface NovedadCompleta {
   usuario_registro?: string;
   created_at: string;
   updated_at: string;
+  id_novedad_registro?: number;
+  empleado?: string;
+  cantidad?: number | string;
 }
 
 export interface RecargoCompleto {
@@ -175,6 +178,7 @@ export interface Area {
 
 export interface Turno {
   id_turno: number;
+  codigo: string;
   hora_entrada: string;
   hora_salida: string;
   tipo_turno: string;

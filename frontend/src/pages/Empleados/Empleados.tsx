@@ -33,7 +33,7 @@ import type { EmpleadoFormData } from '@/lib/validations';
 export default function Empleados() {
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<boolean | undefined>(true);
-  const [page, setPage] = useState(1);
+  const [page] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<EmpleadoCompleto | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);

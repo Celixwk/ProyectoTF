@@ -11,13 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import { turnoSchema, type TurnoFormData } from '@/lib/validations';
 import type { Turno } from '@/types/api.types';
 
@@ -40,26 +34,24 @@ export function TurnoForm({
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
-    watch,
     reset,
   } = useForm<TurnoFormData>({
     resolver: zodResolver(turnoSchema),
     defaultValues: turno
       ? {
-          codigo: turno.codigo,
-          tipo_turno: turno.tipo_turno,
-          hora_entrada: turno.hora_entrada,
-          hora_salida: turno.hora_salida,
-          estado: turno.estado,
-        }
+        codigo: turno.codigo,
+        tipo_turno: turno.tipo_turno,
+        hora_entrada: turno.hora_entrada,
+        hora_salida: turno.hora_salida,
+        estado: turno.estado,
+      }
       : {
-          codigo: '',
-          tipo_turno: '',
-          hora_entrada: '06:00',
-          hora_salida: '14:00',
-          estado: true,
-        },
+        codigo: '',
+        tipo_turno: '',
+        hora_entrada: '06:00',
+        hora_salida: '14:00',
+        estado: true,
+      },
   });
 
   const onFormSubmit = async (data: TurnoFormData) => {

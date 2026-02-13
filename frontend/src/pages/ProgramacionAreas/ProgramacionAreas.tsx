@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
@@ -110,7 +110,7 @@ export default function ProgramacionAreas() {
 
     const turnos = useMemo(() => {
         if (!turnosRaw) return [];
-        return turnosRaw.filter(t => ![1, 2, 3].includes(t.id_turno));
+        return turnosRaw;
     }, [turnosRaw]);
 
     const infoDias = useMemo(() => {

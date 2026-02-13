@@ -21,8 +21,8 @@ export default function Novedades() {
   const { data, isLoading } = useQuery({
     queryKey: ['novedades-completas', fechaInicio, fechaFin, idEmpleado, etapa],
     queryFn: () => vistasService.obtenerNovedadesCompletas({
-      fecha_inicio: fechaInicio,
-      fecha_fin: fechaFin,
+      inicio: fechaInicio,
+      fin: fechaFin,
       id_empleado: idEmpleado,
       etapa,
     }),
@@ -38,11 +38,11 @@ export default function Novedades() {
 
   const getEtapaIcon = (etapa: string) => {
     switch (etapa) {
-      case 'aprobada':
+      case 'Aprobada':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'rechazada':
+      case 'Rechazada':
         return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'completada':
+      case 'Finalizada':
         return <CheckCircle className="h-4 w-4 text-blue-500" />;
       default:
         return <Clock className="h-4 w-4 text-yellow-500" />;
@@ -51,11 +51,11 @@ export default function Novedades() {
 
   const getEtapaColor = (etapa: string) => {
     switch (etapa) {
-      case 'aprobada':
+      case 'Aprobada':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'rechazada':
+      case 'Rechazada':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'completada':
+      case 'Finalizada':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       default:
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
@@ -125,10 +125,10 @@ export default function Novedades() {
                 className="w-full h-10 px-3 rounded-md border border-input bg-background"
               >
                 <option value="">Todas</option>
-                <option value="pendiente">Pendiente</option>
-                <option value="aprobada">Aprobada</option>
-                <option value="rechazada">Rechazada</option>
-                <option value="completada">Completada</option>
+                <option value="Solicitada">Solicitada</option>
+                <option value="En Revision">En Revisión</option>
+                <option value="Aprobada">Aprobada</option>
+                <option value="Rechazada">Rechazada</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -237,7 +237,7 @@ export default function Novedades() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          {novedad.etapa === 'pendiente' && (
+                          {novedad.etapa === 'Solicitada' && (
                             <>
                               <Button variant="ghost" size="sm" className="text-green-600">
                                 Aprobar

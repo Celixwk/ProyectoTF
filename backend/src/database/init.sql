@@ -313,4 +313,9 @@ ALTER TABLE "detalle_recargo" ADD CONSTRAINT "detalle_recargo_id_recargo_tipo_fk
 ALTER TABLE "empleado_area" ADD CONSTRAINT "fk_ea_area" FOREIGN KEY ("id_area") REFERENCES "area"("id_area") ON DELETE CASCADE ON UPDATE NO ACTION;
 ALTER TABLE "empleado_area" ADD CONSTRAINT "fk_ea_empleado" FOREIGN KEY ("id_empleado") REFERENCES "empleado"("id_empleado") ON DELETE CASCADE ON UPDATE NO ACTION;
 
+
 INSERT INTO estados_empleado (id_estado, nombre_estado) VALUES (1, 'Activo'), (2, 'Inactivo'), (3, 'Vacaciones');
+
+INSERT INTO usuario (usuario, contrasenia, tipo_usuario, nombre_completo, estado)
+VALUES ('admin', 'admin123', 'Administrador', 'Administrador del Sistema', 'Activo')
+ON CONFLICT (usuario) DO NOTHING;

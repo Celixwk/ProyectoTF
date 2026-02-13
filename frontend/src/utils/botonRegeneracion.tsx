@@ -8,8 +8,7 @@ import type { Area } from '@/types/api.types';
 
 interface BotonRegeneracionProps {
     fechaCorte: Date;
-    mes: number;
-    anio: number;
+
     programacionOriginal: any[];
     areas: Area[];
     onSuccess: (data: any) => void;
@@ -18,8 +17,6 @@ interface BotonRegeneracionProps {
 
 export function BotonRegeneracion({
     fechaCorte,
-    mes,
-    anio,
     programacionOriginal,
     areas,
     onSuccess,

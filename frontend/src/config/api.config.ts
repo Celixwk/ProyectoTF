@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const API_URL = '/api';
 
 // Configuración de Axios
 export const api = axios.create({
@@ -13,7 +13,7 @@ export const api = axios.create({
 // Interceptor para agregar token a todas las peticiones
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,10 +28,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expirado o inválido
-      localStorage.removeItem('token');
-      localStorage.removeItem('usuario');
+    // Si es un error 401, PERO la URL solicitada fue el login, NO redirigir.
+    // Esto permite que el componente Login maneje el error y muestre "Credenciales inválidas".
+    if (error.response?.status === 401 && !error.config.url?.includes('/auth/login')) {
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('usuario');
       window.location.href = '/login';
     }
     return Promise.reject(error);

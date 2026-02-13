@@ -5,6 +5,7 @@ export const empleadoController = {
     async listar(req: Request, res: Response) {
         try {
             const empleados = await prisma.empleado.findMany({
+                where: { id_estado: 1 },
                 include: { cargo: true }
             });
             res.status(200).json({ success: true, data: empleados });
@@ -157,8 +158,9 @@ export const vistasController = {
             const where: any = {
                 AND: [
                     estado !== undefined && estado !== 'undefined'
-                        ? { id_estado: estado === 'true' ? 1 : 0 }
-                        : {},
+                        ? { id_estado: estado === 'true' ? 1 : 2 }
+                        : { id_estado: 1 }, // Default to Active
+
                     busqueda ? {
                         OR: [
                             { nombre1: { contains: String(busqueda), mode: 'insensitive' } },

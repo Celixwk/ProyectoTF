@@ -4,8 +4,6 @@ import {
   Users,
   Clock,
   Calendar,
-  DollarSign,
-  FileText,
   Settings,
   Building2,
   CalendarCheck,

@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Lock, User as UserIcon } from 'lucide-react';
 
 export default function Login() {
-  const [usuario, setUsuario] = useState('admin');
+  const [usuario, setUsuario] = useState('');
   const [contrasenia, setContrasenia] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -93,16 +93,6 @@ export default function Login() {
               {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
           </form>
-
-          {/* Info */}
-          <div className="mt-6 text-center">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Usuario por defecto: <span className="font-mono font-semibold">admin</span>
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Contraseña: <span className="font-mono font-semibold">admin123</span>
-            </p>
-          </div>
         </div>
 
         {/* Footer */}

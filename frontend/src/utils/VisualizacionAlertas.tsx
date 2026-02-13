@@ -49,7 +49,7 @@ const formatearMensajeDeficit = (mensaje: string) => {
     if (mensaje.includes('déficit:')) {
         const match = mensaje.match(/(Área ".*") tiene déficit: (\d+)\/(\d+)/);
         if (match) {
-            const [_, area, actual, total] = match;
+            const [_, __, actual, total] = match;
             const deficitCount = parseInt(total) - parseInt(actual);
             return `Faltan ${deficitCount} personas (Asignados: ${actual} de ${total})`;
         }
@@ -145,6 +145,7 @@ const AlertasArea = ({ alertas, nombreArea }: { alertas: Alerta[], nombreArea: s
 
     return (
         <div className="mb-4 p-3 border-l-4 border-l-amber-500 bg-amber-50/30 rounded-lg">
+            <h4 className="text-xs font-bold text-amber-900 mb-2 uppercase">{nombreArea}</h4>
             <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
                 {alertas.map((alerta, idx) => (
                     <div

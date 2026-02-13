@@ -9,13 +9,20 @@ import Configuracion from './pages/Configuracion/Configuracion';
 import ConfiguracionProgramacion from './pages/ConfiguracionProgramacion/ConfiguracionProgramacion';
 import ProgramacionAreas from './pages/ProgramacionAreas/ProgramacionAreas';
 import GestionMensual from './pages/ProgramacionAreas/GestionMensual';
+import Login from './pages/Login/Login';
+import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Layout from './components/layout/Layout';
 
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="empleados" element={<Empleados />} />
@@ -28,6 +35,7 @@ function App() {
           <Route path="programacion-areas" element={<ProgramacionAreas />} />
           <Route path="gestion-mensual" element={<GestionMensual />} />
         </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
