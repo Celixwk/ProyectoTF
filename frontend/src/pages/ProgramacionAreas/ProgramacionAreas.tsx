@@ -5,9 +5,9 @@ import { areasService, turnosService, programacionService, alertasService } from
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, LayoutDashboard, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalInfoNovedadesGeneracion } from '@/utils/modalInfoNovedadesGeneracion';
 import { BotonEliminarProgramacion } from '@/utils/botonEliminarProgramacion';
@@ -18,9 +18,16 @@ import type { Area, Turno } from '@/types/api.types';
 export default function ProgramacionAreas() {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+
+    // --- NUEVO ESTADO PARA RANGO DE FECHAS ---
     const hoy = new Date();
-    const [mes, setMes] = useState(hoy.getMonth() + 1);
-    const [anio, setAnio] = useState(hoy.getFullYear());
+    const [fechaInicio, setFechaInicio] = useState(hoy.toISOString().split('T')[0]);
+    // Por defecto, fin es 15 días después
+    const defaultFin = new Date(hoy);
+    defaultFin.setDate(hoy.getDate() + 15);
+    const [fechaFin, setFechaFin] = useState(defaultFin.toISOString().split('T')[0]);
+    // -----------------------------------------
+
     const [paso, setPaso] = useState<'inicio' | 'configuracion' | 'resultado'>('inicio');
     const [mostrarDialogoNovedades, setMostrarDialogoNovedades] = useState(false);
     const [configAreas, setConfigAreas] = useState<Record<number, { turnosIds: number[] }>>({});
@@ -38,74 +45,47 @@ export default function ProgramacionAreas() {
         queryFn: () => turnosService.listar({ estado: true })
     });
 
+    // Validar rango (max 45 días)
+    const diasDiferencia = useMemo(() => {
+        const d1 = new Date(fechaInicio);
+        const d2 = new Date(fechaFin);
+        return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    }, [fechaInicio, fechaFin]);
+
+    const rangoInvalido = diasDiferencia < 0 || diasDiferencia > 45;
+
+    // Obtener mes/año del inicio para consultas de novedades (referencial)
+    const dateInicioObj = new Date(fechaInicio);
+    const mesReferencia = dateInicioObj.getMonth() + 1;
+    const anioReferencia = dateInicioObj.getFullYear();
+
     const { data: novedadesData, isLoading: novedadesLoading } = useQuery({
-        queryKey: ['novedades-periodo', mes, anio],
+        queryKey: ['novedades-periodo', mesReferencia, anioReferencia], // Ojo: esto es aproximado, idealmente backend filtraría por rango exacto
         queryFn: async () => {
-            const res = await programacionService.obtenerNovedades(mes, anio);
+            // Usamos el servicio existente, aunque sea por mes completo, sirve para advertir
+            const res = await programacionService.obtenerNovedades(mesReferencia, anioReferencia);
             return Array.isArray(res) ? res : (res.data || []);
         },
-        enabled: paso === 'inicio'
+        enabled: paso === 'inicio' && !isNaN(mesReferencia)
     });
 
+    // Validar existencia (ahora por rango)
     const { data: programacionExistente, isLoading: verificandoExistente } = useQuery({
-        queryKey: ['verificar-programacion', mes, anio],
-        queryFn: () => programacionService.verificarProgramacionExistente(mes, anio),
-        enabled: paso === 'inicio',
-        staleTime: 0,
-        refetchOnMount: 'always'
-    });
-
-    const { data: datosCargadosAutomaticamente } = useQuery({
-        queryKey: ['cargar-programacion-existente', mes, anio],
+        queryKey: ['verificar-programacion-rango', fechaInicio, fechaFin],
         queryFn: async () => {
-            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
-            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-            return await programacionService.listarPorPeriodo(inicio, fin);
+            // Reutilizamos 'listarPorPeriodo' para ver si hay algo, ya que 'verificarProgramacionExistente' era por mes
+            // Opcionalmente podemos cambiar el backend de verificarProgramacionExistente, pero listar es suficiente.
+            const data = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
+            const lista = Array.isArray(data) ? data : (data.data || []);
+            return { existe: lista.length > 0, total_registros: lista.length };
         },
-        enabled: !!programacionExistente?.existe && paso === 'inicio'
+        enabled: paso === 'inicio' && !rangoInvalido && !!fechaInicio && !!fechaFin,
+        staleTime: 0
     });
-
-    const { data: alertasCargadas } = useQuery({
-        queryKey: ['cargar-alertas-existentes', mes, anio],
-        queryFn: () => alertasService.obtener(mes, anio),
-        enabled: !!programacionExistente?.existe && paso === 'inicio'
-    });
-
-    // Efecto para cargar datos existentes SIN CAMBIAR DE PANTALLA AUTOMATICAMENTE
-    useEffect(() => {
-        if (programacionExistente?.existe && datosCargadosAutomaticamente) {
-            const dataReal = Array.isArray(datosCargadosAutomaticamente) ? datosCargadosAutomaticamente : (datosCargadosAutomaticamente.data || []);
-            setProgramacionGenerada(dataReal);
-
-            const configReconstruida: Record<number, { turnosIds: number[] }> = {};
-            dataReal.forEach((reg: any) => {
-                const aId = Number(reg.id_area);
-                const tId = Number(reg.id_turno);
-                if (!configReconstruida[aId]) {
-                    configReconstruida[aId] = { turnosIds: [] };
-                }
-                if (!configReconstruida[aId].turnosIds.includes(tId)) {
-                    configReconstruida[aId].turnosIds.push(tId);
-                }
-            });
-
-            Object.keys(configReconstruida).forEach(key => {
-                const k = Number(key);
-                configReconstruida[k].turnosIds.sort((a, b) => a - b);
-            });
-
-            setConfigAreas(configReconstruida);
-
-            if (alertasCargadas) {
-                setAlertasMotor(alertasCargadas);
-            }
-            // AQUI ESTABA EL ERROR: Se eliminó setPaso('resultado') para que no salte solo.
-        }
-    }, [programacionExistente, datosCargadosAutomaticamente, alertasCargadas]);
 
     const areas = useMemo(() => {
         if (!areasRaw) return [];
-        return areasRaw.filter(a => a.id_area !== 13);
+        return areasRaw.filter(a => a.id_area !== 13); // Filtrar un área específica si es regla de negocio
     }, [areasRaw]);
 
     const turnos = useMemo(() => {
@@ -114,21 +94,30 @@ export default function ProgramacionAreas() {
     }, [turnosRaw]);
 
     const infoDias = useMemo(() => {
-        const total = new Date(anio, mes, 0).getDate();
-        return Array.from({ length: total }, (_, i) => {
-            const fecha = new Date(anio, mes - 1, i + 1);
-            return {
-                numero: i + 1,
-                nombreDia: fecha.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase(),
-                fechaISO: fecha.toISOString().split('T')[0]
-            };
-        });
-    }, [mes, anio]);
+        if (diasDiferencia < 0 || diasDiferencia > 60) return [];
+        const dias = [];
+        const current = new Date(fechaInicio);
+        // Ajustamos zona horaria para evitar desfases al iterar
+        const end = new Date(fechaFin);
+
+        // Iterar asegurando UTC o local consistente
+        // Truco simple: usar strings YYYY-MM-DD
+        const dCurrent = new Date(fechaInicio + 'T12:00:00');
+        const dEnd = new Date(fechaFin + 'T12:00:00');
+
+        while (dCurrent <= dEnd) {
+            dias.push({
+                numero: dCurrent.getDate(),
+                nombreDia: dCurrent.toLocaleDateString('es-ES', { weekday: 'short' }).toUpperCase(),
+                fechaISO: dCurrent.toISOString().split('T')[0],
+                mesNombre: dCurrent.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()
+            });
+            dCurrent.setDate(dCurrent.getDate() + 1);
+        }
+        return dias;
+    }, [fechaInicio, fechaFin, diasDiferencia]);
 
     const alertasSeparadas = useMemo(() => procesarAlertas(alertasMotor), [alertasMotor]);
-
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() + i);
 
     useEffect(() => {
         if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0 && !programacionExistente?.existe) {
@@ -184,10 +173,12 @@ export default function ProgramacionAreas() {
 
     const generarMutation = useMutation({
         mutationFn: async () => {
-            const inicio = `${anio}-${String(mes).padStart(2, '0')}-01`;
-            const fin = new Date(anio, mes, 0).toISOString().split('T')[0];
-            const result = await programacionService.generarAutomatica({ mes, anio, configuracion: configAreas });
-            const data = await programacionService.listarPorPeriodo(inicio, fin);
+            const result = await programacionService.generarAutomatica({
+                fechaInicio,
+                fechaFin,
+                configuracion: configAreas
+            });
+            const data = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
             const fechasAfectadas = result.fechasProcesadas || infoDias.map(d => d.fechaISO);
             return { data, alertas: result.alertas || [], fechasAfectadas };
         },
@@ -196,9 +187,10 @@ export default function ProgramacionAreas() {
             setAlertasMotor(res.alertas);
             setFechasRecienGeneradas(res.fechasAfectadas);
 
+            // Guardar alertas (asociadas al mes de inicio como referencia principal, o iterar si fuera necesario)
             if (res.alertas && res.alertas.length > 0) {
                 try {
-                    await alertasService.guardar(mes, anio, res.alertas);
+                    await alertasService.guardar(mesReferencia, anioReferencia, res.alertas);
                 } catch (error) {
                     console.error('Error guardando alertas:', error);
                 }
@@ -212,23 +204,15 @@ export default function ProgramacionAreas() {
             queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
             queryClient.invalidateQueries({ queryKey: ['alertas-programacion'] });
         },
-        onError: () => toast.error('Error al generar la programación')
+        onError: (err: any) => toast.error(`Error al generar: ${err.message || 'Error desconocido'}`)
     });
 
     const handleIniciarProceso = () => {
         if (programacionExistente?.existe) {
-            // Lógica restaurada de la versión anterior
-            toast.error(
-                `Ya existe una programación para ${meses[mes - 1]} ${anio} con ${programacionExistente.total_registros} registros.`,
-                {
-                    duration: 5000,
-                    action: {
-                        label: 'Ir a Gestión Mensual',
-                        onClick: () => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)
-                    }
-                }
-            );
-            return;
+            // Advertir si ya hay datos
+            if (!window.confirm(`Existe programación con ${programacionExistente.total_registros} registros en este rango. Si continuas SE BORRARÁN para generar de nuevo. ¿Continuar?`)) {
+                return;
+            }
         }
 
         if (novedadesData && novedadesData.length > 0) {
@@ -245,7 +229,7 @@ export default function ProgramacionAreas() {
             <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Motor de Programación</h1>
                 <p className="text-slate-500">
-                    {paso === 'inicio' && 'Defina el periodo de tiempo a programar.'}
+                    {paso === 'inicio' && 'Defina el rango de fechas a programar (ej: Quincena).'}
                     {paso === 'configuracion' && 'Seleccione los turnos habilitados por cada área de trabajo.'}
                     {paso === 'resultado' && 'Revise la distribución del personal asignado automáticamente.'}
                 </p>
@@ -257,24 +241,48 @@ export default function ProgramacionAreas() {
                         <CardContent className="pt-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Mes de Programación</Label>
-                                    <Select value={String(mes)} onValueChange={(v) => { setMes(parseInt(v)); setPaso('inicio'); setProgramacionGenerada([]); }}>
-                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>Fecha Inicio</Label>
+                                    <Input
+                                        type="date"
+                                        value={fechaInicio}
+                                        onChange={(e) => {
+                                            setFechaInicio(e.target.value);
+                                            setPaso('inicio');
+                                            setProgramacionGenerada([]);
+                                        }}
+                                        className="bg-white"
+                                    />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Año</Label>
-                                    <Select value={String(anio)} onValueChange={(v) => { setAnio(parseInt(v)); setPaso('inicio'); setProgramacionGenerada([]); }}>
-                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>Fecha Fin</Label>
+                                    <Input
+                                        type="date"
+                                        value={fechaFin}
+                                        onChange={(e) => {
+                                            setFechaFin(e.target.value);
+                                            setPaso('inicio');
+                                            setProgramacionGenerada([]);
+                                        }}
+                                        className="bg-white"
+                                    />
                                 </div>
                             </div>
+
+                            {/* Información del rango */}
+                            <div className="mt-4 flex items-center gap-2 text-sm">
+                                <div className={cn("px-3 py-1 rounded-full font-medium",
+                                    rangoInvalido ? "bg-red-100 text-red-700" : "bg-indigo-100 text-indigo-700"
+                                )}>
+                                    {diasDiferencia} días seleccionados
+                                </div>
+                                {rangoInvalido && (
+                                    <span className="text-red-600 flex items-center gap-1">
+                                        <AlertCircle className="h-4 w-4" />
+                                        El rango debe ser entre 0 y 45 días
+                                    </span>
+                                )}
+                            </div>
+
                         </CardContent>
                     </Card>
 
@@ -290,7 +298,7 @@ export default function ProgramacionAreas() {
                             <Button
                                 size="lg"
                                 onClick={handleIniciarProceso}
-                                disabled={novedadesLoading || verificandoExistente}
+                                disabled={novedadesLoading || verificandoExistente || rangoInvalido || !fechaInicio || !fechaFin}
                                 className="px-8"
                             >
                                 {verificandoExistente ? 'Verificando...' :
@@ -308,9 +316,9 @@ export default function ProgramacionAreas() {
                     <div className="flex items-center justify-between bg-white p-4 border rounded-lg shadow-sm">
                         <div className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                            Periodo: {meses[mes - 1]} {anio}
+                            Rango: {fechaInicio} al {fechaFin}
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Periodo</Button>
+                        <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Rango</Button>
                     </div>
 
                     <div className="grid gap-4">
@@ -372,16 +380,16 @@ export default function ProgramacionAreas() {
                         </div>
                         <div className="flex gap-3">
                             <BotonEliminarProgramacion
-                                mes={mes}
-                                anio={anio}
+                                mes={mesReferencia}
+                                anio={anioReferencia}
                                 onSuccess={() => {
                                     setPaso('inicio');
                                     setProgramacionGenerada([]);
                                     queryClient.invalidateQueries({ queryKey: ['verificar-programacion'] });
                                 }}
                             />
-                            <Button className="bg-indigo-600 hover:bg-indigo-700 font-bold" onClick={() => navigate(`/gestion-mensual?mes=${mes}&anio=${anio}`)}>
-                                <LayoutDashboard className="h-4 w-4 mr-2" /> IR A GESTIÓN MENSUAL
+                            <Button className="bg-indigo-600 hover:bg-indigo-700 font-bold" onClick={() => navigate(`/gestion-mensual?mes=${mesReferencia}&anio=${anioReferencia}`)}>
+                                <LayoutDashboard className="h-4 w-4 mr-2" /> IR A GESTIÓN MENSUAL ({anioReferencia}-{mesReferencia})
                             </Button>
                         </div>
                     </div>
@@ -429,7 +437,7 @@ export default function ProgramacionAreas() {
                                                                         {dia.nombreDia}
                                                                     </span>
                                                                     <span className={esRegenerado ? "text-emerald-600" : ""}>
-                                                                        {dia.numero} de {meses[mes - 1].substring(0, 3)}
+                                                                        {dia.numero} {dia.mesNombre}
                                                                     </span>
                                                                 </div>
                                                             </th>
@@ -496,7 +504,7 @@ export default function ProgramacionAreas() {
                     setPaso('configuracion');
                 }}
                 novedades={novedadesData || []}
-                nombreMes={meses[mes - 1]}
+                nombreMes={dateInicioObj.toLocaleString('es-ES', { month: 'long' })}
             />
         </div>
     );

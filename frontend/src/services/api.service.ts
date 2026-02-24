@@ -474,7 +474,13 @@ export const programacionService = {
     });
     return data;
   },
-  generarAutomatica: async (payload: { mes: number; anio: number; configuracion: any; id_usuario_registro?: number }) => {
+  obtenerEstadoMes: async (mes: number, anio: number) => {
+    const { data } = await api.get('/programacion/mes-estado', {
+      params: { mes, anio }
+    });
+    return data.estado;
+  },
+  generarAutomatica: async (payload: { fechaInicio: string; fechaFin: string; configuracion: any; id_usuario_registro?: number }) => {
     const { data } = await api.post('/programacion/generar', payload);
     return data.data || data;
   },
@@ -529,25 +535,47 @@ export const programacionService = {
     });
     return data.data || data;
   },
-  obtenerEmpleadosNoAsignadosPorDia: async (mes: number, anio: number) => {
-    const { data } = await api.get('/programacion/empleados-no-asignados-por-dia', {
-      params: { mes, anio }
-    });
-    return data.data;
+  obtenerEmpleadosNoAsignadosPorDia: async (mes?: number, anio?: number, fechaInicio?: string, fechaFin?: string) => {
+    const params: any = {};
+    if (fechaInicio && fechaFin) {
+      params.fechaInicio = fechaInicio;
+      params.fechaFin = fechaFin;
+    } else {
+      params.mes = mes;
+      params.anio = anio;
+    }
+    const { data } = await api.get('/programacion/no-asignados-dia', { params });
+    return data.data || data;
   },
   obtenerEmpleadosConAreas: async () => {
     const { data } = await api.get('/programacion/empleados-con-areas');
     return data.data || [];
   },
+  obtenerUltimoRango: async () => {
+    const { data } = await api.get('/programacion/ultimo-rango');
+    return data;
+  },
+  validarCompleto: async (fechaInicio: string, fechaFin: string) => {
+    const { data } = await api.get('/programacion/validar-completo', { params: { fechaInicio, fechaFin } });
+    return data.data || data;
+  },
 };
 
 export const alertasService = {
-  guardar: async (mes: number, anio: number, alertas: any[]) => {
-    const { data } = await api.post('/alertas', { mes, anio, alertas });
+  guardar: async (mes: number, anio: number, alertas: any[], fechaInicio?: string, fechaFin?: string) => {
+    const { data } = await api.post('/alertas', { mes, anio, alertas, fechaInicio, fechaFin });
     return data;
   },
-  obtener: async (mes: number, anio: number) => {
-    const { data } = await api.get('/alertas', { params: { mes, anio } });
+  obtener: async (mes?: number, anio?: number, fechaInicio?: string, fechaFin?: string) => {
+    const params: any = {};
+    if (fechaInicio && fechaFin) {
+      params.fechaInicio = fechaInicio;
+      params.fechaFin = fechaFin;
+    } else {
+      params.mes = mes;
+      params.anio = anio;
+    }
+    const { data } = await api.get('/alertas', { params });
     return data.data || data;
   },
   eliminar: async (mes: number, anio: number) => {
