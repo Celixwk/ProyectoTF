@@ -34,12 +34,13 @@ interface OpcionesAsignacion {
 const ID_AREA_REFUERZOS = 13;
 
 export function capa5_calcularScore(
-    empleado: EmpleadoOrdenado,
+    empleado: EmpleadoOrdenado & { horas_acumuladas?: number; meta_periodo?: number },
     idArea: number,
     programacionHistorica: Asignacion[],
     fecha: Date,
     esFallback: boolean = false,
-    penalizacion: number = 500
+    penalizacion: number = 500,
+    balancearHoras: boolean = false
 ): number {
     const pesoClasificacion =
         empleado.clasificacion === "especialista" ? 0 :
@@ -75,6 +76,13 @@ export function capa5_calcularScore(
         (totalAsignaciones * 50) +
         (repeticionesArea * 100) +
         (diasConsecutivos * 200);
+
+    // Si está encendido el balanceo de horas, el peso principal se vuelve las horas trabajadas
+    if (balancearHoras && empleado.horas_acumuladas !== undefined) {
+        // Multiplicamos por 1000 para que las horas superen (tengan más peso) que la clasificación o las repeticiones,
+        // garantizando que siempre se priorice a quien menos horas tenga
+        score += (empleado.horas_acumuladas * 1000);
+    }
 
     if (esFallback) score += penalizacion;
 
@@ -135,7 +143,15 @@ export function capa5_seleccionarEmpleadoParaArea(
 
         return filtrados.map(e => ({
             empleado: e,
-            score: capa5_calcularScore(e, area.id_area, programacionExistente, fecha, esFallback, penalizacionRefuerzo)
+            score: capa5_calcularScore(
+                e,
+                area.id_area,
+                programacionExistente,
+                fecha,
+                esFallback,
+                penalizacionRefuerzo,
+                (opciones as any)?.balancearHoras
+            )
         })).sort((a, b) => a.score - b.score);
     };
 

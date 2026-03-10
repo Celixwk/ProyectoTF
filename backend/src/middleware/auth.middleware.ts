@@ -17,3 +17,20 @@ export const verificarToken = (req: Request, res: Response, next: NextFunction) 
         return res.status(401).json({ success: false, error: 'Token inválido o expirado' });
     }
 };
+
+export const esAdmin = (req: Request, res: Response, next: NextFunction) => {
+    // @ts-ignore
+    const user = req.user;
+
+    if (!user) {
+        return res.status(401).json({ success: false, error: 'Usuario no autenticado' });
+    }
+
+    const role = user.role || user.tipo_usuario;
+
+    if (role !== 'administrador' && role !== 'Administrador') {
+        return res.status(403).json({ success: false, error: 'Acceso denegado. Se requiere perfil de Administrador.' });
+    }
+
+    next();
+};

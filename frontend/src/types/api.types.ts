@@ -200,12 +200,14 @@ export interface TipoNovedad {
 }
 
 export interface TipoRecargo {
-  id_tipo_recargo: number;
+  id_recargo_tipo: number;
   codigo: string;
   nombre_recargo: string;
-  porcentaje_recargo: string;
-  created_at: string;
-  updated_at: string;
+  porcentaje_recargo: string | number;
+  descripcion?: string;
+  activo: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EstadoEmpleado {

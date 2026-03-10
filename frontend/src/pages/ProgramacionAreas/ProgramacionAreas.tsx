@@ -34,6 +34,7 @@ export default function ProgramacionAreas() {
     const [programacionGenerada, setProgramacionGenerada] = useState<any[]>([]);
     const [alertasMotor, setAlertasMotor] = useState<any[]>([]);
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
+    const [balancearHoras, setBalancearHoras] = useState(true);
 
     const { data: areasRaw, isLoading: areasLoading } = useQuery<Area[]>({
         queryKey: ['areas'],
@@ -96,9 +97,7 @@ export default function ProgramacionAreas() {
     const infoDias = useMemo(() => {
         if (diasDiferencia < 0 || diasDiferencia > 60) return [];
         const dias = [];
-        const current = new Date(fechaInicio);
         // Ajustamos zona horaria para evitar desfases al iterar
-        const end = new Date(fechaFin);
 
         // Iterar asegurando UTC o local consistente
         // Truco simple: usar strings YYYY-MM-DD
@@ -176,7 +175,8 @@ export default function ProgramacionAreas() {
             const result = await programacionService.generarAutomatica({
                 fechaInicio,
                 fechaFin,
-                configuracion: configAreas
+                configuracion: configAreas,
+                balancearHoras
             });
             const data = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
             const fechasAfectadas = result.fechasProcesadas || infoDias.map(d => d.fechaISO);
@@ -313,12 +313,21 @@ export default function ProgramacionAreas() {
 
             {paso === 'configuracion' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
-                    <div className="flex items-center justify-between bg-white p-4 border rounded-lg shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 border rounded-lg shadow-sm gap-4">
                         <div className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                             <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
                             Rango: {fechaInicio} al {fechaFin}
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Rango</Button>
+                        <div className="flex items-center gap-6">
+                            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-md border text-sm hover:bg-slate-100 transition-colors">
+                                <Checkbox
+                                    checked={balancearHoras}
+                                    onCheckedChange={(checked) => setBalancearHoras(checked as boolean)}
+                                />
+                                <span className="font-medium text-slate-700">Equilibrar Horas Asignadas</span>
+                            </label>
+                            <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Rango</Button>
+                        </div>
                     </div>
 
                     <div className="grid gap-4">

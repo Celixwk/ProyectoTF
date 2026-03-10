@@ -1,4 +1,4 @@
-import { Bell, Moon, Sun, LogOut, User, Menu } from 'lucide-react';
+import { Moon, Sun, LogOut, Menu, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
@@ -49,11 +49,6 @@ export default function TopBar() {
             {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
 
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" title="Notificaciones">
-            <Bell className="h-5 w-5" />
-          </Button>
-
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -72,10 +67,12 @@ export default function TopBar() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Perfil</span>
-              </DropdownMenuItem>
+              {(usuario?.tipo_usuario?.toLowerCase() === 'administrador') && (
+                <DropdownMenuItem onClick={() => navigate('/usuarios')}>
+                  <ShieldCheck className="mr-2 h-4 w-4" />
+                  <span>Gestión de Usuarios</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
                 <LogOut className="mr-2 h-4 w-4" />

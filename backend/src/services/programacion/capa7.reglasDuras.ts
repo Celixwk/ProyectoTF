@@ -97,12 +97,13 @@ export function capa7_verificarTurnosSimultaneos(
 }
 
 export function capa7_validarReglasDuras(
-    empleado: EmpleadoOrdenado,
+    empleado: EmpleadoOrdenado & { horas_acumuladas?: number; meta_periodo?: number },
     area: { id_area: number },
     turno: any,
     fecha: Date,
     programacionExistente: Asignacion[],
-    empleadoDisponible?: { disponible: boolean; tipoNovedad?: string }
+    empleadoDisponible?: { disponible: boolean; tipoNovedad?: string },
+    opciones?: { balancearHoras?: boolean }
 ): ValidacionReglasDuras {
 
     if (empleadoDisponible && !empleadoDisponible.disponible) {
@@ -122,6 +123,19 @@ export function capa7_validarReglasDuras(
 
     const vSimul = capa7_verificarTurnosSimultaneos(empleado, turno, fecha, programacionExistente);
     if (!vSimul.valido) return vSimul;
+
+    // Phase B: Evitar si excederá horas laborables y se pide balancear
+    if (opciones?.balancearHoras && empleado.horas_acumuladas !== undefined && empleado.meta_periodo !== undefined && turno.duracion_horas) {
+        // Permitimos un margen de 12 horas extra (máx un turno largo de sobretiempo) sobre la meta para no bloquear totalmente
+        const margen = 12;
+        if ((empleado.horas_acumuladas + Number(turno.duracion_horas)) > (empleado.meta_periodo + margen)) {
+            return {
+                valido: false,
+                razon: `Excede el límite de horas permitidas en este periodo (${empleado.horas_acumuladas}/${empleado.meta_periodo} + ${turno.duracion_horas}h)`,
+                codigo: "EXCEDE_HORAS_PERIODO"
+            };
+        }
+    }
 
     return { valido: true };
 }

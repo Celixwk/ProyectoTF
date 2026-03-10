@@ -9,6 +9,7 @@ import Configuracion from './pages/Configuracion/Configuracion';
 import ConfiguracionProgramacion from './pages/ConfiguracionProgramacion/ConfiguracionProgramacion';
 import ProgramacionAreas from './pages/ProgramacionAreas/ProgramacionAreas';
 import GestionMensual from './pages/ProgramacionAreas/GestionMensual';
+import Usuarios from './pages/Usuarios/Usuarios';
 import Login from './pages/Login/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Layout from './components/layout/Layout';
@@ -34,6 +35,7 @@ function App() {
           <Route path="configuracion-programacion" element={<ConfiguracionProgramacion />} />
           <Route path="programacion-areas" element={<ProgramacionAreas />} />
           <Route path="gestion-mensual" element={<GestionMensual />} />
+          <Route path="usuarios" element={<Usuarios />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

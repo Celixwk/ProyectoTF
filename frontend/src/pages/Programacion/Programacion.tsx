@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { format, addDays, differenceInDays, parseISO } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Area } from '@/types/api.types';
@@ -33,13 +33,31 @@ export default function Programacion() {
   // Ajuste: Consideramos rango personalizado si AL MENOS UNO existe, para evitar saltos de UI
   const esRangoPersonalizado = !!(pInicio || pFin);
 
-  const [mes, setMes] = useState(hoy.getMonth() + 1);
-  const [anio, setAnio] = useState(hoy.getFullYear());
+  const [mes] = useState(hoy.getMonth() + 1);
+  const [anio] = useState(hoy.getFullYear());
+
   const [filtro, setFiltro] = useState('');
+
+  // Persistir y restaurar rango desde localStorage
+  useEffect(() => {
+    if (!pInicio && !pFin) {
+      const savedInicio = localStorage.getItem('prog_vista_fechaInicio');
+      const savedFin = localStorage.getItem('prog_vista_fechaFin');
+      if (savedInicio && savedFin) {
+        setSearchParams({ fechaInicio: savedInicio, fechaFin: savedFin });
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pInicio && pFin) {
+      localStorage.setItem('prog_vista_fechaInicio', pInicio);
+      localStorage.setItem('prog_vista_fechaFin', pFin);
+    }
+  }, [pInicio, pFin]);
   const [areaFiltro, setAreaFiltro] = useState<string>('TODAS');
 
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const anios = Array.from({ length: 5 }, (_, i) => hoy.getFullYear() - 2 + i);
 
   const { data: areasRaw } = useQuery<Area[]>({
     queryKey: ['areas'],
@@ -48,41 +66,25 @@ export default function Programacion() {
 
   const areasMap = useMemo(() => {
     const map = new Map<number, string>();
-    areasRaw?.forEach(a => map.set(a.id_area, a.nombre_area));
+    areasRaw?.forEach((a: Area) => map.set(a.id_area, a.nombre_area));
     return map;
   }, [areasRaw]);
 
-  // Lógica de Fechas
-  const fechaInicio = useMemo(() => {
-    // Si hay input manual, usalo (o nada si esta vacio). Si no, fallback al mes.
-    if (esRangoPersonalizado) return pInicio ?? '';
-    return `${anio}-${String(mes).padStart(2, '0')}-01`;
-  }, [esRangoPersonalizado, pInicio, mes, anio]);
-
-  const fechaFin = useMemo(() => {
-    if (esRangoPersonalizado) return pFin ?? '';
-    return new Date(anio, mes, 0).toISOString().split('T')[0];
-  }, [esRangoPersonalizado, pFin, mes, anio]);
-
-  // Resetear filtros si cambiamos mes manual (solo si no es rango)
-  const handleCambioMes = (m: string) => {
-    if (esRangoPersonalizado) limparFiltros();
-    setMes(parseInt(m));
-  };
-
-  const handleCambioAnio = (a: string) => {
-    if (esRangoPersonalizado) limparFiltros();
-    setAnio(parseInt(a));
-  };
+  // Lógica de Fechas — ahora solo usa params de URL (rango manual)
+  const fechaInicio = useMemo(() => pInicio ?? '', [pInicio]);
+  const fechaFin = useMemo(() => pFin ?? '', [pFin]);
 
   const limparFiltros = () => {
     setSearchParams({});
+    localStorage.removeItem('prog_vista_fechaInicio');
+    localStorage.removeItem('prog_vista_fechaFin');
   };
 
-
   const { data: estadoValidacion, isLoading: loadingVal } = useQuery({
+
     queryKey: ['validacion-completa', fechaInicio, fechaFin],
     queryFn: () => programacionService.validarCompleto(fechaInicio, fechaFin),
+    enabled: !!pInicio && !!pFin,
     staleTime: 0,
     refetchOnMount: 'always'
   });
@@ -97,6 +99,7 @@ export default function Programacion() {
       const res = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
       return Array.isArray(res) ? res : (res.data || []);
     },
+    enabled: !!pInicio && !!pFin,
     // enabled: !!estadoValidacion?.completo, // Deshabilitado el bloqueo
     staleTime: 0,
     refetchOnMount: 'always', // Forzar recarga al entrar
@@ -108,7 +111,8 @@ export default function Programacion() {
     queryFn: () => consultasService.obtenerNovedadesCompletas({
       inicio: fechaInicio,
       fin: fechaFin
-    })
+    }),
+    enabled: !!pInicio && !!pFin
   });
 
   const diasDelRango = useMemo(() => {
@@ -381,23 +385,7 @@ export default function Programacion() {
             </Select>
           </div>
 
-          {!esRangoPersonalizado && (
-            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
-              <Select value={String(mes)} onValueChange={handleCambioMes}>
-                <SelectTrigger className="w-[120px] border-none shadow-none font-medium h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {meses.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <div className="h-6 w-px bg-slate-200" />
-              <Select value={String(anio)} onValueChange={handleCambioAnio}>
-                <SelectTrigger className="w-[80px] border-none shadow-none font-medium h-8"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+
 
           <Button
             onClick={() => navigate(`/gestion-mensual?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`)}
@@ -424,17 +412,29 @@ export default function Programacion() {
         )
       }
 
-      <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 flex gap-3 items-start">
-        <Info className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
-        <div>
-          <h5 className="font-bold text-blue-700 text-base mb-1">Modo Lectura</h5>
-          <p className="text-blue-600/90 text-sm">
-            Vista consolidada. Pase el mouse sobre las casillas para ver detalles del turno y el área asignada.
+      {(!pInicio || !pFin) ? (
+        <Card className="border-dashed py-20 text-center bg-slate-50/50">
+          <div className="flex justify-center mb-6">
+            <CalendarDays className="h-16 w-16 text-slate-300" />
+          </div>
+          <h3 className="text-xl font-medium text-slate-700">Seleccione un rango de fechas</h3>
+          <p className="text-slate-400 max-w-md mx-auto mt-2 text-base">
+            Ingrese las fechas de inicio y fin en el selector de rango para visualizar la programación.
           </p>
+        </Card>
+      ) : (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 flex gap-3 items-start">
+          <Info className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
+          <div>
+            <h5 className="font-bold text-blue-700 text-base mb-1">Modo Lectura</h5>
+            <p className="text-blue-600/90 text-sm">
+              Vista consolidada. Pase el mouse sobre las casillas para ver detalles del turno y el área asignada.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {
+      {(pInicio && pFin) && (
         loadingProg ? (
           <div className="py-20 text-center text-slate-400 text-xl flex flex-col items-center gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
@@ -571,7 +571,8 @@ export default function Programacion() {
             </div>
           </div>
         )
-      }
+      )}
+
 
       <div className="flex flex-wrap gap-4 justify-center pt-8 border-t">
         <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">

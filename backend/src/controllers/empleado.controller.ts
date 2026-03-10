@@ -179,24 +179,45 @@ export const vistasController = {
                     take: Number(limit),
                     include: {
                         cargo: true,
-                        empleado_area: { include: { area: true } }
+                        empleado_area: { include: { area: true } },
+                        labor_mes: {
+                            where: { estado: 'Activo' },
+                            include: { detalle_programacion: { include: { turno: true } } }
+                        }
                     },
                     orderBy: { apellido1: 'asc' }
-                })
+                }) as unknown as Promise<any[]>
             ]);
 
-            const empleadosProcesados = empleadosRaw.map(emp => ({
-                id_empleado: emp.id_empleado,
-                cedula: emp.cedula,
-                nombre_completo: `${emp.nombre1} ${emp.nombre2 || ''} ${emp.apellido1} ${emp.apellido2 || ''}`.replace(/\s+/g, ' ').trim(),
-                nombre_cargo: emp.cargo?.nombre_cargo || 'Sin Cargo',
-                salario_base: emp.cargo?.salario_base || 0,
-                estado: emp.id_estado === 1,
-                sexo: emp.sexo?.trim(),
-                vehiculo: emp.vehiculo,
-                areas_permitidas: emp.empleado_area.map(ea => ea.id_area),
-                areas: emp.empleado_area.map(ea => ea.area.nombre_area).join(', ')
-            }));
+            const empleadosProcesados = empleadosRaw.map(emp => {
+                let horas_acumuladas = 0;
+                let meta_periodo = 240; // Default or maybe mapped from somewhere else
+
+                if (emp.labor_mes && emp.labor_mes.length > 0) {
+                    const laborVisible = emp.labor_mes[0]; // Active labor_mes
+                    meta_periodo = laborVisible.horas_laborales || 240;
+                    if (laborVisible.detalle_programacion) {
+                        horas_acumuladas = laborVisible.detalle_programacion.reduce((acc: number, cur: any) => {
+                            return acc + (cur.turno?.duracion_horas ? Number(cur.turno.duracion_horas) : 0);
+                        }, 0);
+                    }
+                }
+
+                return {
+                    id_empleado: emp.id_empleado,
+                    cedula: emp.cedula,
+                    nombre_completo: `${emp.nombre1} ${emp.nombre2 || ''} ${emp.apellido1} ${emp.apellido2 || ''}`.replace(/\s+/g, ' ').trim(),
+                    nombre_cargo: emp.cargo?.nombre_cargo || 'Sin Cargo',
+                    salario_base: emp.cargo?.salario_base || 0,
+                    estado: emp.id_estado === 1,
+                    sexo: emp.sexo?.trim(),
+                    vehiculo: emp.vehiculo,
+                    areas_permitidas: emp.empleado_area.map(ea => ea.id_area),
+                    areas: emp.empleado_area.map(ea => ea.area.nombre_area).join(', '),
+                    horas_acumuladas,
+                    meta_periodo
+                };
+            });
 
             res.status(200).json({
                 success: true,

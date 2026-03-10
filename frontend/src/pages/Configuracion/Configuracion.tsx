@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cargosService, areasService, turnosService, novedadesService, estadosService } from '@/services/api.service';
+import { cargosService, areasService, novedadesService, tiposRecargoService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,14 +18,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { CargoForm } from '@/components/forms/CargoForm';
 import { AreaForm } from '@/components/forms/AreaForm';
-import { TurnoForm } from '@/components/forms/TurnoForm';
 import { TipoNovedadForm } from '@/components/forms/TipoNovedadForm';
-import { EstadoForm } from '@/components/forms/EstadoForm';
-import { Briefcase, Building2, Clock, FileText, Plus, Edit, Trash2, Activity } from 'lucide-react';
+import { TipoRecargoForm } from '@/components/forms/TipoRecargoForm';
+import { Briefcase, Building2, FileText, Plus, Edit, Trash2, Coins } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
-import type { Cargo, Area, Turno, TipoNovedad, EstadoEmpleado } from '@/types/api.types';
-import type { CargoFormData, AreaFormData, TurnoFormData, TipoNovedadFormData, EstadoFormData } from '@/lib/validations';
+import type { Cargo, Area, TipoNovedad, TipoRecargo } from '@/types/api.types';
+import type { CargoFormData, AreaFormData, TipoNovedadFormData, TipoRecargoFormData } from '@/lib/validations';
 
 export default function Configuracion() {
   const [activeTab, setActiveTab] = useState('cargos');
@@ -43,23 +42,17 @@ export default function Configuracion() {
   const [areaDeleteDialogOpen, setAreaDeleteDialogOpen] = useState(false);
   const [areaAEliminar, setAreaAEliminar] = useState<Area | null>(null);
 
-  // Estados para diálogos de Turnos
-  const [turnoDialogOpen, setTurnoDialogOpen] = useState(false);
-  const [turnoSeleccionado, setTurnoSeleccionado] = useState<Turno | null>(null);
-  const [turnoDeleteDialogOpen, setTurnoDeleteDialogOpen] = useState(false);
-  const [turnoAEliminar, setTurnoAEliminar] = useState<Turno | null>(null);
-
   // Estados para diálogos de Tipos de Novedad
   const [tipoNovedadDialogOpen, setTipoNovedadDialogOpen] = useState(false);
   const [tipoNovedadSeleccionado, setTipoNovedadSeleccionado] = useState<TipoNovedad | null>(null);
   const [tipoNovedadDeleteDialogOpen, setTipoNovedadDeleteDialogOpen] = useState(false);
   const [tipoNovedadAEliminar, setTipoNovedadAEliminar] = useState<TipoNovedad | null>(null);
 
-  // Estados para diálogos de Estados de Empleado
-  const [estadoDialogOpen, setEstadoDialogOpen] = useState(false);
-  const [estadoSeleccionado, setEstadoSeleccionado] = useState<EstadoEmpleado | null>(null);
-  const [estadoDeleteDialogOpen, setEstadoDeleteDialogOpen] = useState(false);
-  const [estadoAEliminar, setEstadoAEliminar] = useState<EstadoEmpleado | null>(null);
+  // Estados para diálogos de Tipos de Recargo
+  const [tipoRecargoDialogOpen, setTipoRecargoDialogOpen] = useState(false);
+  const [tipoRecargoSeleccionado, setTipoRecargoSeleccionado] = useState<TipoRecargo | null>(null);
+  const [tipoRecargoDeleteDialogOpen, setTipoRecargoDeleteDialogOpen] = useState(false);
+  const [tipoRecargoAEliminar, setTipoRecargoAEliminar] = useState<TipoRecargo | null>(null);
 
   // Obtener datos
   const { data: cargos, isLoading: cargosLoading } = useQuery({
@@ -72,19 +65,14 @@ export default function Configuracion() {
     queryFn: () => areasService.listar(),
   });
 
-  const { data: turnos, isLoading: turnosLoading } = useQuery({
-    queryKey: ['turnos'],
-    queryFn: () => turnosService.listar(),
-  });
-
   const { data: tiposNovedad, isLoading: tiposNovedadLoading } = useQuery({
     queryKey: ['tipos-novedad'],
     queryFn: () => novedadesService.listarTipos(),
   });
 
-  const { data: estados, isLoading: estadosLoading } = useQuery({
-    queryKey: ['estados'],
-    queryFn: () => estadosService.listar(),
+  const { data: tiposRecargo, isLoading: tiposRecargoLoading } = useQuery({
+    queryKey: ['tipos-recargo'],
+    queryFn: () => tiposRecargoService.listar(),
   });
 
   // Mutaciones para Cargos
@@ -161,41 +149,6 @@ export default function Configuracion() {
     },
   });
 
-  // Mutaciones para Turnos
-  const turnoSaveMutation = useMutation({
-    mutationFn: async (data: TurnoFormData) => {
-      if (turnoSeleccionado) {
-        return turnosService.actualizar(turnoSeleccionado.id_turno, data);
-      } else {
-        return turnosService.crear(data);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turnos'] });
-      toast.success(
-        turnoSeleccionado ? 'Turno actualizado exitosamente' : 'Turno creado exitosamente'
-      );
-      setTurnoDialogOpen(false);
-      setTurnoSeleccionado(null);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al guardar turno');
-    },
-  });
-
-  const turnoDeleteMutation = useMutation({
-    mutationFn: (id: number) => turnosService.eliminar(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['turnos'] });
-      toast.success('Turno eliminado exitosamente');
-      setTurnoDeleteDialogOpen(false);
-      setTurnoAEliminar(null);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al eliminar turno');
-    },
-  });
-
   // Mutaciones para Tipos de Novedad
   const tipoNovedadSaveMutation = useMutation({
     mutationFn: async (data: TipoNovedadFormData) => {
@@ -231,38 +184,38 @@ export default function Configuracion() {
     },
   });
 
-  // Mutaciones para Estados
-  const estadoSaveMutation = useMutation({
-    mutationFn: async (data: EstadoFormData) => {
-      if (estadoSeleccionado) {
-        return estadosService.actualizar(estadoSeleccionado.id_estado, data);
+  // Mutaciones para Tipos de Recargo
+  const tipoRecargoSaveMutation = useMutation({
+    mutationFn: async (data: TipoRecargoFormData) => {
+      if (tipoRecargoSeleccionado) {
+        return tiposRecargoService.actualizar(tipoRecargoSeleccionado.id_recargo_tipo, data);
       } else {
-        return estadosService.crear(data);
+        return tiposRecargoService.crear(data);
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estados'] });
+      queryClient.invalidateQueries({ queryKey: ['tipos-recargo'] });
       toast.success(
-        estadoSeleccionado ? 'Estado actualizado exitosamente' : 'Estado creado exitosamente'
+        tipoRecargoSeleccionado ? 'Tipo de recargo actualizado exitosamente' : 'Tipo de recargo creado exitosamente'
       );
-      setEstadoDialogOpen(false);
-      setEstadoSeleccionado(null);
+      setTipoRecargoDialogOpen(false);
+      setTipoRecargoSeleccionado(null);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al guardar estado');
+      toast.error(error.response?.data?.error || 'Error al guardar tipo de recargo');
     },
   });
 
-  const estadoDeleteMutation = useMutation({
-    mutationFn: (id: number) => estadosService.eliminar(id),
+  const tipoRecargoDeleteMutation = useMutation({
+    mutationFn: (id: number) => tiposRecargoService.eliminar(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['estados'] });
-      toast.success('Estado eliminado exitosamente');
-      setEstadoDeleteDialogOpen(false);
-      setEstadoAEliminar(null);
+      queryClient.invalidateQueries({ queryKey: ['tipos-recargo'] });
+      toast.success('Tipo de recargo eliminado exitosamente');
+      setTipoRecargoDeleteDialogOpen(false);
+      setTipoRecargoAEliminar(null);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Error al eliminar estado');
+      toast.error(error.response?.data?.error || 'Error al eliminar tipo de recargo');
     },
   });
 
@@ -298,22 +251,6 @@ export default function Configuracion() {
     setAreaDeleteDialogOpen(true);
   };
 
-  // Handlers Turnos
-  const handleNuevoTurno = () => {
-    setTurnoSeleccionado(null);
-    setTurnoDialogOpen(true);
-  };
-
-  const handleEditarTurno = (turno: Turno) => {
-    setTurnoSeleccionado(turno);
-    setTurnoDialogOpen(true);
-  };
-
-  const handleEliminarTurno = (turno: Turno) => {
-    setTurnoAEliminar(turno);
-    setTurnoDeleteDialogOpen(true);
-  };
-
   // Handlers Tipos de Novedad
   const handleNuevoTipoNovedad = () => {
     setTipoNovedadSeleccionado(null);
@@ -330,20 +267,20 @@ export default function Configuracion() {
     setTipoNovedadDeleteDialogOpen(true);
   };
 
-  // Handlers Estados
-  const handleNuevoEstado = () => {
-    setEstadoSeleccionado(null);
-    setEstadoDialogOpen(true);
+  // Handlers Tipos de Recargo
+  const handleNuevoTipoRecargo = () => {
+    setTipoRecargoSeleccionado(null);
+    setTipoRecargoDialogOpen(true);
   };
 
-  const handleEditarEstado = (estado: EstadoEmpleado) => {
-    setEstadoSeleccionado(estado);
-    setEstadoDialogOpen(true);
+  const handleEditarTipoRecargo = (tipoRecargo: TipoRecargo) => {
+    setTipoRecargoSeleccionado(tipoRecargo);
+    setTipoRecargoDialogOpen(true);
   };
 
-  const handleEliminarEstado = (estado: EstadoEmpleado) => {
-    setEstadoAEliminar(estado);
-    setEstadoDeleteDialogOpen(true);
+  const handleEliminarTipoRecargo = (tipoRecargo: TipoRecargo) => {
+    setTipoRecargoAEliminar(tipoRecargo);
+    setTipoRecargoDeleteDialogOpen(true);
   };
 
   return (
@@ -369,17 +306,13 @@ export default function Configuracion() {
             <Building2 className="h-4 w-4 mr-2" />
             Áreas
           </TabsTrigger>
-          <TabsTrigger value="turnos">
-            <Clock className="h-4 w-4 mr-2" />
-            Turnos
-          </TabsTrigger>
           <TabsTrigger value="novedades">
             <FileText className="h-4 w-4 mr-2" />
             Novedades
           </TabsTrigger>
-          <TabsTrigger value="estados">
-            <Activity className="h-4 w-4 mr-2" />
-            Estados
+          <TabsTrigger value="recargos">
+            <Coins className="h-4 w-4 mr-2" />
+            Recargos
           </TabsTrigger>
         </TabsList>
 
@@ -589,125 +522,6 @@ export default function Configuracion() {
           </Card>
         </TabsContent>
 
-        {/* Turnos Tab */}
-        <TabsContent value="turnos" className="space-y-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Turnos</CardTitle>
-              <Button onClick={handleNuevoTurno}>
-                <Plus className="h-4 w-4 mr-2" />
-                Nuevo Turno
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {turnosLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Card key={i}>
-                      <CardContent className="pt-6">
-                        <Skeleton className="h-6 w-1/4 mb-2" />
-                        <Skeleton className="h-4 w-1/3" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : turnos && turnos.length > 0 ? (
-                <div className="space-y-4">
-                  {turnos.map((turno: Turno) => (
-                    <Card key={turno.id_turno}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <span className="font-mono font-bold text-lg">{turno.tipo_turno}</span>
-                              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
-                                {turno.tipo_turno}
-                              </span>
-                              <span
-                                className={`px-2 py-1 rounded text-xs ${turno.estado
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                  }`}
-                              >
-                                {turno.estado ? 'Activo' : 'Inactivo'}
-                              </span>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {turno.hora_entrada} - {turno.hora_salida}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditarTurno(turno)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog
-                              open={
-                                turnoDeleteDialogOpen &&
-                                turnoAEliminar?.id_turno === turno.id_turno
-                              }
-                              onOpenChange={(open) => {
-                                if (!open) {
-                                  setTurnoDeleteDialogOpen(false);
-                                  setTurnoAEliminar(null);
-                                }
-                              }}
-                            >
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleEliminarTurno(turno)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>
-                                    ¿Estás seguro de eliminar este turno?
-                                  </AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta acción eliminará el turno{' '}
-                                    <strong>{turno.tipo_turno}</strong>. Esta acción no se puede
-                                    deshacer.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() =>
-                                      turnoAEliminar &&
-                                      turnoDeleteMutation.mutate(turnoAEliminar.id_turno)
-                                    }
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    {turnoDeleteMutation.isPending
-                                      ? 'Eliminando...'
-                                      : 'Eliminar'}
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay turnos registrados</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Novedades Tab */}
         <TabsContent value="novedades" className="space-y-4">
           <Card>
@@ -825,51 +639,70 @@ export default function Configuracion() {
         </TabsContent>
 
 
-        {/* Estados Tab */}
-        <TabsContent value="estados" className="space-y-4">
+        {/* Recargos Tab */}
+        <TabsContent value="recargos" className="space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Estados de Empleados</CardTitle>
-              <Button onClick={handleNuevoEstado}>
+              <CardTitle>Tipos de Recargo</CardTitle>
+              <Button onClick={handleNuevoTipoRecargo}>
                 <Plus className="h-4 w-4 mr-2" />
-                Nuevo Estado
+                Nuevo Tipo
               </Button>
             </CardHeader>
             <CardContent>
-              {estadosLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[...Array(6)].map((_, i) => (
+              {tiposRecargoLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
                     <Card key={i}>
                       <CardContent className="pt-6">
-                        <Skeleton className="h-6 w-3/4" />
+                        <Skeleton className="h-6 w-1/4 mb-2" />
+                        <Skeleton className="h-4 w-1/3" />
                       </CardContent>
                     </Card>
                   ))}
                 </div>
-              ) : estados && estados.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {estados.map((estado: EstadoEmpleado) => (
-                    <Card key={estado.id_estado}>
+              ) : tiposRecargo && tiposRecargo.length > 0 ? (
+                <div className="space-y-4">
+                  {tiposRecargo.map((tipo: TipoRecargo) => (
+                    <Card key={tipo.id_recargo_tipo}>
                       <CardContent className="pt-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-semibold text-lg">{estado.nombre_estado}</h3>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="font-mono font-bold text-lg">{tipo.codigo}</span>
+                              <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 rounded text-xs">
+                                {tipo.nombre_recargo}
+                              </span>
+                              <span
+                                className={`px-2 py-1 rounded text-xs ${tipo.activo
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  }`}
+                              >
+                                {tipo.activo ? 'Activo' : 'Inactivo'}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Porcentaje: {tipo.porcentaje_recargo}% {tipo.descripcion ? `- ${tipo.descripcion}` : ''}
+                            </div>
+                          </div>
                           <div className="flex gap-2">
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => handleEditarEstado(estado)}
+                              onClick={() => handleEditarTipoRecargo(tipo)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <AlertDialog
                               open={
-                                estadoDeleteDialogOpen &&
-                                estadoAEliminar?.id_estado === estado.id_estado
+                                tipoRecargoDeleteDialogOpen &&
+                                tipoRecargoAEliminar?.id_recargo_tipo === tipo.id_recargo_tipo
                               }
                               onOpenChange={(open) => {
                                 if (!open) {
-                                  setEstadoDeleteDialogOpen(false);
-                                  setEstadoAEliminar(null);
+                                  setTipoRecargoDeleteDialogOpen(false);
+                                  setTipoRecargoAEliminar(null);
                                 }
                               }}
                             >
@@ -877,7 +710,7 @@ export default function Configuracion() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => handleEliminarEstado(estado)}
+                                  onClick={() => handleEliminarTipoRecargo(tipo)}
                                 >
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
@@ -885,24 +718,23 @@ export default function Configuracion() {
                               <AlertDialogContent>
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>
-                                    ¿Estás seguro de eliminar este estado?
+                                    ¿Estás seguro de eliminar este tipo de recargo?
                                   </AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Esta acción eliminará el estado{' '}
-                                    <strong>{estado.nombre_estado}</strong>. Esta acción no se puede
-                                    deshacer.
+                                    Esta acción eliminará el tipo de recargo{' '}
+                                    <strong>{tipo.nombre_recargo}</strong> ({tipo.codigo}). Esta acción no se puede deshacer.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() =>
-                                      estadoAEliminar &&
-                                      estadoDeleteMutation.mutate(estadoAEliminar.id_estado)
+                                      tipoRecargoAEliminar &&
+                                      tipoRecargoDeleteMutation.mutate(tipoRecargoAEliminar.id_recargo_tipo)
                                     }
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                   >
-                                    {estadoDeleteMutation.isPending
+                                    {tipoRecargoDeleteMutation.isPending
                                       ? 'Eliminando...'
                                       : 'Eliminar'}
                                   </AlertDialogAction>
@@ -917,8 +749,8 @@ export default function Configuracion() {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No hay estados registrados</p>
+                  <Coins className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No hay tipos de recargo registrados</p>
                 </div>
               )}
             </CardContent>
@@ -953,19 +785,6 @@ export default function Configuracion() {
         loading={areaSaveMutation.isPending}
       />
 
-      <TurnoForm
-        open={turnoDialogOpen}
-        onOpenChange={(open) => {
-          setTurnoDialogOpen(open);
-          if (!open) setTurnoSeleccionado(null);
-        }}
-        onSubmit={async (data) => {
-          await turnoSaveMutation.mutateAsync(data);
-        }}
-        turno={turnoSeleccionado}
-        loading={turnoSaveMutation.isPending}
-      />
-
       <TipoNovedadForm
         open={tipoNovedadDialogOpen}
         onOpenChange={(open) => {
@@ -980,17 +799,17 @@ export default function Configuracion() {
       />
 
 
-      <EstadoForm
-        open={estadoDialogOpen}
+      <TipoRecargoForm
+        open={tipoRecargoDialogOpen}
         onOpenChange={(open) => {
-          setEstadoDialogOpen(open);
-          if (!open) setEstadoSeleccionado(null);
+          setTipoRecargoDialogOpen(open);
+          if (!open) setTipoRecargoSeleccionado(null);
         }}
         onSubmit={async (data) => {
-          await estadoSaveMutation.mutateAsync(data);
+          await tipoRecargoSaveMutation.mutateAsync(data);
         }}
-        estado={estadoSeleccionado}
-        loading={estadoSaveMutation.isPending}
+        tipoRecargo={tipoRecargoSeleccionado}
+        loading={tipoRecargoSaveMutation.isPending}
       />
     </div >
   );

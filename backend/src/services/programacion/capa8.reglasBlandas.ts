@@ -1,6 +1,7 @@
 import prisma from "../../prisma/cliente";
 import { capa3_obtenerPrioridadAreas } from "./capa3.reglasArea";
 import { capa5_generarAsignacionesDia } from "./capa5.GeneracionAsignacion";
+import { capa7_validarReglasDuras } from "./capa7.reglasDuras";
 import { capa9_detectarProblemas } from "./capa9.deteccionProblemas";
 import {
   Asignacion,
@@ -59,7 +60,7 @@ export async function capa6_guardarAsignaciones(asignaciones: Asignacion[], idUs
 export async function capa6_generarProgramacionDia(fecha: Date, opciones?: OpcionesGeneracion): Promise<ProgramacionDia> {
   const fechaNormalizada = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
 
-  const [empleadosBD, areasBD, turnosBD, novedades] = await Promise.all([
+  const [empleadosBD, areasBD, turnosBD, novedades, asignacionesPeriodo] = await Promise.all([
     prisma.empleado.findMany({
       where: {
         id_estado: 1
@@ -79,22 +80,58 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     prisma.detalleNovedad.findMany({
       where: { fecha: fechaNormalizada },
       include: { novedad_empleado: true }
-    })
+    }),
+    // Traer las asignaciones del periodo para balancear horas (si están activos)
+    opciones?.balancearHoras
+      ? prisma.detalleProgramacion.findMany({
+        where: {
+          labor_mes: {
+            fecha_inicio: { lte: fechaNormalizada },
+            fecha_fin: { gte: fechaNormalizada }
+          },
+          estado: 'Activo'
+        },
+        include: { turno: true }
+      })
+      : Promise.resolve([])
   ]);
 
   const idsEnNovedad = new Set(novedades.map(n => n.novedad_empleado.id_empleado));
 
-  const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => ({
-    id_empleado: emp.id_empleado,
-    cedula: emp.cedula,
-    nombre_completo: `${emp.nombre1} ${emp.apellido1 || ''}`.trim(),
-    total_areas: emp.empleado_area.length,
-    clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
-    areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
-    disponible: !idsEnNovedad.has(emp.id_empleado),
-    razonNoDisponible: idsEnNovedad.has(emp.id_empleado) ? "Tiene Novedad/Ausencia" : undefined,
-    id_labor_mes: emp.labor_mes[0]?.id_labor_mes || null
-  }));
+  const paramMetaHoras = await prisma.parametrizacion.findUnique({
+    where: { nombre_parametro: 'META_HORAS_PERIODO' }
+  });
+  const metaHorasConf = paramMetaHoras?.horas_maximas ? Number(paramMetaHoras.horas_maximas) : 100;
+
+  // Mapa de horas acumuladas en el periodo para cada empleado
+  const horasAcumuladasMap = new Map<number, number>();
+  if (opciones?.balancearHoras) {
+    asignacionesPeriodo.forEach(asig => {
+      if (!asig.turno?.duracion_horas) return;
+      const current = horasAcumuladasMap.get(asig.id_empleado) || 0;
+      horasAcumuladasMap.set(asig.id_empleado, current + Number(asig.turno.duracion_horas));
+    });
+  }
+
+  const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => {
+    const totalHorasProgramadas = horasAcumuladasMap.get(emp.id_empleado) || 0;
+    // Opcionalmente se puede sacar de la config, por defecto asumiremos meta de 100 quincenal para la UI
+    const meta_periodo = metaHorasConf;
+
+    return {
+      id_empleado: emp.id_empleado,
+      cedula: emp.cedula,
+      nombre_completo: `${emp.nombre1} ${emp.apellido1 || ''}`.trim(),
+      total_areas: emp.empleado_area.length,
+      clasificacion: emp.empleado_area.length === 1 ? "especialista" : "flexible",
+      areas: emp.empleado_area.map(ea => ({ id_area: ea.area.id_area, nombre_area: ea.area.nombre_area })),
+      disponible: !idsEnNovedad.has(emp.id_empleado),
+      razonNoDisponible: idsEnNovedad.has(emp.id_empleado) ? "Tiene Novedad/Ausencia" : undefined,
+      id_labor_mes: emp.labor_mes[0]?.id_labor_mes || null,
+      horas_acumuladas: totalHorasProgramadas,
+      meta_periodo
+    };
+  });
 
   const areasPriorizadas: AreaPriorizada[] = await capa3_obtenerPrioridadAreas(
     areasBD.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area }))
@@ -128,7 +165,11 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
       necesidadesPorArea,
       tPrisma as unknown as Turno,
       fechaNormalizada,
-      { ...opciones, programacionExistente: todasLasAsignaciones }
+      {
+        ...opciones,
+        programacionExistente: todasLasAsignaciones,
+        validarReglasFn: (emp, area, turno, f, progE) => capa7_validarReglasDuras(emp, area, turno, f, progE, undefined, opciones)
+      }
     );
 
     resultadoTurno.asignaciones.forEach(asig => {
@@ -165,7 +206,8 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
         total_areas: c.total_areas,
         clasificacion: c.clasificacion,
         areas: c.areas
-      }))
+      })),
+      balancearHoras: opciones?.balancearHoras
     }
   );
 

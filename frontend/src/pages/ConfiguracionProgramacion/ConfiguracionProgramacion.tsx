@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { consultasService, empleadosService, areasService, novedadesService, programacionService } from '@/services/api.service';
+import { consultasService, empleadosService, areasService, novedadesService, programacionService, parametrizacionService } from '@/services/api.service';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2, Search } from 'lucide-react';
+import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2, Search, Clock } from 'lucide-react';
 import { format, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -38,6 +38,9 @@ export default function ConfiguracionProgramacion() {
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
   const [cambiosPendientes, setCambiosPendientes] = useState<Map<string, any>>(new Map());
   const [bannerIgnorado, setBannerIgnorado] = useState(false);
+  const [metaHorasInput, setMetaHorasInput] = useState<string>('');
+  const [inicioNocturnoInput, setInicioNocturnoInput] = useState<string>('');
+  const [maximoExtrasInput, setMaximoExtrasInput] = useState<string>('');
   const isSaving = useRef(false);
 
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-01'));
@@ -56,6 +59,75 @@ export default function ConfiguracionProgramacion() {
       return programacionService.validarPeriodo(fechaInicio, fechaFin);
     },
     staleTime: 0
+  });
+
+  const { data: metaHorasData, refetch: refetchMetaHoras } = useQuery({
+    queryKey: ['parametro-meta-horas'],
+    queryFn: () => parametrizacionService.obtener('META_HORAS_PERIODO'),
+    staleTime: 60_000
+  });
+
+  const { data: inicioNocturnaData, refetch: refetchInicioNocturna } = useQuery({
+    queryKey: ['parametro-inicio-nocturna'],
+    queryFn: () => parametrizacionService.obtener('HORA_INICIO_NOCTURNA'),
+    staleTime: 60_000
+  });
+
+  const { data: maximoExtrasData, refetch: refetchMaximoExtras } = useQuery({
+    queryKey: ['parametro-maximo-extras'],
+    queryFn: () => parametrizacionService.obtener('MAXIMO_HORAS_EXTRAS'),
+    staleTime: 60_000
+  });
+
+  useEffect(() => {
+    if (metaHorasData?.horas_maximas !== undefined) {
+      setMetaHorasInput(String(Number(metaHorasData.horas_maximas)));
+    }
+  }, [metaHorasData]);
+
+  useEffect(() => {
+    // Si no existe, sugerir 21 (9:00 PM)
+    if (inicioNocturnaData?.horas_maximas !== undefined) {
+      setInicioNocturnoInput(String(Number(inicioNocturnaData.horas_maximas)));
+    } else if (!inicioNocturnaData) {
+      setInicioNocturnoInput('21'); 
+    }
+  }, [inicioNocturnaData]);
+
+  useEffect(() => {
+    // Si no existe, sugerir 48 horas como máximo legal general
+    if (maximoExtrasData?.horas_maximas !== undefined) {
+      setMaximoExtrasInput(String(Number(maximoExtrasData.horas_maximas)));
+    } else if (!maximoExtrasData) {
+      setMaximoExtrasInput('48');
+    }
+  }, [maximoExtrasData]);
+
+  const guardarMetaHorasMutation = useMutation({
+    mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_PERIODO', horas),
+    onSuccess: () => {
+      refetchMetaHoras();
+      toast.success('Meta de horas guardada correctamente');
+    },
+    onError: () => toast.error('Error al guardar la meta de horas'),
+  });
+
+  const guardarInicioNocturnaMutation = useMutation({
+    mutationFn: (hora: number) => parametrizacionService.guardar('HORA_INICIO_NOCTURNA', hora),
+    onSuccess: () => {
+      refetchInicioNocturna();
+      toast.success('Hora inicio de jornada nocturna guardada');
+    },
+    onError: () => toast.error('Error guardando inicio nocturno'),
+  });
+
+  const guardarMaximoExtrasMutation = useMutation({
+    mutationFn: (horas: number) => parametrizacionService.guardar('MAXIMO_HORAS_EXTRAS', horas),
+    onSuccess: () => {
+      refetchMaximoExtras();
+      toast.success('Máximo de horas extras guardado');
+    },
+    onError: () => toast.error('Error guardando máximo de extras'),
   });
 
   const fechaConflicto = useMemo(() => {
@@ -433,6 +505,125 @@ export default function ConfiguracionProgramacion() {
           <p className="font-bold text-lg">Seleccione un colaborador para configurar</p>
         </div>
       )}
+
+      <Card className="border-violet-100 bg-violet-50/20 rounded-2xl overflow-hidden mt-6 shadow-md">
+        <CardHeader className="py-4 border-b border-violet-100 bg-white/50 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black text-violet-900 flex items-center gap-2 tracking-widest uppercase">
+            <Settings2 className="h-4 w-4" /> Parámetros para Programación y Recargos
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 bg-white">
+          <p className="text-sm text-slate-500 mb-6 max-w-2xl">
+            Defina las variables fijas de control. Estos valores se utilizan automáticamente en todos los cálculos del sistema, como el reporte de desgloses y recargos.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* META HORAS PERIODO */}
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+              <div>
+                <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
+                  Meta de Horas por Periodo <Clock className="inline h-3 w-3 ml-1 text-violet-500" />
+                </Label>
+                <span className="text-xs text-slate-400 leading-tight block mb-3">Horas base programables en la vigencia. Ej: 192 (mes).</span>
+              </div>
+              <div className="flex items-center gap-2 mt-auto">
+                <input
+                  type="number"
+                  min="1"
+                  max="300"
+                  value={metaHorasInput}
+                  onChange={(e) => setMetaHorasInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 192"
+                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300 transition-all border border-slate-200"
+                />
+                <Button
+                  onClick={() => {
+                    const val = parseInt(metaHorasInput);
+                    if (!isNaN(val) && val > 0) guardarMetaHorasMutation.mutate(val);
+                    else toast.error('Ingrese un número válido mayor a 0');
+                  }}
+                  disabled={guardarMetaHorasMutation.isPending}
+                  size="icon"
+                  className="h-10 w-10 shrink-0 bg-violet-600 hover:bg-violet-700 rounded-lg"
+                  title="Guardar"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* HORA INICIO NOCTURNO */}
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+              <div>
+                <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
+                  Inicio Jornada Nocturna <Clock className="inline h-3 w-3 ml-1 text-slate-800" />
+                </Label>
+                <span className="text-xs text-slate-400 leading-tight block mb-3">Hora militar (0-23) desde donde inicia el recargo nocturno. Ej: 21.</span>
+              </div>
+              <div className="flex items-center gap-2 mt-auto">
+                <input
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={inicioNocturnoInput}
+                  onChange={(e) => setInicioNocturnoInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 21"
+                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200"
+                />
+                <Button
+                  onClick={() => {
+                    const val = parseInt(inicioNocturnoInput);
+                    if (!isNaN(val) && val >= 0 && val <= 23) guardarInicioNocturnaMutation.mutate(val);
+                    else toast.error('Ingrese hora militar válida (0-23)');
+                  }}
+                  disabled={guardarInicioNocturnaMutation.isPending}
+                  size="icon"
+                  className="h-10 w-10 shrink-0 bg-slate-800 hover:bg-slate-900 rounded-lg"
+                  title="Guardar"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* MAXIMO HORAS EXTRAS */}
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+              <div>
+                <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
+                  Máximo Legal Horas Extras <AlertCircle className="inline h-3 w-3 ml-1 text-rose-500" />
+                </Label>
+                <span className="text-xs text-slate-400 leading-tight block mb-3">Límite de horas extras laborables por periodo. Ej: 48 (quincena/mes).</span>
+              </div>
+              <div className="flex items-center gap-2 mt-auto">
+                <input
+                  type="number"
+                  min="0"
+                  max="200"
+                  value={maximoExtrasInput}
+                  onChange={(e) => setMaximoExtrasInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 48"
+                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300 transition-all border border-slate-200"
+                />
+                <Button
+                  onClick={() => {
+                    const val = parseInt(maximoExtrasInput);
+                    if (!isNaN(val) && val >= 0) guardarMaximoExtrasMutation.mutate(val);
+                    else toast.error('Ingrese un número válido');
+                  }}
+                  disabled={guardarMaximoExtrasMutation.isPending}
+                  size="icon"
+                  className="h-10 w-10 shrink-0 bg-rose-600 hover:bg-rose-700 rounded-lg"
+                  title="Guardar"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-indigo-100 bg-indigo-50/30 rounded-2xl overflow-hidden mt-6 shadow-md">
         <CardHeader className="py-4 border-b border-indigo-100 bg-white/50 flex flex-row items-center justify-between">

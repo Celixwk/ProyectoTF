@@ -30,6 +30,8 @@ export interface EmpleadoDisponible extends EmpleadoOrdenado {
   razonNoDisponible?: string;
   tipoNovedad?: string;
   id_labor_mes?: number;
+  horas_acumuladas?: number;
+  meta_periodo?: number;
 }
 
 export interface NovedadPorFecha {
@@ -125,6 +127,7 @@ export interface OpcionesGeneracion {
   descansosRequeridos?: Map<number, number>;
   idUsuario?: number;
   configuracion?: Record<number, { turnosIds: number[] }>;
+  balancearHoras?: boolean;
 }
 
 export interface ParamsGenerarAsignaciones {

@@ -60,7 +60,7 @@ export const verificarProgramacionExistente = async (req: Request, res: Response
 
 export const generarAutomatica = async (req: Request, res: Response) => {
     try {
-        const { fechaInicio, fechaFin, id_usuario_registro, configuracion } = req.body;
+        const { fechaInicio, fechaFin, id_usuario_registro, configuracion, balancearHoras } = req.body;
 
         // Validación básica de fechas
         if (!fechaInicio || !fechaFin) {
@@ -194,7 +194,8 @@ export const generarAutomatica = async (req: Request, res: Response) => {
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
                 configuracion: configReal,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
-                maxDiasConsecutivosArea: 3
+                maxDiasConsecutivosArea: 3,
+                balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             });
 
             totalAsignaciones += resultadoDia.resumen?.total_asignaciones ?? resultadoDia.asignaciones?.length ?? 0;
@@ -232,7 +233,7 @@ export const generarAutomatica = async (req: Request, res: Response) => {
 
 export const regenerarDesdeFecha = async (req: Request, res: Response) => {
     try {
-        const { fecha_inicio, configuracion, id_usuario_registro } = req.body;
+        const { fecha_inicio, configuracion, id_usuario_registro, balancearHoras } = req.body;
         if (!fecha_inicio || !configuracion) {
             return res.status(400).json({ success: false, error: 'Faltan parámetros requeridos' });
         }
@@ -288,7 +289,8 @@ export const regenerarDesdeFecha = async (req: Request, res: Response) => {
                 configuracion,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea: 3,
-                programacionExistente: programacionAcumulada
+                programacionExistente: programacionAcumulada,
+                balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             } as any);
             if (resultadoDia.asignaciones && resultadoDia.asignaciones.length > 0) {
                 programacionAcumulada.push(...resultadoDia.asignaciones);

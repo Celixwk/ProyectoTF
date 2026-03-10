@@ -5,7 +5,7 @@ function postRequest(path, data) {
     return new Promise((resolve, reject) => {
         const options = {
             hostname: '127.0.0.1',
-            port: 4000,
+            port: 5000,
             path: '/api/programacion' + path,
             method: 'POST',
             headers: {
@@ -28,7 +28,7 @@ function getRequest(path) {
     return new Promise((resolve, reject) => {
         const options = {
             hostname: '127.0.0.1',
-            port: 4000,
+            port: 5000,
             path: '/api/programacion' + path,
             method: 'GET'
         };
@@ -46,7 +46,7 @@ function deleteRequest(path, data) {
     return new Promise((resolve, reject) => {
         const options = {
             hostname: '127.0.0.1',
-            port: 4000,
+            port: 5000,
             path: '/api/programacion' + path,
             method: 'DELETE',
             headers: {
@@ -77,7 +77,8 @@ async function testEndpointsHttp() {
         const dataGen = await postRequest('/generar', JSON.stringify({
             fechaInicio: start,
             fechaFin: end,
-            id_usuario_registro: 1
+            id_usuario_registro: 1,
+            balancearHoras: true
         }));
         console.log('   Generate Response:', dataGen);
         if (!dataGen.success) throw new Error('Generation failed via API');

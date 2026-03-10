@@ -10,6 +10,7 @@ import type {
   Area,
   Turno,
   EstadoEmpleado,
+  Usuario,
 } from '../types/api.types';
 
 export const authService = {
@@ -383,6 +384,24 @@ export const novedadesService = {
     return data;
   },
 };
+export const tiposRecargoService = {
+  listar: async () => {
+    const { data } = await api.get('/tipos-recargo');
+    return data.data || data;
+  },
+  crear: async (tipo: any) => {
+    const { data } = await api.post('/tipos-recargo', tipo);
+    return data.data || data;
+  },
+  actualizar: async (id: number, tipo: any) => {
+    const { data } = await api.put(`/tipos-recargo/${id}`, tipo);
+    return data.data || data;
+  },
+  eliminar: async (id: number) => {
+    const { data } = await api.delete(`/tipos-recargo/${id}`);
+    return data;
+  },
+};
 
 export const recargosService = {
   listarTipos: async () => {
@@ -398,6 +417,15 @@ export const recargosService = {
       params: { id_empleado: idEmpleado, fecha_inicio: fechaInicio, fecha_fin: fechaFin },
     });
     return data.data || data;
+  },
+  guardarMasivo: async (payload: {
+    id_empleado: number;
+    fecha_inicio: string;
+    fecha_fin: string;
+    filas: Array<any>;
+  }) => {
+    const { data } = await api.post('/recargos/masivo', payload);
+    return data;
   },
 };
 
@@ -480,7 +508,7 @@ export const programacionService = {
     });
     return data.estado;
   },
-  generarAutomatica: async (payload: { fechaInicio: string; fechaFin: string; configuracion: any; id_usuario_registro?: number }) => {
+  generarAutomatica: async (payload: { fechaInicio: string; fechaFin: string; configuracion: any; id_usuario_registro?: number; balancearHoras?: boolean }) => {
     const { data } = await api.post('/programacion/generar', payload);
     return data.data || data;
   },
@@ -488,11 +516,13 @@ export const programacionService = {
     fechaInicio: string;
     configuracion: any;
     idUsuario?: number;
+    balancearHoras?: boolean;
   }) => {
     const { data } = await api.post('/programacion/regenerar-desde', {
       fecha_inicio: payload.fechaInicio,
       configuracion: payload.configuracion,
-      id_usuario_registro: payload.idUsuario
+      id_usuario_registro: payload.idUsuario,
+      balancearHoras: payload.balancearHoras
     });
     return data;
   },
@@ -584,6 +614,36 @@ export const alertasService = {
   },
 };
 
+export const parametrizacionService = {
+  obtener: async (nombre: string) => {
+    const { data } = await api.get(`/parametrizacion/${nombre}`);
+    return data.data;
+  },
+  guardar: async (nombre: string, horas_maximas: number) => {
+    const { data } = await api.put(`/parametrizacion/${nombre}`, { horas_maximas });
+    return data.data;
+  },
+};
+
+export const usuariosService = {
+  listar: async () => {
+    const { data } = await api.get<Usuario[]>('/usuarios');
+    return data;
+  },
+  crear: async (usuario: Partial<Usuario> & { contrasenia: string }) => {
+    const { data } = await api.post<Usuario>('/usuarios', usuario);
+    return data;
+  },
+  actualizar: async (id: number, usuario: Partial<Usuario> & { contrasenia?: string }) => {
+    const { data } = await api.put<Usuario>(`/usuarios/${id}`, usuario);
+    return data;
+  },
+  eliminar: async (id: number) => {
+    const { data } = await api.delete(`/usuarios/${id}`);
+    return data;
+  },
+};
+
 const services = {
   authService,
   consultasService,
@@ -600,6 +660,8 @@ const services = {
   calendarioService,
   programacionService,
   alertasService,
+  parametrizacionService,
+  usuariosService,
 };
 
 export default services;

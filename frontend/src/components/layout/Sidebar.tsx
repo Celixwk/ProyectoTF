@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarCheck,
   ClipboardList,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,7 +19,7 @@ const navigation = [
   { name: 'Vist. Programación', href: '/programacion', icon: Calendar },
   { name: 'Generar Programación', href: '/programacion-areas', icon: Building2 },
   { name: 'Gestión Mensual', href: '/gestion-mensual', icon: ClipboardList },
-  // { name: 'Recargos', href: '/recargos', icon: DollarSign },
+  { name: 'Recargos', href: '/recargos', icon: DollarSign },
   // { name: 'Novedades', href: '/novedades', icon: FileText },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
   { name: 'Config. Programación y Novedades', href: '/configuracion-programacion', icon: CalendarCheck },

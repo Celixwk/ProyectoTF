@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, UserSearch, Calendar, Lock } from 'lucide-react';
+
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, Calendar, Lock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -56,6 +57,7 @@ export default function GestionMensual() {
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
+    const [busquedaSelect, setBusquedaSelect] = useState('');
 
     const [modalNovedadOpen, setModalNovedadOpen] = useState(false);
     const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<{ id: number; nombre: string } | null>(null);
@@ -135,9 +137,20 @@ export default function GestionMensual() {
         return empleadosData.empleados.map((emp: any) => ({
             id_empleado: emp.id_empleado,
             nombre: emp.nombre_completo || emp.nombre || 'Empleado',
+            cedula: emp.cedula || '',
             areas_habilitadas: emp.areas_permitidas || []
         }));
     }, [empleadosData]);
+
+    const empleadosFiltradosSelect = useMemo(() => {
+        const term = (busquedaSelect || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (!term) return empleadosInfo;
+        return empleadosInfo.filter((e: any) => {
+            const nombre = (e.nombre || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const cedula = (e.cedula || '').toLowerCase();
+            return nombre.includes(term) || cedula.includes(term);
+        });
+    }, [empleadosInfo, busquedaSelect]);
 
     const alertasSeparadas = useMemo(() => {
         const alertasProcesadas = procesarAlertas(alertasMotor);
@@ -188,9 +201,8 @@ export default function GestionMensual() {
         base = [...base, ...nuevosDesdeRefuerzo];
 
         if (filtroEmpleado.trim()) {
-            const search = filtroEmpleado.toLowerCase();
             return base.filter((p: any) =>
-                (p.nombre_empleado || p.empleado?.nombre_completo || '').toLowerCase().includes(search)
+                String(p.id_empleado) === filtroEmpleado
             );
         }
         return base;
@@ -351,7 +363,7 @@ export default function GestionMensual() {
             // 1. Validar que esté DISPONIBLE ese día específico (no sea descanso ni novedad)
             // Usamos noAsignadosPorDia que trae la verdad del backend sobre disponibilidad
             const disponiblesHabil = noAsignadosPorDia[fechaNorm] || [];
-            const esHabil = disponiblesHabil.some(p => Number(p.id_empleado) === Number(empleadoArrastrado.id_empleado));
+            const esHabil = disponiblesHabil.some((p: any) => Number(p.id_empleado) === Number(empleadoArrastrado.id_empleado));
 
             if (!esHabil) {
                 // Si no está en la lista de disponibles, averiguar por qué para dar buen feedback
@@ -436,30 +448,6 @@ export default function GestionMensual() {
         aplicarCambios(cambiosAGenerar);
     };
 
-    const handleDropRefuerzo = (e: React.DragEvent, fechaDestino: string) => {
-        e.preventDefault();
-        if (!empleadoArrastrado || !empleadoArrastrado.id_empleado) return;
-
-        // Si viene de refuerzo (area -1) y cae en el mismo dia en zona de refuerzo, no hacemos nada
-        if (empleadoArrastrado.id_area_origen === -1 && empleadoArrastrado.fecha === fechaDestino) {
-            setEmpleadoArrastrado(null);
-            return;
-        }
-
-        const cambioId = `${Date.now()}-${Math.random()}`;
-        const nuevoCambio: CambioLocal = {
-            id: cambioId,
-            id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0,
-            empleado: empleadoArrastrado.nombre_empleado,
-            id_empleado: empleadoArrastrado.id_empleado,
-            fecha: fechaDestino,
-            id_area_origen: empleadoArrastrado.id_area_origen,
-            id_turno_origen: empleadoArrastrado.id_turno_origen,
-            id_area_destino: -1, // Destino refuerzos
-            id_turno_destino: -1
-        };
-        aplicarCambios([nuevoCambio]);
-    };
 
     const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
 
@@ -606,9 +594,65 @@ export default function GestionMensual() {
                                         </div>
                                     </h2>
                                 </div>
-                                <div className="flex-1 max-w-sm relative">
-                                    <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                    <Input placeholder="Buscar..." className="pl-10 h-9" value={filtroEmpleado} onChange={(e) => setFiltroEmpleado(e.target.value)} />
+                                <div className="flex-1 max-w-sm relative flex flex-col items-center">
+                                    <div className="w-full flex items-center justify-between">
+                                        <Select
+                                            value={filtroEmpleado || "todos"}
+                                            onValueChange={v => {
+                                                setFiltroEmpleado(v === "todos" ? "" : v);
+                                                setBusquedaSelect('');
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-9 bg-white border-slate-200">
+                                                <div className="flex items-center text-slate-700">
+                                                    <Users className="h-4 w-4 mr-2 text-indigo-500" />
+                                                    <SelectValue placeholder="Seleccione un empleado..." />
+                                                </div>
+                                            </SelectTrigger>
+                                            <SelectContent className="w-[var(--radix-select-trigger-width)]">
+                                                <div
+                                                    className="flex items-center px-3 pb-2 border-b"
+                                                    onPointerDown={(e) => e.stopPropagation()}
+                                                >
+                                                    <Search className="h-4 w-4 mr-2 text-slate-400" />
+                                                    <input
+                                                        className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-slate-400"
+                                                        placeholder="Escriba para filtrar..."
+                                                        value={busquedaSelect}
+                                                        onChange={(e) => setBusquedaSelect(e.target.value)}
+                                                        onKeyDown={(e) => e.stopPropagation()}
+                                                    />
+                                                </div>
+                                                <div className="max-h-[300px] overflow-y-auto mt-1 p-1">
+                                                    <SelectItem value="todos" className="py-2 text-slate-600 font-medium">
+                                                        Todos los empleados
+                                                    </SelectItem>
+                                                    {empleadosFiltradosSelect.length > 0 ? (
+                                                        empleadosFiltradosSelect.map((e: any) => (
+                                                            <SelectItem
+                                                                key={e.id_empleado}
+                                                                value={e.id_empleado.toString()}
+                                                                className="py-3"
+                                                            >
+                                                                <span className="font-bold uppercase text-xs">
+                                                                    {e.nombre}
+                                                                </span>
+                                                                {e.cedula && (
+                                                                    <span className="ml-2 text-indigo-600 font-mono text-xs">
+                                                                        [{e.cedula}]
+                                                                    </span>
+                                                                )}
+                                                            </SelectItem>
+                                                        ))
+                                                    ) : (
+                                                        <div className="p-3 text-center text-sm text-slate-500">
+                                                            No se encontraron empleados.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
                                     {esModoLectura && (
@@ -755,6 +799,16 @@ export default function GestionMensual() {
                                                     <span className="text-xs font-semibold text-slate-700 truncate" title={emp.nombre_completo}>
                                                         {emp.nombre_completo}
                                                     </span>
+                                                    {(emp.horas_acumuladas !== undefined && emp.meta_periodo) && (
+                                                        <span className={cn(
+                                                            "text-[9px] font-bold px-1 rounded-sm ml-1",
+                                                            emp.horas_acumuladas > emp.meta_periodo ? "bg-red-100 text-red-700" :
+                                                                emp.horas_acumuladas < (emp.meta_periodo - 12) ? "bg-amber-100 text-amber-700" :
+                                                                    "bg-green-100 text-green-700"
+                                                        )} title="Horas acumuladas / Meta periodo">
+                                                            {emp.horas_acumuladas} / {emp.meta_periodo}h
+                                                        </span>
+                                                    )}
                                                     <span className="flex items-center justify-center bg-indigo-50 text-indigo-700 text-[9px] font-bold h-4 min-w-[1rem] px-1 rounded-full border border-indigo-100" title="Días disponibles en este rango">
                                                         {emp._diasDisponibles}
                                                     </span>

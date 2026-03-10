@@ -23,6 +23,7 @@ export function capa9_detectarProblemas(
     maxDiasConsecutivos?: number;
     descansosRequeridos?: Map<number, number>;
     empleados?: EmpleadoOrdenado[];
+    balancearHoras?: boolean;
   }
 ): Alerta[] {
   const alertas: Alerta[] = [];
@@ -60,6 +61,33 @@ export function capa9_detectarProblemas(
   if (opciones?.descansosRequeridos && opciones?.empleados) {
     const alertasDescansos = detectarDescansosFaltantes(programacion, opciones.empleados, opciones.descansosRequeridos, fecha);
     alertas.push(...alertasDescansos);
+  }
+
+  // Phase B: Detección de problemas de subprogramación (déficit de horas) o extra programación (exceso)
+  if (opciones?.balancearHoras) {
+    empleadosDisponibles.forEach(emp => {
+      const info = emp as EmpleadoDisponible & { horas_acumuladas?: number; meta_periodo?: number };
+      if (info.horas_acumuladas !== undefined && info.meta_periodo !== undefined) {
+        const margenAceptableDebajo = 12; // Un turno por debajo
+        const margenAceptableEncima = 12; // Un turno por encima (extras toleradas)
+
+        if (info.horas_acumuladas < (info.meta_periodo - margenAceptableDebajo)) {
+          alertas.push({
+            tipo: 'advertencia',
+            codigo: 'DEFICIT_HORAS_PERIODO',
+            mensaje: `${info.nombre_completo} está bajo el margen de horas estimadas (${info.horas_acumuladas}/${info.meta_periodo}h). Verifique si hay áreas donde pueda apoyar.`,
+            empleado: info.id_empleado
+          });
+        } else if (info.horas_acumuladas > (info.meta_periodo + margenAceptableEncima)) {
+          alertas.push({
+            tipo: 'info',
+            codigo: 'EXCESO_HORAS_PERIODO',
+            mensaje: `${info.nombre_completo} está proyectando un exceso de horas en el periodo (${info.horas_acumuladas}/${info.meta_periodo}h).`,
+            empleado: info.id_empleado
+          });
+        }
+      }
+    });
   }
 
   if (corruptas.length > 0) {

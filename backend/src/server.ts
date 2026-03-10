@@ -17,6 +17,10 @@ import programacionRoutes from './routes/programacion.routes';
 import alertasRoutes from './routes/alertas.routes';
 import estadosRoutes from './routes/estados.routes';
 import authRoutes from './routes/auth.routes';
+import parametrizacionRoutes from './routes/parametrizacion.routes';
+import recargosRoutes from './routes/recargos.routes';
+import tiposRecargoRoutes from './routes/tipos_recargo.routes';
+import usuariosRoutes from './routes/usuarios.routes';
 import { verificarEstructuraBD } from './database/inicializar';
 
 dotenv.config();
@@ -41,6 +45,10 @@ app.use('/api/programacion', programacionRoutes);
 app.use('/api/alertas', alertasRoutes);
 app.use('/api/estados', estadosRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/parametrizacion', parametrizacionRoutes);
+app.use('/api/recargos', recargosRoutes);
+app.use('/api/tipos-recargo', tiposRecargoRoutes);
+app.use('/api/usuarios', usuariosRoutes);
 
 app.get('/health', (req, res) => res.send('Backend operativo ✅'));
 
