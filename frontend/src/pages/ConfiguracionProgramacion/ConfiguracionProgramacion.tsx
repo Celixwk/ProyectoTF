@@ -14,14 +14,6 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import type { EmpleadoCompleto, Area } from '@/types/api.types';
 
-const TIPOS_NOVEDAD = [
-  { id: 1, nombre: 'Descanso', color: 'bg-blue-600 text-white', corta: 'DES' },
-  { id: 2, nombre: 'Vacaciones', color: 'bg-emerald-600 text-white', corta: 'VAC' },
-  { id: 3, nombre: 'Incapacidad', color: 'bg-rose-600 text-white', corta: 'INC' },
-  { id: 4, nombre: 'Licencia', color: 'bg-amber-500 text-black', corta: 'LIC' },
-  { id: 5, nombre: 'Suspensión', color: 'bg-slate-800 text-white', corta: 'SUS' },
-];
-
 const parseFechaSinAjuste = (fechaStr: string) => {
   if (!fechaStr) return null;
   const [y, m, d] = fechaStr.split('T')[0].split('-').map(Number);
@@ -32,7 +24,7 @@ export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
   const [busquedaEmpleado, setBusquedaEmpleado] = useState('');
-  const [tipoSeleccionado, setTipoSeleccionado] = useState<number>(1);
+  const [tipoSeleccionado, setTipoSeleccionado] = useState<number | undefined>(undefined);
   const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number; id_novedad_empleado?: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
@@ -54,7 +46,7 @@ export default function ConfiguracionProgramacion() {
   }, [mesActual, anioActual]);
 
   const { data: alertasMotor = [], refetch: refetchAlertas } = useQuery({
-    queryKey: ['validar-programacion', mesActual, anioActual],
+    queryKey: ['validar-programacion', fechaInicio, fechaFin],
     queryFn: async () => {
       return programacionService.validarPeriodo(fechaInicio, fechaFin);
     },
@@ -90,7 +82,7 @@ export default function ConfiguracionProgramacion() {
     if (inicioNocturnaData?.horas_maximas !== undefined) {
       setInicioNocturnoInput(String(Number(inicioNocturnaData.horas_maximas)));
     } else if (!inicioNocturnaData) {
-      setInicioNocturnoInput('21'); 
+      setInicioNocturnoInput('21');
     }
   }, [inicioNocturnaData]);
 
@@ -102,6 +94,42 @@ export default function ConfiguracionProgramacion() {
       setMaximoExtrasInput('48');
     }
   }, [maximoExtrasData]);
+
+  const { data: tiposNovedadData } = useQuery({
+    queryKey: ['tipos-novedades'],
+    queryFn: () => novedadesService.listarTipos(),
+    staleTime: 60_000
+  });
+
+  const tiposNovedad = useMemo(() => {
+    if (!tiposNovedadData) return [];
+    const PALETAS = [
+      { color: 'bg-blue-600 text-white', bgPill: 'bg-blue-600' },
+      { color: 'bg-emerald-600 text-white', bgPill: 'bg-emerald-600' },
+      { color: 'bg-rose-600 text-white', bgPill: 'bg-rose-600' },
+      { color: 'bg-amber-500 text-black', bgPill: 'bg-amber-500' },
+      { color: 'bg-slate-800 text-white', bgPill: 'bg-slate-800' },
+      { color: 'bg-violet-600 text-white', bgPill: 'bg-violet-600' },
+      { color: 'bg-pink-600 text-white', bgPill: 'bg-pink-600' },
+      { color: 'bg-cyan-600 text-white', bgPill: 'bg-cyan-600' },
+    ];
+    return tiposNovedadData.map((t: any, index: number) => {
+      const paleta = PALETAS[index % PALETAS.length];
+      return {
+        id: t.id_novedad_tipo,
+        nombre: t.nombre_novedad,
+        color: paleta.color,
+        bgPill: paleta.bgPill,
+        corta: t.codigo || t.nombre_novedad.substring(0, 3).toUpperCase()
+      };
+    });
+  }, [tiposNovedadData]);
+
+  useEffect(() => {
+    if (tiposNovedad.length > 0 && (!tipoSeleccionado || !tiposNovedad.find((t: any) => t.id === tipoSeleccionado))) {
+      setTipoSeleccionado(tiposNovedad[0].id);
+    }
+  }, [tiposNovedad, tipoSeleccionado]);
 
   const guardarMetaHorasMutation = useMutation({
     mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_PERIODO', horas),
@@ -221,6 +249,7 @@ export default function ConfiguracionProgramacion() {
   }, [idEmpleadoSeleccionado, empleadoSeleccionado, novedadesMes]);
 
   const handleDiaToggle = (fecha: Date) => {
+    if (!tipoSeleccionado) return;
     const fechaStr = format(fecha, 'yyyy-MM-dd');
     setNovedades(prev => {
       const existe = prev.find(n => isSameDay(n.fecha, fecha));
@@ -320,7 +349,7 @@ export default function ConfiguracionProgramacion() {
     }
   });
 
-  const hayCambiosEnAreas = JSON.stringify(areasPermitidas) !== JSON.stringify(empleadoSeleccionado?.areas_permitidas);
+  const hayCambiosEnAreas = JSON.stringify([...areasPermitidas].sort()) !== JSON.stringify([...(empleadoSeleccionado?.areas_permitidas || [])].sort());
   const hayCambiosPendientes = cambiosPendientes.size > 0;
 
   return (
@@ -453,16 +482,25 @@ export default function ConfiguracionProgramacion() {
                   <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
                 </Button>
               </div>
-              <div className="flex flex-wrap gap-1 bg-white p-1 rounded-full border shadow-sm">
-                {TIPOS_NOVEDAD.map(t => (
-                  <button
-                    key={t.id}
-                    className={`px-3 py-1.5 rounded-full text-[10px] font-black transition-all ${tipoSeleccionado === t.id ? `${t.color} scale-105 shadow-md` : 'text-slate-400 hover:text-slate-600'}`}
-                    onClick={() => setTipoSeleccionado(t.id)}
-                  >
-                    {t.nombre}
-                  </button>
-                ))}
+              <div className="flex bg-white px-2 py-1 rounded-xl border shadow-sm items-center">
+                <Select
+                  value={tipoSeleccionado?.toString() || ""}
+                  onValueChange={v => setTipoSeleccionado(parseInt(v))}
+                >
+                  <SelectTrigger className="h-8 text-xs font-bold w-[200px] border-none bg-transparent shadow-none focus:ring-0">
+                    <SelectValue placeholder="Seleccione Novedad..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tiposNovedad.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id.toString()} className="text-xs font-bold py-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-3 h-3 rounded-full ${t.bgPill}`}></span>
+                          {t.nombre}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent className="p-6 bg-white">
@@ -470,7 +508,7 @@ export default function ConfiguracionProgramacion() {
                 {diasEnRango.map(fecha => {
                   const fechaISO = format(fecha, 'yyyy-MM-dd');
                   const novedad = novedades.find(n => format(n.fecha, 'yyyy-MM-dd') === fechaISO);
-                  const tipo = TIPOS_NOVEDAD.find(t => t.id === novedad?.id_tipo);
+                  const tipo = tiposNovedad.find((t: any) => t.id === novedad?.id_tipo);
                   return (
                     <div
                       key={fechaISO}
@@ -516,9 +554,9 @@ export default function ConfiguracionProgramacion() {
           <p className="text-sm text-slate-500 mb-6 max-w-2xl">
             Defina las variables fijas de control. Estos valores se utilizan automáticamente en todos los cálculos del sistema, como el reporte de desgloses y recargos.
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
+
             {/* META HORAS PERIODO */}
             <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
               <div>

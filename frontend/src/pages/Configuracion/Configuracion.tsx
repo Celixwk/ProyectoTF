@@ -66,7 +66,7 @@ export default function Configuracion() {
   });
 
   const { data: tiposNovedad, isLoading: tiposNovedadLoading } = useQuery({
-    queryKey: ['tipos-novedad'],
+    queryKey: ['tipos-novedades'],
     queryFn: () => novedadesService.listarTipos(),
   });
 
@@ -159,7 +159,7 @@ export default function Configuracion() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tipos-novedad'] });
+      queryClient.invalidateQueries({ queryKey: ['tipos-novedades'] });
       toast.success(
         tipoNovedadSeleccionado ? 'Tipo de novedad actualizado exitosamente' : 'Tipo de novedad creado exitosamente'
       );
@@ -174,7 +174,7 @@ export default function Configuracion() {
   const tipoNovedadDeleteMutation = useMutation({
     mutationFn: (id: number) => novedadesService.eliminarTipo(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tipos-novedad'] });
+      queryClient.invalidateQueries({ queryKey: ['tipos-novedades'] });
       toast.success('Tipo de novedad eliminado exitosamente');
       setTipoNovedadDeleteDialogOpen(false);
       setTipoNovedadAEliminar(null);

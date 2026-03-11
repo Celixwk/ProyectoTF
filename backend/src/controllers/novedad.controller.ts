@@ -60,6 +60,70 @@ export const novedadController = {
         }
     },
 
+    async crearTipo(req: Request, res: Response) {
+        try {
+            const { codigo, nombre_novedad, descripcion, afecta_pago, activo } = req.body;
+            const nuevoTipo = await prisma.tipoNovedad.create({
+                data: {
+                    codigo,
+                    nombre_novedad,
+                    descripcion,
+                    afecta_pago,
+                    activo
+                }
+            });
+            res.status(201).json({ success: true, data: nuevoTipo });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: 'Error al crear tipo de novedad' });
+        }
+    },
+
+    async actualizarTipo(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            const { codigo, nombre_novedad, descripcion, afecta_pago, activo } = req.body;
+            const tipoActualizado = await prisma.tipoNovedad.update({
+                where: { id_novedad_tipo: Number(id) },
+                data: {
+                    codigo,
+                    nombre_novedad,
+                    descripcion,
+                    afecta_pago,
+                    activo
+                }
+            });
+            res.json({ success: true, data: tipoActualizado });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: 'Error al actualizar tipo de novedad' });
+        }
+    },
+
+    async eliminarTipo(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            // Verificar si el tipo está en uso
+            const enUso = await prisma.novedadEmpleado.findFirst({
+                where: { id_novedad_tipo: Number(id) }
+            });
+
+            if (enUso) {
+                // Si está en uso, solo se inactiva
+                await prisma.tipoNovedad.update({
+                    where: { id_novedad_tipo: Number(id) },
+                    data: { activo: false }
+                });
+                return res.json({ success: true, message: 'Tipo de novedad desactivado, ya que está en uso en registros de empleados.' });
+            }
+
+            await prisma.tipoNovedad.delete({
+                where: { id_novedad_tipo: Number(id) }
+            });
+            res.json({ success: true, message: 'Tipo de novedad eliminado correctamente.' });
+        } catch (error: any) {
+            res.status(500).json({ success: false, error: 'Error al eliminar tipo de novedad' });
+        }
+    },
+
     async crear(req: Request, res: Response) {
         try {
             const { id_empleado, id_novedad_tipo, fecha_inicio, fecha_fin, observaciones, cantidad_diaria = 1 } = req.body;

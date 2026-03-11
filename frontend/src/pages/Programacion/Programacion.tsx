@@ -1,26 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { areasService, programacionService, consultasService } from '@/services/api.service';
+import { areasService, programacionService, consultasService, novedadesService } from '@/services/api.service';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight, X } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Area } from '@/types/api.types';
-
-const TIPOS_NOVEDAD: Record<string, { label: string, color: string, full: string }> = {
-  'VAC': { label: 'VAC', color: 'bg-emerald-200 text-emerald-900 border-emerald-300', full: 'Vacaciones' },
-  'INC': { label: 'INC', color: 'bg-rose-200 text-rose-900 border-rose-300', full: 'Incapacidad' },
-  'LIC': { label: 'LIC', color: 'bg-amber-200 text-amber-900 border-amber-300', full: 'Licencia' },
-  'SUS': { label: 'SUS', color: 'bg-slate-800 text-white border-slate-600', full: 'Suspensión' },
-  'PER': { label: 'PER', color: 'bg-indigo-200 text-indigo-900 border-indigo-300', full: 'Permiso' },
-  'DES': { label: 'DES', color: 'bg-blue-600 text-white border-blue-700', full: 'Descanso' }
-};
 
 export default function Programacion() {
   const navigate = useNavigate();
@@ -114,6 +105,44 @@ export default function Programacion() {
     }),
     enabled: !!pInicio && !!pFin
   });
+
+  const { data: tiposNovedadData } = useQuery({
+    queryKey: ['tipos-novedades'],
+    queryFn: () => novedadesService.listarTipos(),
+    staleTime: 60_000
+  });
+
+  const { tiposNovedadMap, leyendaTipos } = useMemo(() => {
+    const map = new Map<string, any>();
+    const leyenda: any[] = [];
+    if (!tiposNovedadData) return { tiposNovedadMap: map, leyendaTipos: leyenda };
+
+    const PALETAS = [
+      { color: 'bg-blue-200 text-blue-900 border-blue-300' },
+      { color: 'bg-emerald-200 text-emerald-900 border-emerald-300' },
+      { color: 'bg-rose-200 text-rose-900 border-rose-300' },
+      { color: 'bg-amber-200 text-amber-900 border-amber-300' },
+      { color: 'bg-violet-200 text-violet-900 border-violet-300' },
+      { color: 'bg-pink-200 text-pink-900 border-pink-300' },
+      { color: 'bg-cyan-200 text-cyan-900 border-cyan-300' },
+      { color: 'bg-slate-800 text-white border-slate-600' },
+    ];
+
+    tiposNovedadData.forEach((t: any, index: number) => {
+      const paleta = PALETAS[index % PALETAS.length];
+      const code = t.codigo || t.nombre_novedad.substring(0, 3).toUpperCase();
+      const obj = {
+        label: code,
+        color: paleta.color,
+        full: t.nombre_novedad,
+        id_tipo: t.id_novedad_tipo
+      };
+      map.set(code, obj);
+      map.set(t.id_novedad_tipo.toString(), obj);
+      leyenda.push(obj);
+    });
+    return { tiposNovedadMap: map, leyendaTipos: leyenda };
+  }, [tiposNovedadData]);
 
   const diasDelRango = useMemo(() => {
     if (!fechaInicio || !fechaFin) return [];
@@ -247,27 +276,28 @@ export default function Programacion() {
 
     const listaNovedades = Array.isArray(novedadesData) ? novedadesData : (novedadesData.novedades || []);
     listaNovedades.forEach((nov: any) => {
-      // Debug: Log nov being processed to ensure clean scope
-      // console.log('Processing Novedad:', nov?.id_empleado);
       if (!empleadosMap[nov.id_empleado]) {
         empleadosMap[nov.id_empleado] = {
-          nombre: nov.empleado ? `${nov.empleado.nombre1} ${nov.empleado.apellido1}` : (nov.nombre_completo || 'Empleado'),
-          cedula: nov.cedula_empleado || '',
-          dias: {}
+          nombre: nov.nombre_completo || (nov.empleado ? `${nov.empleado.nombre1} ${nov.empleado.apellido1}` : 'Empleado'),
+          cedula: nov.cedula || nov.cedula_empleado || '',
+          dias: {},
+          // @ts-ignore
+          areaIds: new Set<number>()
         };
       }
-      if (nov.detalle_novedad && Array.isArray(nov.detalle_novedad)) {
-        nov.detalle_novedad.forEach((det: any) => {
-          const fecha = det.fecha.split('T')[0];
-          const tipoNov = TIPOS_NOVEDAD[nov.tipo_novedad?.codigo] || TIPOS_NOVEDAD['LIC'];
-          empleadosMap[nov.id_empleado].dias[fecha] = {
-            tipo: 'NOVEDAD',
-            valor: tipoNov.label,
-            estilo: tipoNov.color,
-            detalle: tipoNov.full,
-            subvalor: ''
-          };
-        });
+
+      const fecha = nov.fecha?.split('T')[0];
+      if (fecha) {
+        const tipoId = nov.id_novedad_tipo?.toString();
+        const tipoNov = tiposNovedadMap.get(tipoId) || tiposNovedadMap.get(nov.codigo_novedad) || { label: 'NOV', color: 'bg-slate-200 text-slate-900 border-slate-300', full: nov.tipo || 'Novedad' };
+
+        empleadosMap[nov.id_empleado].dias[fecha] = {
+          tipo: 'NOVEDAD',
+          valor: tipoNov.label,
+          estilo: tipoNov.color,
+          detalle: tipoNov.full,
+          subvalor: ''
+        };
       }
     });
 
@@ -300,7 +330,7 @@ export default function Programacion() {
     }
 
     return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [programacion, novedadesData, areasMap, filtro, areaFiltro]);
+  }, [programacion, novedadesData, areasMap, filtro, areaFiltro, tiposNovedadMap]);
 
   if (loadingVal || (estadoValidacion?.completo && loadingProg)) {
     return (
@@ -581,7 +611,7 @@ export default function Programacion() {
         <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
           <span className="w-6 h-6 rounded bg-cyan-100 border border-cyan-300 flex items-center justify-center text-[10px] font-bold text-cyan-900">LIBRE</span> Disponible
         </div>
-        {Object.values(TIPOS_NOVEDAD).map(tipo => (
+        {leyendaTipos.map(tipo => (
           <div key={tipo.label} className="flex items-center gap-2 text-sm text-slate-600 font-medium">
             <span className={cn("w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border", tipo.color)}>{tipo.label}</span> {tipo.full}
           </div>
@@ -590,7 +620,3 @@ export default function Programacion() {
     </div >
   );
 }
-
-const Loader2 = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
-);
