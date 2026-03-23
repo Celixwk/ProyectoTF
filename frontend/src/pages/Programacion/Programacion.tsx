@@ -1,14 +1,17 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { areasService, programacionService, consultasService, novedadesService } from '@/services/api.service';
+import { areasService, programacionService, consultasService, novedadesService, turnosService } from '@/services/api.service';
+import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
+
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight, X, Loader2 } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Info, UserSearch, ArrowRight, X, Loader2, FileSpreadsheet } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
-import { format, addDays } from 'date-fns';
+import { parseISO, format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import type { Area } from '@/types/api.types';
@@ -26,8 +29,8 @@ export default function Programacion() {
 
   const [mes] = useState(hoy.getMonth() + 1);
   const [anio] = useState(hoy.getFullYear());
-
   const [filtro, setFiltro] = useState('');
+  const [areaFiltro, setAreaFiltro] = useState('TODAS');
 
   // Persistir y restaurar rango desde localStorage
   useEffect(() => {
@@ -46,7 +49,6 @@ export default function Programacion() {
       localStorage.setItem('prog_vista_fechaFin', pFin);
     }
   }, [pInicio, pFin]);
-  const [areaFiltro, setAreaFiltro] = useState<string>('TODAS');
 
   const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -112,6 +114,17 @@ export default function Programacion() {
     staleTime: 60_000
   });
 
+  const { data: turnosRaw } = useQuery({
+    queryKey: ['turnos'],
+    queryFn: () => turnosService.listar({ estado: true })
+  });
+
+  const turnos = useMemo(() => {
+    if (!turnosRaw) return [];
+    // @ts-ignore
+    return turnosRaw.filter(t => ![1, 2, 3].includes(t.id_turno));
+  }, [turnosRaw]);
+
   const { tiposNovedadMap, leyendaTipos } = useMemo(() => {
     const map = new Map<string, any>();
     const leyenda: any[] = [];
@@ -155,8 +168,8 @@ export default function Programacion() {
     try {
       // Calcular días dinámicamente
       // Ajuste: Crear fechas a mediodía para evitar saltos de zona horaria al iterar
-      const start = new Date(fechaInicio + 'T12:00:00');
-      const end = new Date(fechaFin + 'T12:00:00');
+      const start = parseISO(fechaInicio);
+      const end = parseISO(fechaFin);
 
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
 
@@ -185,6 +198,7 @@ export default function Programacion() {
 
   const datosProcesados = useMemo(() => {
     const empleadosMap: Record<number, {
+      id_empleado: number,
       nombre: string,
       cedula: string,
       dias: Record<string, any>
@@ -195,24 +209,33 @@ export default function Programacion() {
       const fecha = asig.fecha.split('T')[0];
       const idArea = Number(asig.id_area);
       const nombreArea = areasMap.get(idArea) || 'General';
-      const abreviacionArea = nombreArea.substring(0, 3).toUpperCase();
+      // Abbreviation: up to 8 chars for better readability
+      const abreviacionArea = nombreArea.substring(0, 8).trimEnd();
       const esRefuerzo = !asig.turno?.hora_entrada;
 
       if (!empleadosMap[idEmp]) {
         empleadosMap[idEmp] = {
+          id_empleado: idEmp,
           nombre: asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado',
           cedula: asig.cedula_empleado || asig.empleado?.cedula || '',
           dias: {},
           // @ts-ignore
           descansosRaw: asig.empleado?.descansos || [],
           // @ts-ignore
-          areaIds: new Set<number>()
+          areaIds: new Set<number>(),
+          // @ts-ignore
+          areaDays: new Map<number, number>(),
         };
       }
 
       // Registrar área en el set del empleado
       // @ts-ignore
       if (idArea) empleadosMap[idEmp].areaIds.add(idArea);
+      // Contar días por área para determinar área dominante
+      // @ts-ignore
+      const areaDays: Map<number, number> = empleadosMap[idEmp].areaDays;
+      // @ts-ignore
+      areaDays.set(idArea, (areaDays.get(idArea) || 0) + 1);
 
       // Asegurarnos de tener los descansos si vienen en esta iteración
       if (asig.empleado?.descansos && (!empleadosMap[idEmp].dias['descansosRaw'])) {
@@ -262,6 +285,7 @@ export default function Programacion() {
       } else {
         empleadosMap[idEmp].dias[fecha] = {
           tipo: 'TURNO',
+          id_area: idArea,
           valor: esRefuerzo ? 'LIBRE' : (asig.turno?.tipo_turno || 'T?'),
           subvalor: abreviacionArea,
           areaCompleta: nombreArea,
@@ -278,6 +302,7 @@ export default function Programacion() {
     listaNovedades.forEach((nov: any) => {
       if (!empleadosMap[nov.id_empleado]) {
         empleadosMap[nov.id_empleado] = {
+          id_empleado: nov.id_empleado,
           nombre: nov.nombre_completo || (nov.empleado ? `${nov.empleado.nombre1} ${nov.empleado.apellido1}` : 'Empleado'),
           cedula: nov.cedula || nov.cedula_empleado || '',
           dias: {},
@@ -309,28 +334,54 @@ export default function Programacion() {
       resultado = resultado.filter(e => e.nombre.toLowerCase().includes(s) || e.cedula.includes(s));
     }
 
-    // Filtro de Área
+    // Filtro de Área — inclusivo: si trabajó al menos 1 día en esta área
     if (areaFiltro !== 'TODAS') {
-      // Debemos filtrar por el área asignada en la mayoría de los días o alguna lógica
-      // Como employees can move, filtering by area is tricky in a consolidated view.
-      // But users usually want to see employees that belong to X area.
-      // In this map, we store 'areaCompleta' in days. We don't have a main area per employee easily.
-      // Let's rely on the area from the FIRST assignment found or most frequent?
-      // Better: We can check if ANY day has this area.
-      // Or better yet, we can capture the area from the initial loop.
-
-      // Let's filter by checking if any day has the selected area abbreviation/name
-      // or check against the 'id_area' from assignments.
-
-      // Revised Strategy: Store 'areasIds' Set in employee object.
+      const idAreaBuscado = Number(areaFiltro);
       resultado = resultado.filter(e => {
         // @ts-ignore
-        return e.areaIds && e.areaIds.has(Number(areaFiltro));
+        return e.areaIds && e.areaIds.has(idAreaBuscado);
       });
     }
 
     return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [programacion, novedadesData, areasMap, filtro, areaFiltro, tiposNovedadMap]);
+
+  const handleExportar = async () => {
+    if (!fechaInicio || !fechaFin || programacion.length === 0 || !areasRaw) return;
+
+    // 1. Filtrar áreas si hay un área seleccionada en la UI
+    const areasParaExportar = areaFiltro !== 'TODAS'
+      ? areasRaw.filter(a => a.id_area === Number(areaFiltro))
+      : areasRaw;
+
+    // 2. Filtrar programación para incluir solo a los empleados que pasaron el filtro de UI (texto/búsqueda)
+    // @ts-ignore
+    const empIdsPermitidos = new Set(datosProcesados.map(e => e.id_empleado));
+    const progParaExportar = programacion.filter((p: any) => empIdsPermitidos.has(Number(p.id_empleado)));
+
+    const infoDias = diasDelRango.map(d => ({
+      fechaISO: d.fechaISO,
+      numero: d.dia,
+      nombreDia: d.nombre,
+      esFestivo: false,
+    }));
+
+    const wb = await buildProgramacionWorkbook({
+      areas: areasParaExportar,
+      turnos,
+      infoDias,
+      programacion: progParaExportar
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `horario_${fechaInicio}_al_${fechaFin}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (loadingVal || (estadoValidacion?.completo && loadingProg)) {
     return (
@@ -407,22 +458,34 @@ export default function Programacion() {
 
           <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
             <Select value={areaFiltro} onValueChange={setAreaFiltro}>
-              <SelectTrigger className="w-[180px] border-none shadow-none font-medium h-8"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs bg-slate-50 border-slate-300">
+                <SelectValue placeholder="Todas las Áreas" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="TODAS">Todas las Areas</SelectItem>
-                {areasRaw?.map(a => <SelectItem key={a.id_area} value={String(a.id_area)}>{a.nombre_area}</SelectItem>)}
+                <SelectItem value="TODAS" className="font-bold text-slate-700">Todas las Áreas</SelectItem>
+                {areasRaw?.map(a => (
+                  <SelectItem key={a.id_area} value={a.id_area.toString()}>{a.nombre_area}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
-
-
           <Button
             onClick={() => navigate(`/gestion-mensual?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`)}
-            className="bg-indigo-600 hover:bg-indigo-700 shadow-md font-bold"
+            variant="outline"
+            className="font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
           >
-            <LayoutDashboard className="mr-2 h-5 w-5" />
+            <LayoutDashboard className="mr-2 h-4 w-4" />
             Gestionar
+          </Button>
+          
+          <Button
+            onClick={handleExportar}
+            disabled={programacion.length === 0}
+            className="bg-emerald-600 hover:bg-emerald-700 shadow-md font-bold text-white"
+          >
+            <FileSpreadsheet className="mr-2 h-5 w-5" />
+            Exportar Excel
           </Button>
         </div>
       </div>
@@ -492,16 +555,16 @@ export default function Programacion() {
               </Badge>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[calc(100vh-220px)] overflow-y-auto">
               <table className="w-full border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-30 shadow-sm">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-slate-50 border-b border-r p-4 text-left w-64 font-bold text-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
+                    <th className="sticky left-0 top-0 z-40 bg-slate-50 border-b border-r p-4 text-left w-64 font-bold text-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
                       COLABORADOR
                     </th>
                     {diasDelRango.map(dia => (
                       <th key={dia.fechaISO} className={cn(
-                        "border-b border-r min-w-[56px] p-2 text-center font-medium",
+                        "sticky top-0 z-30 border-b border-r min-w-[56px] p-2 text-center font-medium",
                         dia.esFinDeSemana ? "bg-slate-50 text-slate-500" : "bg-white text-slate-700"
                       )}>
                         <div className="flex flex-col items-center">
@@ -517,7 +580,7 @@ export default function Programacion() {
                 <tbody>
                   {datosProcesados.map((emp, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="sticky left-0 z-10 bg-white border-r border-b px-4 py-3 font-medium text-slate-700 truncate shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                      <td className="sticky left-0 z-20 bg-white border-r border-b px-4 py-3 font-medium text-slate-700 truncate shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         <div className="flex flex-col">
                           <span className="truncate text-sm font-bold">{emp.nombre}</span>
                           {emp.cedula && <span className="text-xs text-slate-400 font-mono">{emp.cedula}</span>}
@@ -529,35 +592,21 @@ export default function Programacion() {
                         // Si no hay info (hueco), verificar si es DESCANSO
                         if (!infoDia) {
                           let diasDescanso: number[] = [];
-                          // Debemos buscar en los datos crudos o guardar los descansos en el objeto empleado
-                          // Como 'emp' es procesado, quizas perdimos la ref a 'descansos'. 
-                          // Estrategia: Guardar descansos en el objeto procesado 'emp' tambien.
-
-                          // Acceder a descansos RAW desde el mapa o el objeto emp original si es posible.
-                          // En datosProcesados (memo), 'emp' es: {nombre, cedula, dias, descansosRaw?}. 
-                          // Debemos asegurarnos que 'descansosRaw' pase.
-
-                          // Asumiremos que hemos agregado 'descansosRaw' al objeto emp en el useMemo de arriba.
-                          // (Ver editar useMemo a continuacion)
                           const dateObj = new Date(dia.fechaISO + 'T12:00:00');
                           const y = dateObj.getFullYear();
                           const m = dateObj.getMonth() + 1;
                           const diaNumero = dateObj.getDate();
-
                           // @ts-ignore
                           const descansos = emp.descansosRaw || [];
                           const descMes = descansos.find((d: any) => d.anio === y && d.mes === m);
                           if (descMes) {
-                            try {
-                              diasDescanso = Array.isArray(descMes.dias_descanso) ? descMes.dias_descanso : JSON.parse(descMes.dias_descanso as string);
-                            } catch { diasDescanso = []; }
+                            try { diasDescanso = Array.isArray(descMes.dias_descanso) ? descMes.dias_descanso : JSON.parse(descMes.dias_descanso as string); } catch { diasDescanso = []; }
                           }
-
                           if (diasDescanso.includes(diaNumero)) {
                             infoDia = {
                               tipo: 'DESCANSO',
                               valor: 'DES',
-                              estilo: 'bg-indigo-100 text-indigo-800 border-indigo-200 font-bold opacity-60',
+                              estilo: 'bg-indigo-100/50 text-indigo-800 border-indigo-200 font-bold opacity-60',
                               detalle: 'Descanso Programado',
                               subvalor: ''
                             };
@@ -565,17 +614,32 @@ export default function Programacion() {
                         }
 
                         if (!infoDia) {
-                          infoDia = {
-                            tipo: 'REFUERZO_DEFAULT',
-                            valor: 'LIBRE',
-                            estilo: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold',
-                            detalle: 'Disponible / Sin Turno',
-                            subvalor: ''
-                          };
+                          infoDia = { type: 'REFUERZO_DEFAULT', valor: 'LIBRE', estilo: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold', detalle: 'Disponible / Sin Turno', subvalor: '' };
                         }
+                        
+                        // Filtro Estricto de Área
+                        const idAreaFiltro = areaFiltro !== 'TODAS' ? Number(areaFiltro) : null;
+                        if (idAreaFiltro && infoDia.tipo === 'TURNO' && infoDia.id_area !== idAreaFiltro) {
+                            // Turno de OTRA área cuando estamos filtrando, se oculta
+                            return (
+                                <td key={dia.fechaISO} className={cn("border-r border-b p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50" : "bg-white")}>
+                                    <div className="w-full h-full flex flex-col items-center justify-center transition-all p-1 bg-white border cursor-default">
+                                    </div>
+                                </td>
+                            );
+                        }
+
+                        // Color base (sin arcoíris)
+                        let bgColorClass = 'bg-white';
+                        if (infoDia.tipo === 'DESCANSO') bgColorClass = 'bg-indigo-50/50 text-indigo-800 font-bold opacity-60 cursor-default';
+                        else if (infoDia.valor === 'LIBRE') bgColorClass = 'bg-slate-50 text-slate-500 font-bold cursor-default';
+                        else if (infoDia.tipo === 'NOVEDAD') bgColorClass = infoDia.estilo; // RESTAURAR ESTILO DE NOVEDAD
+                        else if (infoDia.tipo === 'TURNO') bgColorClass = 'bg-white text-slate-800 font-bold border-2';
+
                         return (
-                          <td key={dia.fechaISO} className="border-r border-b p-0 text-center h-16 w-14 relative">
-                            <div className={cn("group w-full h-full flex flex-col items-center justify-center cursor-help transition-all p-1 border", infoDia.estilo)}>
+                          <td key={dia.fechaISO} className={cn("border-r border-b p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50" : "bg-white")}>
+                            <div className={cn("w-full h-full flex flex-col items-center justify-center transition-all p-1 border", bgColorClass)}>
+                              
                               <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-2 w-max max-w-[220px] bg-slate-900 text-white p-3 rounded-lg shadow-2xl pointer-events-none">
                                 <div className="text-base font-bold mb-1">{infoDia.detalle}</div>
                                 {infoDia.tipo === 'TURNO' && (
@@ -586,9 +650,12 @@ export default function Programacion() {
                                 )}
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900"></div>
                               </div>
-                              <span className="font-black text-xs leading-tight truncate max-w-full px-1">{infoDia.valor}</span>
-                              {infoDia.tipo === 'TURNO' && (
-                                <span className="text-[10px] font-semibold opacity-80 leading-tight mt-0.5">{infoDia.subvalor}</span>
+
+                              <span className={cn("font-black leading-tight max-w-full px-1", infoDia.valor === 'LIBRE' || infoDia.valor === 'DES' ? 'text-[11px]' : 'text-[13px]')}>{infoDia.valor}</span>
+                              {infoDia.tipo === 'TURNO' && infoDia.areaCompleta && infoDia.valor !== 'LIBRE' && (
+                                <span className="text-[8px] font-bold opacity-80 leading-tight mt-0.5 max-w-[95%] text-center break-words line-clamp-2">
+                                  {infoDia.areaCompleta}
+                                </span>
                               )}
                             </div>
                           </td>
@@ -604,18 +671,17 @@ export default function Programacion() {
       )}
 
 
-      <div className="flex flex-wrap gap-4 justify-center pt-8 border-t">
-        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-          <span className="w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-700">T1</span> Turno / Área
-        </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-          <span className="w-6 h-6 rounded bg-cyan-100 border border-cyan-300 flex items-center justify-center text-[10px] font-bold text-cyan-900">LIBRE</span> Disponible
-        </div>
-        {leyendaTipos.map(tipo => (
-          <div key={tipo.label} className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-            <span className={cn("w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border", tipo.color)}>{tipo.label}</span> {tipo.full}
+      <div className="flex flex-col gap-4 pt-8 border-t">
+        <div className="flex flex-wrap gap-4 justify-center py-2">
+          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+            <span className="w-6 h-6 rounded bg-slate-50 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-500">LIBRE</span> Disponible
           </div>
-        ))}
+          {leyendaTipos.map(tipo => (
+            <div key={tipo.label} className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+              <span className={cn("w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border", tipo.color)}>{tipo.label}</span> {tipo.full}
+            </div>
+          ))}
+        </div>
       </div>
     </div >
   );

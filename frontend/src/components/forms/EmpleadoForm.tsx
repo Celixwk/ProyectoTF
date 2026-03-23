@@ -27,7 +27,7 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
     resolver: zodResolver(empleadoSchema),
     defaultValues: {
       nombre1: '', nombre2: '', apellido1: '', apellido2: '',
-      cedula: '', edad: 18, sexo: 'M', vehiculo: '', id_cargo: 0, areas_permitidas: []
+      cedula: '', fecha_nacimiento: '', edad: undefined, sexo: 'M', vehiculo: '', id_cargo: 0, areas_permitidas: []
     }
   });
 
@@ -53,7 +53,8 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
             apellido1: detalle.apellido1 || '',
             apellido2: detalle.apellido2 || '',
             cedula: detalle.cedula || '',
-            edad: detalle.edad ? Number(detalle.edad) : 18,
+            fecha_nacimiento: detalle.fecha_nacimiento || '',
+            edad: detalle.edad ? Number(detalle.edad) : undefined,
             sexo: (detalle.sexo as 'M' | 'F') || 'M',
             vehiculo: detalle.vehiculo || '',
             id_cargo: detalle.id_cargo || 0,
@@ -68,7 +69,7 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
           });
         }
       } else if (open && !empleado) {
-        reset({ nombre1: '', nombre2: '', apellido1: '', apellido2: '', cedula: '', edad: 18, sexo: 'M', vehiculo: '', id_cargo: 0, areas_permitidas: [] });
+        reset({ nombre1: '', nombre2: '', apellido1: '', apellido2: '', cedula: '', fecha_nacimiento: '', edad: undefined, sexo: 'M', vehiculo: '', id_cargo: 0, areas_permitidas: [] });
       }
     };
     fetchDetalle();
@@ -117,8 +118,28 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
               <Input {...register('cedula')} />
             </div>
             <div className="space-y-1">
-              <Label>Edad</Label>
-              <Input type="number" {...register('edad', { valueAsNumber: true })} />
+              <Label>Fecha de Nacimiento</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  max={new Date().toISOString().split('T')[0]}
+                  {...register('fecha_nacimiento')}
+                  onChange={(e) => {
+                    register('fecha_nacimiento').onChange(e);
+                    const val = e.target.value;
+                    if (val) {
+                      const hoy = new Date();
+                      const nac = new Date(val + 'T12:00:00');
+                      const edad = Math.floor((hoy.getTime() - nac.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+                      setValue('edad', edad >= 0 ? edad : 0);
+                    }
+                  }}
+                />
+                <div className="flex flex-col items-center min-w-[56px] px-2 py-1.5 bg-slate-100 border rounded-md text-center">
+                  <span className="text-xs text-slate-500 font-medium leading-none">Edad</span>
+                  <span className="text-sm font-bold text-slate-800">{watch('edad') || '—'}</span>
+                </div>
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

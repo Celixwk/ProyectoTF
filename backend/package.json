@@ -1,7 +1,7 @@
 {
-  "name": "sistema-nomina-pro",
+  "name": "sistema-gestion-horarios",
   "version": "1.0.0",
-  "description": "Sistema de Nómina Profesional con Base de Datos Embebida",
+  "description": "Sistema de Gestión de Horarios y Recargos con Base de Datos Embebida",
   "main": "electron/main.js",
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts",
@@ -15,8 +15,8 @@
     "prisma:studio": "prisma studio --schema=src/prisma/schema.prisma"
   },
   "build": {
-    "appId": "com.empresa.nomina",
-    "productName": "Sistema de Nómina",
+    "appId": "com.empresa.sigh",
+    "productName": "Sistema de Gestión de Horarios",
     "directories": {
       "output": "release"
     },
@@ -68,7 +68,7 @@
     "postgresql",
     "prisma"
   ],
-  "author": "SysNomina PRO Corp",
+  "author": "SIGH Corp",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.19.1",

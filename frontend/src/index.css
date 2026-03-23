@@ -58,3 +58,51 @@
   }
 }
 
+/* ─── Print styles ──────────────────────────────────────────────────────── */
+
+/* Forzar orientación horizontal y márgenes mínimos */
+@page {
+  size: A4 landscape;
+  margin: 8mm 10mm;
+}
+
+@media print {
+  /* Ocultar notificaciones de Sonner */
+  [data-sonner-toaster],
+  [data-sonner-toast],
+  [role="status"] {
+    display: none !important;
+  }
+
+  /* Forzar que los fondos/colores de celdas se impriman */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ocultar elementos marcados con no-print */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Todo el contenido de la página en una sola hoja: reducir escala */
+  body {
+    zoom: 0.70;
+  }
+
+  /* Evitar saltos de página dentro de la tabla y las firmas */
+  table,
+  thead,
+  tbody,
+  tfoot,
+  tr,
+  td,
+  th {
+    page-break-inside: avoid !important;
+  }
+
+  /* Reducir márgenes de espaciado del contenedor principal al imprimir */
+  .space-y-5 > * + * {
+    margin-top: 0.5rem !important;
+  }
+}

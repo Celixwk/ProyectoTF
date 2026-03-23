@@ -23,7 +23,7 @@ export default function Login() {
       const response = await authService.login(usuario, contrasenia);
       login(response.token, response.usuario);
       toast.success('¡Bienvenido!');
-      navigate('/dashboard');
+      navigate('/programacion');
     } catch (error: any) {
       console.error('Error en login:', error);
       toast.error(error.response?.data?.error || 'Error al iniciar sesión');
@@ -43,7 +43,7 @@ export default function Login() {
               <Lock className="h-8 w-8 text-primary-foreground" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Sistema de Nómina
+              Sistema de Gestión de Horarios
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-2">
               Inicia sesión para continuar
@@ -97,7 +97,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="text-center mt-8 text-sm text-gray-600 dark:text-gray-400">
-          Sistema de Nómina v2.0 &copy; 2024
+          Sistema de Gestión de Horarios v2.0 &copy; 2024
         </p>
       </div>
     </div>

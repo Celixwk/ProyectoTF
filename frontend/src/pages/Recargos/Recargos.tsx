@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { programacionService, parametrizacionService, turnosService, consultasService, recargosService } from '@/services/api.service';
+import { programacionService, parametrizacionService, turnosService, consultasService, recargosService, empleadosService } from '@/services/api.service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { CalendarDays, FileSpreadsheet, Loader2, Calculator, Info, FileText, Search, Users, Save } from 'lucide-react';
+import { CalendarDays, FileSpreadsheet, Loader2, Calculator, Info, FileText, Search, Users, Save, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   calcularPeriodo,
@@ -117,6 +117,14 @@ export default function ReporteRecargos() {
     staleTime: 0,
   });
 
+  // ─── DETALLE DEL EMPLEADO SELECCIONADO (con edad y sexo desde BD) ─────────
+  const { data: detalleEmp } = useQuery({
+    queryKey: ['empleado-detalle-recargos', empSeleccionado?.id_empleado],
+    queryFn: () => empleadosService.obtener(empSeleccionado!.id_empleado),
+    enabled: !!empSeleccionado,
+    staleTime: 300_000,
+  });
+
   // ─── PROCESADO DE DATOS ─────────────────────────────────────────────────────
   const { turnos: turnosFiltrados, empleadoInfo } = useMemo(() => {
     if (!empSeleccionado) return { turnos: [], empleadoInfo: null };
@@ -144,11 +152,20 @@ export default function ReporteRecargos() {
     // Ordenar por fecha
     turnos.sort((a, b) => a.fecha.localeCompare(b.fecha));
 
+    // Enriquecer con los datos completos del empleado (edad, sexo)
+    const infoCompleta = empSeleccionado
+      ? {
+          ...empSeleccionado,
+          edad: detalleEmp?.edad ?? empSeleccionado.edad ?? null,
+          sexo: detalleEmp?.sexo ?? empSeleccionado.sexo ?? null,
+        }
+      : null;
+
     return {
       turnos,
-      empleadoInfo: empSeleccionado,
+      empleadoInfo: infoCompleta,
     };
-  }, [empSeleccionado, progData, turnoMap]);
+  }, [empSeleccionado, progData, turnoMap, detalleEmp]);
 
   // Motor de cálculo de recargos
   const { filas, totales } = useMemo(() =>
@@ -187,11 +204,21 @@ export default function ReporteRecargos() {
     }
   };
 
+  /** Guarda automáticamente y luego ejecuta la acción indicada (export / print) */
+  const ejecutarAccion = async (accion: () => void | Promise<void>) => {
+    if (empSeleccionado && fechaInicio && fechaFin && filas.length > 0) {
+      await handleGuardarMasivo();
+      // Descartar cualquier toast antes de ejecutar impresión/exportación
+      toast.dismiss();
+    }
+    await accion();
+  };
+
   // ─── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header – oculto al imprimir */}
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <FileSpreadsheet className="h-7 w-7 text-emerald-600" />
@@ -218,21 +245,25 @@ export default function ReporteRecargos() {
                 {guardando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 Guardar Recargos
               </Button>
-              <Button variant="outline" className="bg-white" onClick={() => exportarRecargosPDF({ empleadoInfo: empSeleccionado, fechaInicio, fechaFin, filas, totales, COLS: [...COLS] })}>
+              <Button variant="outline" className="bg-white" onClick={() => ejecutarAccion(() => exportarRecargosPDF({ empleadoInfo: empSeleccionado, fechaInicio, fechaFin, filas, totales, COLS: [...COLS] }))}>
                 <FileText className="w-4 h-4 mr-2 text-red-500" />
                 Exportar PDF
               </Button>
-              <Button variant="outline" className="bg-white" onClick={() => exportarRecargosExcel({ empleadoInfo: empSeleccionado, fechaInicio, fechaFin, filas, totales, COLS: [...COLS] })}>
+              <Button variant="outline" className="bg-white" onClick={() => ejecutarAccion(() => exportarRecargosExcel({ empleadoInfo: empSeleccionado, fechaInicio, fechaFin, filas, totales, COLS: [...COLS] }))}>
                 <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" />
                 Exportar Excel
+              </Button>
+              <Button variant="outline" className="bg-white" onClick={() => ejecutarAccion(() => { setTimeout(() => window.print(), 300); })}>
+                <Printer className="w-4 h-4 mr-2 text-slate-600" />
+                Imprimir
               </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Filtros */}
-      <Card className="shadow-sm border-slate-200">
+      {/* Filtros – ocultos al imprimir */}
+      <Card className="shadow-sm border-slate-200 print:hidden">
         <CardContent className="pt-5 pb-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
@@ -317,7 +348,7 @@ export default function ReporteRecargos() {
 
       {/* Información de parámetros */}
       {!empSeleccionado && (
-        <Card className="border-dashed py-20 text-center bg-slate-50/50">
+        <Card className="border-dashed py-20 text-center bg-slate-50/50 print:hidden">
           <div className="flex justify-center mb-4">
             <CalendarDays className="h-14 w-14 text-slate-300" />
           </div>
@@ -336,7 +367,7 @@ export default function ReporteRecargos() {
       )}
 
       {empSeleccionado && cargandoProg && (
-        <div className="py-20 text-center text-slate-400 flex flex-col items-center gap-3">
+        <div className="py-20 text-center text-slate-400 flex flex-col items-center gap-3 print:hidden">
           <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
           Calculando recargos...
         </div>
@@ -381,7 +412,7 @@ export default function ReporteRecargos() {
           </div>
 
           {/* Tabla de desglose */}
-          <div className="overflow-x-auto bg-white border-2 border-slate-400 mb-8">
+          <div className="overflow-x-auto bg-white border-2 border-slate-400 mb-8 print:overflow-visible">
             <table className="w-full border-collapse text-sm font-sans" id="tabla-reporte-recargos">
               <thead>
                 <tr className="bg-slate-200 border-b border-slate-400">
@@ -472,7 +503,7 @@ export default function ReporteRecargos() {
             </table>
 
             {/* Firmas en la parte inferior de la vista */}
-            <div className="grid grid-cols-2 mt-20 mb-10 px-10">
+            <div className="grid grid-cols-2 mt-20 mb-10 px-10 print:mt-3 print:mb-2">
               <div className="text-center">
                 <div className="border-t-2 border-black mx-10 pt-1 font-bold">Coordinador Operativo</div>
               </div>
@@ -489,9 +520,9 @@ export default function ReporteRecargos() {
             </div>
           )}
 
-          {/* Resumen de totales en tarjetas */}
+          {/* Resumen de totales en tarjetas – oculto al imprimir */}
           {filas.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 print:hidden">
               {COLS.filter(c => (totales[c.key as ColKey] as number) > 0).map(c => (
                 <Card key={c.key} className={cn("border shadow-sm", c.color)}>
                   <CardHeader className="pb-1 pt-3 px-3">

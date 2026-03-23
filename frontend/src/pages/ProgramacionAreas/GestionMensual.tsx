@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
-import { buildProgramacionWorkbook } from '@/utils/exportarExcel';
+
 import { areasService, turnosService, programacionService, alertasService, consultasService } from '@/services/api.service';
 import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
@@ -13,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, FileSpreadsheet, Loader2, Save, Undo2, Calendar, Lock, Users } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, Loader2, Save, Undo2, Calendar, Lock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -451,14 +450,6 @@ export default function GestionMensual() {
 
     const handleRevertirCambios = () => { setCambiosLocales([]); toast.info('Cambios revertidos'); };
 
-    // Exportar Excel ajustado a rango
-    const handleExportar = () => {
-        // Nota: buildProgramacionWorkbook necesitaría ajuste si depende de 'mes'/'anio' explícito para headers
-        // pero usa 'infoDias' así que debería funcionar si le pasamos infoDias correcto.
-        const wb = buildProgramacionWorkbook({ areas, turnos, infoDias, programacion, configAreasTurnos });
-        XLSX.writeFile(wb, `programacion_${fechaInicio}_al_${fechaFin}.xlsx`);
-    };
-
     const abrirModalNovedad = (id: number, nombre: string, fecha: string) => { setEmpleadoSeleccionado({ id, nombre }); setFechaParaNovedad(fecha); setModalNovedadOpen(true); };
 
     const handleGuardarCambios = async () => {
@@ -660,16 +651,12 @@ export default function GestionMensual() {
                                             <Lock className="w-3 h-3" /> PERIODO CERRADO - SOLO LECTURA
                                         </div>
                                     )}
-                                    {!esModoLectura && cambiosLocales.length > 0 ? (
+                                    {!esModoLectura && cambiosLocales.length > 0 && (
                                         <>
                                             <Button variant="outline" size="sm" className="border-amber-200 text-amber-700 hover:bg-amber-50" onClick={handleRevertirCambios}><Undo2 className="mr-2 h-4 w-4" /> Revertir</Button>
                                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={handleGuardarCambios}><Save className="mr-2 h-4 w-4" /> Guardar ({cambiosLocales.length})</Button>
                                         </>
-                                    ) : (
-                                        // TODO: Ajustar BotonEliminarProgramacion para rango si es necesario, o ocultarlo en modo rango
-                                        <div />
                                     )}
-                                    <Button variant="outline" size="sm" onClick={handleExportar}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</Button>
                                 </div>
                             </div>
 

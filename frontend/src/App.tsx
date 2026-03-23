@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard/Dashboard';
 import Empleados from './pages/Empleados/Empleados';
 import Turnos from './pages/Turnos/Turnos';
 import Programacion from './pages/Programacion/Programacion';
@@ -24,8 +23,7 @@ function App() {
             <Layout />
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route index element={<Navigate to="/programacion" replace />} />
           <Route path="empleados" element={<Empleados />} />
           <Route path="turnos" element={<Turnos />} />
           <Route path="programacion" element={<Programacion />} />

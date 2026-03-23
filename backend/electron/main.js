@@ -28,7 +28,7 @@ const pgBinDir = isDev
     : path.join(process.resourcesPath, 'postgres-portable', 'bin');
 
 const PORT = 54320;
-const DB_NAME = 'nomina_db';
+const DB_NAME = 'gestion_horarios_db';
 const DB_USER = 'postgres';
 
 async function startPostgres() {
@@ -211,11 +211,15 @@ function startExpressServer() {
     });
 
     serverProcess.stdout.on('data', (data) => {
-        console.log('[EXPRESS-OUT]', data.toString().trim());
+        const msg = data.toString().trim();
+        console.log('[EXPRESS-OUT]', msg);
+        fs.appendFileSync(path.join(app.getPath('userData'), 'express.log'), '[OUT] ' + msg + '\n');
     });
 
     serverProcess.stderr.on('data', (data) => {
-        console.error('[EXPRESS-ERR]', data.toString().trim());
+        const msg = data.toString().trim();
+        console.error('[EXPRESS-ERR]', msg);
+        fs.appendFileSync(path.join(app.getPath('userData'), 'express.log'), '[ERR] ' + msg + '\n');
     });
 
     serverProcess.on('error', (err) => {
@@ -294,6 +298,10 @@ async function createWindow() {
         console.log('📍 Modo:', isDev ? 'DESARROLLO' : 'PRODUCCIÓN');
         console.log('📍 userDataPath:', userDataPath);
 
+        try {
+            fs.writeFileSync(path.join(app.getPath('userData'), 'express.log'), '');
+        } catch (e) { }
+
         console.log('\n1️⃣ Iniciando PostgreSQL...');
         await startPostgres();
 
@@ -344,7 +352,14 @@ async function createWindow() {
         console.error('═══════════════════════════════════════');
         console.error('Error:', error.message);
         console.error('Stack:', error.stack);
-        dialog.showErrorBox('Error de Inicio', `No se pudo iniciar la aplicación:\n\n${error.message}`);
+
+        let dump = '';
+        try {
+            const logPath = path.join(app.getPath('userData'), 'express.log');
+            if (fs.existsSync(logPath)) dump = '\n\nLog del Servidor Interno:\n' + fs.readFileSync(logPath, 'utf8');
+        } catch (e) { }
+
+        dialog.showErrorBox('Error de Inicio', `No se pudo iniciar la aplicación:\n\n${error.message}${dump}`);
         app.quit();
     }
 }

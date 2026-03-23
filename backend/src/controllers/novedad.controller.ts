@@ -149,12 +149,22 @@ export const novedadController = {
                 const fin = new Date(Date.UTC(yF, mF - 1, dF, 12, 0, 0));
 
                 while (current <= fin) {
+                    const currentDia = new Date(current);
                     dias.push({
                         id_novedad_empleado: novedad.id_novedad_empleado,
-                        fecha: new Date(current),
+                        fecha: currentDia,
                         cantidad: Number(cantidad_diaria),
                         observaciones
                     });
+
+                    // Eliminar de detalleProgramacion para liberar el turno (rango de todo el día)
+                    const inicioDiaProg = new Date(Date.UTC(currentDia.getUTCFullYear(), currentDia.getUTCMonth(), currentDia.getUTCDate(), 0, 0, 0));
+                    const finDiaProg = new Date(Date.UTC(currentDia.getUTCFullYear(), currentDia.getUTCMonth(), currentDia.getUTCDate(), 23, 59, 59));
+
+                    await tx.detalleProgramacion.deleteMany({
+                        where: { id_empleado: Number(id_empleado), fecha: { gte: inicioDiaProg, lte: finDiaProg } }
+                    });
+
                     current.setUTCDate(current.getUTCDate() + 1);
                 }
 
@@ -237,6 +247,11 @@ export const novedadController = {
                         await tx.detalleNovedad.create({
                             data: { id_novedad_empleado: novedad.id_novedad_empleado, fecha, cantidad: 1 }
                         });
+
+                        // Eliminar de detalleProgramacion para liberar el turno (rango de todo el día)
+                        await tx.detalleProgramacion.deleteMany({
+                            where: { id_empleado: Number(id_empleado), fecha: { gte: inicioDia, lte: finDia } }
+                        });
                     }
 
                     if (op.tipo === 'modificar') {
@@ -316,6 +331,14 @@ export const novedadController = {
                         });
                         await tx.detalleNovedad.create({
                             data: { id_novedad_empleado: novedad.id_novedad_empleado, fecha: fechaItem, cantidad: 1 }
+                        });
+
+                        // Eliminar de detalleProgramacion para liberar el turno (rango de todo el día)
+                        const inicioDiaProg = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+                        const finDiaProg = new Date(Date.UTC(y, m - 1, d, 23, 59, 59));
+
+                        await tx.detalleProgramacion.deleteMany({
+                            where: { id_empleado: Number(id_empleado), fecha: { gte: inicioDiaProg, lte: finDiaProg } }
                         });
                     }
                 }

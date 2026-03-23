@@ -1,6 +1,5 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
   Users,
   Clock,
   Calendar,
@@ -13,7 +12,6 @@ import {
 import { cn } from '@/lib/utils';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Empleados', href: '/empleados', icon: Users },
   { name: 'Turnos', href: '/turnos', icon: Clock },
   { name: 'Vist. Programación', href: '/programacion', icon: Calendar },
@@ -30,8 +28,8 @@ export default function Sidebar() {
     <div className="hidden lg:flex lg:flex-shrink-0">
       <div className="flex flex-col w-64 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
         <div className="flex items-center h-16 flex-shrink-0 px-6 border-b border-gray-200 dark:border-gray-800">
-          <h1 className="text-xl font-bold text-primary">
-            Sistema de Nómina
+          <h1 className="text-xl font-bold text-primary text-wrap text-center leading-5 uppercase tracking-wide">
+            Gestión de<br/>Horarios
           </h1>
         </div>
 

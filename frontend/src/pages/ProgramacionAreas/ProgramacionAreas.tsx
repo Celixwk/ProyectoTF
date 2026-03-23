@@ -187,13 +187,11 @@ export default function ProgramacionAreas() {
             setAlertasMotor(res.alertas);
             setFechasRecienGeneradas(res.fechasAfectadas);
 
-            // Guardar alertas (asociadas al mes de inicio como referencia principal, o iterar si fuera necesario)
-            if (res.alertas && res.alertas.length > 0) {
-                try {
-                    await alertasService.guardar(mesReferencia, anioReferencia, res.alertas);
-                } catch (error) {
-                    console.error('Error guardando alertas:', error);
-                }
+            // Guardar alertas (siempre llamar para que si hay 0 alertas, se borren las viejas del rango)
+            try {
+                await alertasService.guardar(mesReferencia, anioReferencia, res.alertas || [], fechaInicio, fechaFin);
+            } catch (error) {
+                console.error('Error guardando alertas:', error);
             }
 
             setPaso('resultado');

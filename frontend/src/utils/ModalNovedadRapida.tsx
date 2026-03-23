@@ -64,6 +64,7 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
             queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
             queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
             queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
+            queryClient.invalidateQueries({ queryKey: ['novedades-lectura'] });
             queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
 
             const fechaCorte = parseISO(fechaInicio);
