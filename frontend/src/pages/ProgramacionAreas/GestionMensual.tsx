@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, Loader2, Save, Undo2, Calendar, Lock, Users } from 'lucide-react';
+import { CalendarDays, ArrowRight, Search, ChevronLeft, AlertCircle, Loader2, Save, Undo2, Calendar, Lock, Users, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Area, Turno } from '@/types/api.types';
@@ -53,6 +53,7 @@ export default function GestionMensual() {
 
     const [cambiosLocales, setCambiosLocales] = useState<CambioLocal[]>([]);
     const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
+    const [menuContextual, setMenuContextual] = useState<{ x: number, y: number, asig: any, areaId: number, turnoId: number, fecha: string } | null>(null);
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
@@ -290,6 +291,24 @@ export default function GestionMensual() {
         setBannerIgnorado(false);
         setFiltroEmpleado('');
         refetch();
+    };
+
+    const handleEliminarAsignacion = async (item: any) => {
+        try {
+            setMenuContextual(null);
+            if (item.asig.id_detalle_programacion && item.asig.id_detalle_programacion !== 0) {
+                await programacionService.eliminarDetalle(item.asig.id_detalle_programacion);
+                toast.success("Turno eliminado permanentemente.");
+            } else {
+                setCambiosLocales(prev => prev.filter(c => !(c.id_empleado === item.asig.id_empleado && c.fecha === item.fecha)));
+                toast.info("Turno pendiente eliminado.");
+            }
+            refetch();
+            refetchNoAsignados();
+            refetchAlertas();
+        } catch (error) {
+            toast.error("Error al eliminar el turno.");
+        }
     };
 
     // --- Drag & Drop Handlers (Similares, ajustados para usar fechaISO directa) ---
@@ -705,7 +724,7 @@ export default function GestionMensual() {
                                                                                 <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px]", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
                                                                                     <div className="flex flex-col gap-1">
                                                                                         {asignados.map((asig: any, idx: number) => (
-                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500', esModoLectura && 'cursor-default opacity-90')}>
+                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} onContextMenu={(e) => { e.preventDefault(); if (esModoLectura) return; setMenuContextual({ x: e.clientX, y: e.clientY, asig, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500', esModoLectura && 'cursor-default opacity-90')}>
                                                                                                 {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                             </div>
                                                                                         ))}
@@ -835,6 +854,23 @@ export default function GestionMensual() {
                         advertencias={advertenciasPendientes}
                         onConfirm={() => { if (cambioPendiente) { aplicarCambios(cambioPendiente); setCambioPendiente(null); setAdvertenciasPendientes([]); } }}
                     />
+
+                    {menuContextual && (
+                        <>
+                            <div className="fixed inset-0 z-[100]" onClick={() => setMenuContextual(null)} onContextMenu={(e) => { e.preventDefault(); setMenuContextual(null); }} />
+                            <div 
+                                className="fixed z-[101] bg-white border border-slate-200 shadow-xl rounded-md overflow-hidden min-w-[160px] py-1"
+                                style={{ top: Math.min(menuContextual.y, window.innerHeight - 50), left: Math.min(menuContextual.x, window.innerWidth - 180) }}
+                            >
+                                <button 
+                                    className="w-full text-left px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors"
+                                    onClick={() => handleEliminarAsignacion(menuContextual)}
+                                >
+                                    <Trash className="w-4 h-4" /> Eliminar Turno
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </div>

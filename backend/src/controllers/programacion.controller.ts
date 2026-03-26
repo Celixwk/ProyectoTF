@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { subMonths, endOfMonth } from 'date-fns';
+import { FestivosColombia } from '../utils/FestivosColombia';
 import { PrismaClient } from '../generated/client';
 import { capa6_generarProgramacionDia } from '../services/programacion/capa6.integracion';
 
@@ -422,6 +424,10 @@ export const guardarCambiosManuales = async (req: Request, res: Response) => {
                             }
                         });
 
+                        const isDomingo = fechaDate.getUTCDay() === 0;
+                        const fechaString = fechaDate.toISOString().split('T')[0];
+                        const { esFestivo } = FestivosColombia.esFestivo(fechaString);
+
                         await tx.detalleProgramacion.create({
                             data: {
                                 id_empleado: idEmpleado,
@@ -431,7 +437,7 @@ export const guardarCambiosManuales = async (req: Request, res: Response) => {
                                 id_labor_mes: laborMes?.id_labor_mes || null,
                                 estado: 'Activo',
                                 origen_registro: 'Manual',
-                                tipo_dia: 'Laborado'
+                                tipo_dia: esFestivo ? 'Festivo' : (isDomingo ? 'Domingo' : 'Laborado')
                             }
                         });
                     }
@@ -954,6 +960,32 @@ export const validarCompleto = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+export const eliminarDetalle = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        if (!id) {
+            return res.status(400).json({ success: false, message: 'ID no proporcionado' });
+        }
+
+        const detalle = await prisma.detalleProgramacion.findUnique({
+            where: { id_detalle_programacion: Number(id) }
+        });
+
+        if (!detalle) {
+            return res.status(404).json({ success: false, message: 'Turno no encontrado' });
+        }
+
+        await prisma.detalleProgramacion.delete({
+            where: { id_detalle_programacion: Number(id) }
+        });
+
+        res.json({ success: true, message: 'Turno eliminado con éxito' });
+    } catch (error: any) {
+        console.error('Error al eliminar detalle de programación:', error);
+        res.status(500).json({ success: false, message: 'Error al eliminar el turno', error: error.message });
     }
 };
 

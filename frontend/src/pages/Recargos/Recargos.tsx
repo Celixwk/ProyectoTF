@@ -13,6 +13,7 @@ import {
   fmtH,
   PARAMETROS_DEFAULT,
 } from '@/utils/calculadoraRecargos';
+import { FestivosColombia } from '@/utils/FestivosColombia';
 import { exportarRecargosExcel, exportarRecargosPDF } from '@/utils/exportadorRecargos';
 import type { TurnoParaCalculo } from '@/utils/calculadoraRecargos';
 import type { EmpleadoCompleto, Turno } from '@/types/api.types';
@@ -125,29 +126,87 @@ export default function ReporteRecargos() {
     staleTime: 300_000,
   });
 
+  // ─── NOVEDADES DEL PERIODO ──────────────────────────────────────────────────
+  const { data: novedadesData = [] } = useQuery({
+    queryKey: ['novedades-recargos', fechaInicio, fechaFin, empSeleccionado?.id_empleado],
+    queryFn: async () => {
+      const res = await consultasService.obtenerNovedadesCompletas({
+        inicio: fechaInicio,
+        fin: fechaFin,
+        id_empleado: empSeleccionado!.id_empleado
+      });
+      return Array.isArray(res) ? res : (res.novedades || []);
+    },
+    enabled: !!fechaInicio && !!fechaFin && !!empSeleccionado,
+    staleTime: 0,
+  });
+
   // ─── PROCESADO DE DATOS ─────────────────────────────────────────────────────
   const { turnos: turnosFiltrados, empleadoInfo } = useMemo(() => {
-    if (!empSeleccionado) return { turnos: [], empleadoInfo: null };
+    if (!empSeleccionado || !fechaInicio || !fechaFin) return { turnos: [], empleadoInfo: null };
 
     const turnosBrutos = progData.filter((d: any) => d.id_empleado === empSeleccionado.id_empleado);
-
-    const turnos: TurnoParaCalculo[] = turnosBrutos.map((d: any) => {
-      const catalogoTurno = turnoMap.get(d.id_turno);
-      const fechaLimpia = d.fecha ? d.fecha.split('T')[0] : '';
-      const esDomingo = new Date(fechaLimpia + 'T12:00:00').getDay() === 0;
-      const esFestivo = !!(d.es_festivo || d.tipo_dia === 'Festivo');
-      return {
-        fecha: fechaLimpia,
-        hora_entrada: extraerHora(d.turno?.hora_entrada || catalogoTurno?.hora_entrada || d.hora_entrada),
-        hora_salida: extraerHora(d.turno?.hora_salida || catalogoTurno?.hora_salida || d.hora_salida),
-        hora_entrada_2: extraerHora(d.turno?.hora_entrada_2 || catalogoTurno?.hora_entrada_2),
-        hora_salida_2: extraerHora(d.turno?.hora_salida_2 || catalogoTurno?.hora_salida_2),
-        es_festivo: esFestivo,
-        es_domingo: esDomingo,
-        codigo_turno: d.turno?.tipo_turno || d.codigo_turno || catalogoTurno?.codigo || '',
-        tipo_turno: d.turno?.tipo_turno || d.tipo_turno || catalogoTurno?.tipo_turno || '',
-      };
+    const turnosBrutosMap = new Map<string, any>();
+    turnosBrutos.forEach((d: any) => {
+        if (d.fecha) turnosBrutosMap.set(d.fecha.split('T')[0], d);
     });
+
+    const novedadesMap = new Map<string, any>();
+    novedadesData.forEach((n: any) => {
+        if (n.fecha) novedadesMap.set(n.fecha.split('T')[0], n);
+    });
+
+    const turnos: TurnoParaCalculo[] = [];
+    const start = new Date(`${fechaInicio}T12:00:00Z`);
+    const end = new Date(`${fechaFin}T12:00:00Z`);
+
+    let current = new Date(start);
+    while (current <= end) {
+        const fechaIso = current.toISOString().split('T')[0];
+        const esDomingo = current.getUTCDay() === 0;
+        const { esFestivo } = FestivosColombia.esFestivo(fechaIso);
+
+        const d = turnosBrutosMap.get(fechaIso);
+        
+        if (d) {
+            const catalogoTurno = turnoMap.get(d.id_turno);
+            turnos.push({
+                fecha: fechaIso,
+                hora_entrada: extraerHora(d.turno?.hora_entrada || catalogoTurno?.hora_entrada || d.hora_entrada),
+                hora_salida: extraerHora(d.turno?.hora_salida || catalogoTurno?.hora_salida || d.hora_salida),
+                hora_entrada_2: extraerHora(d.turno?.hora_entrada_2 || catalogoTurno?.hora_entrada_2),
+                hora_salida_2: extraerHora(d.turno?.hora_salida_2 || catalogoTurno?.hora_salida_2),
+                es_festivo: esFestivo,
+                es_domingo: esDomingo,
+                codigo_turno: d.turno?.tipo_turno || d.codigo_turno || catalogoTurno?.codigo || '',
+                tipo_turno: d.turno?.tipo_turno || d.tipo_turno || catalogoTurno?.tipo_turno || '',
+            });
+        } else {
+            const nov = novedadesMap.get(fechaIso);
+            if (nov) {
+                turnos.push({
+                    fecha: fechaIso,
+                    hora_entrada: '',
+                    hora_salida: '',
+                    es_festivo: esFestivo,
+                    es_domingo: esDomingo,
+                    codigo_turno: nov.codigo_novedad || 'NOV',
+                    tipo_turno: nov.tipo || 'NOVEDAD'
+                });
+            } else {
+                turnos.push({
+                    fecha: fechaIso,
+                    hora_entrada: '',
+                    hora_salida: '',
+                    es_festivo: esFestivo,
+                    es_domingo: esDomingo,
+                    codigo_turno: 'D',
+                    tipo_turno: 'DESCANSO'
+                });
+            }
+        }
+        current.setUTCDate(current.getUTCDate() + 1);
+    }
 
     // Ordenar por fecha
     turnos.sort((a, b) => a.fecha.localeCompare(b.fecha));

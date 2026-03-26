@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-
+import { FestivosColombia } from '../utils/FestivosColombia';
 export const calendarioController = {
     async listar(req: Request, res: Response) {
         try {
@@ -18,14 +18,18 @@ export const calendarioController = {
             for (let i = 1; i <= daysInMonth; i++) {
                 const date = new Date(year, month - 1, i);
                 const dayOfWeek = date.getDay(); // 0 = Domingo
+                
+                // Formatear fecha para evitar problemas de TZ
+                const fIso = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const { esFestivo, nombre } = FestivosColombia.esFestivo(fIso);
 
                 days.push({
                     id_calendario: i, // ID temporal
-                    fecha: date.toISOString().split('T')[0],
-                    es_festivo: false, // Por ahora sin festivos
+                    fecha: fIso,
+                    es_festivo: esFestivo,
                     es_domingo: dayOfWeek === 0,
-                    nombre_festivo: null,
-                    tipo_festivo: null
+                    nombre_festivo: nombre || null,
+                    tipo_festivo: esFestivo ? 'nacional' : null
                 });
             }
 
@@ -37,8 +41,18 @@ export const calendarioController = {
 
     async obtenerFestivos(req: Request, res: Response) {
         try {
-            // Retornar array vacío por ahora ya que no hay tabla de festivos
-            res.json({ success: true, data: [] });
+            const { anio } = req.params;
+            if (!anio) {
+                return res.status(400).json({ success: false, error: 'Año es requerido' });
+            }
+            const festivos = FestivosColombia.obtenerFestivos(Number(anio));
+            const data = festivos.map(f => ({
+                fecha: f.fecha,
+                es_festivo: true,
+                nombre_festivo: f.nombre,
+                tipo_festivo: 'nacional'
+            }));
+            res.json({ success: true, data });
         } catch (error: any) {
             res.status(500).json({ success: false, error: error.message });
         }

@@ -14,6 +14,7 @@ router.get('/novedades-periodo', controller.obtenerNovedadesPeriodo);
 router.get('/validar', controller.validarProgramacion);
 router.get('/no-asignados-dia', controller.obtenerEmpleadosNoAsignadosPorDia);
 router.delete('/eliminar', controller.eliminarProgramacion);
+router.delete('/detalle/:id', controller.eliminarDetalle);
 router.get('/validar-completo', controller.validarCompleto);
 router.get('/ultimo-rango', controller.obtenerUltimoRango);
 router.get('/empleados-con-areas', controller.obtenerEmpleadosConAreas);

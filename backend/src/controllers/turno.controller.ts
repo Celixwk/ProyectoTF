@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../prisma/cliente';
+import { FestivosColombia } from '../utils/FestivosColombia';
 
 const convertirHora = (hora: any): Date | null => {
     if (!hora || hora === '') return null;
@@ -233,6 +234,13 @@ export const asignarTurno = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'No existe periodo laboral abierto para esta fecha.' });
         }
 
+        // Determine tipo_dia based on date
+        const isDomingo = fechaDate.getUTCDay() === 0;
+        // Assuming FestivosColombia is imported and available, and expects a 'YYYY-MM-DD' string
+        const fechaString = fechaDate.toISOString().split('T')[0];
+        const { esFestivo } = FestivosColombia.esFestivo(fechaString);
+        const tipoDia = esFestivo ? 'Festivo' : (isDomingo ? 'Domingo' : 'Laborado');
+
         const asignacion = await prisma.detalleProgramacion.upsert({
             where: {
                 uq_empleado_fecha: {
@@ -245,7 +253,7 @@ export const asignarTurno = async (req: Request, res: Response) => {
                 id_turno: Number(id_turno),
                 id_labor_mes: laborMes.id_labor_mes,
                 updated_at: new Date(),
-                tipo_dia: "Laborado",
+                tipo_dia: tipoDia,
                 id_usuario_registro: id_usuario_registro ? Number(id_usuario_registro) : null,
                 origen_registro: "Manual"
             },

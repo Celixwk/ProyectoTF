@@ -248,12 +248,13 @@ export function calcularPeriodo(
         // Turno de descanso → fila vacía
         if (!turno.hora_entrada || turno.tipo_turno === 'DESCANSO' || turno.codigo_turno === 'D') {
             const fecha = new Date(turno.fecha + 'T12:00:00');
+            const esNovedad = turno.codigo_turno !== 'D' && turno.tipo_turno !== 'DESCANSO';
             filas.push({
                 fecha: turno.fecha,
                 diaSemana: DIAS_ES[fecha.getDay()] || '?',
-                codigoTurno: 'D',
-                horario: 'Descansa',
-                esDescanso: true,
+                codigoTurno: turno.codigo_turno || 'D',
+                horario: esNovedad ? (turno.tipo_turno || 'NOVEDAD') : 'Descansa',
+                esDescanso: !esNovedad,
                 esFestivo: turno.es_festivo || turno.es_domingo,
                 thl: 0, ord: 0, D: 0, F: 0,
                 RNO: 0, RNF: 0, HEOD: 0, HEON: 0, HEFD: 0, HEFN: 0,

@@ -555,6 +555,10 @@ export const programacionService = {
     });
     return data.data || data;
   },
+  eliminarDetalle: async (id_detalle_programacion: number) => {
+    const { data } = await api.delete(`/programacion/detalle/${id_detalle_programacion}`);
+    return data;
+  },
   generarDia: async (fecha: string, idUsuarioRegistro?: number) => {
     const { data } = await api.post('/programacion/generar', { fecha, id_usuario_registro: idUsuarioRegistro });
     return data.data || data;
