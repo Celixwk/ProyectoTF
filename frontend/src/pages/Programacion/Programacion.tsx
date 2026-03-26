@@ -31,6 +31,7 @@ export default function Programacion() {
   const [anio] = useState(hoy.getFullYear());
   const [filtro, setFiltro] = useState('');
   const [areaFiltro, setAreaFiltro] = useState('TODAS');
+  const [busquedaVista, setBusquedaVista] = useState('');
 
   // Persistir y restaurar rango desde localStorage
   useEffect(() => {
@@ -328,10 +329,9 @@ export default function Programacion() {
 
     let resultado = Object.values(empleadosMap);
 
-    // Filtro de Texto (Nombre/Cédula)
+    // Filtro por empleado seleccionado (id_empleado como string)
     if (filtro.trim()) {
-      const s = filtro.toLowerCase();
-      resultado = resultado.filter(e => e.nombre.toLowerCase().includes(s) || e.cedula.includes(s));
+      resultado = resultado.filter(e => e.id_empleado.toString() === filtro);
     }
 
     // Filtro de Área — inclusivo: si trabajó al menos 1 día en esta área
@@ -493,14 +493,51 @@ export default function Programacion() {
 
       {
         programacion.length > 0 && (
-          <div className="relative max-w-md">
-            <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Buscar colaborador..."
-              className="pl-10 bg-white"
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-            />
+          <div className="max-w-sm">
+            <Select
+              value={filtro || ""}
+              onValueChange={(v) => {
+                setFiltro(v === "__TODOS__" ? '' : v);
+                setBusquedaVista('');
+              }}
+            >
+              <SelectTrigger className="h-10 bg-white border-slate-200">
+                <SelectValue placeholder="Buscar colaborador..." />
+              </SelectTrigger>
+              <SelectContent className="w-[var(--radix-select-trigger-width)]">
+                <div
+                  className="flex items-center px-3 pb-2 border-b"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <UserSearch className="h-4 w-4 mr-2 text-slate-400" />
+                  <input
+                    className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-slate-400"
+                    placeholder="Escriba para filtrar..."
+                    value={busquedaVista}
+                    onChange={(e) => setBusquedaVista(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-[300px] overflow-y-auto mt-1 p-1">
+                  <SelectItem value="__TODOS__" className="py-2 font-medium text-slate-500 italic">
+                    Todos los colaboradores
+                  </SelectItem>
+                  {datosProcesados
+                    .filter((e: any) => {
+                      if (!busquedaVista.trim()) return true;
+                      const term = busquedaVista.toLowerCase();
+                      return e.nombre.toLowerCase().includes(term) || e.cedula.includes(term);
+                    })
+                    .map((e: any) => (
+                      <SelectItem key={e.id_empleado} value={e.id_empleado.toString()} className="py-2.5">
+                        <span className="font-bold uppercase text-xs">{e.nombre}</span>
+                        <span className="ml-2 text-indigo-600 font-mono text-xs">[{e.cedula}]</span>
+                      </SelectItem>
+                    ))
+                  }
+                </div>
+              </SelectContent>
+            </Select>
           </div>
         )
       }

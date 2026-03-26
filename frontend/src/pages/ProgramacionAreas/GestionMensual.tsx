@@ -127,7 +127,7 @@ export default function GestionMensual() {
 
     const { data: empleadosData } = useQuery({
         queryKey: ['empleados-completos-validacion'],
-        queryFn: () => consultasService.obtenerEmpleadosCompletos({ estado: true }),
+        queryFn: () => consultasService.obtenerEmpleadosCompletos({ estado: true, limit: 1000 }),
         enabled: paso === 'detalle',
         staleTime: 0
     });
