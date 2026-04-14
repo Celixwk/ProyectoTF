@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { tipoRecargoSchema, type TipoRecargoFormData } from '@/lib/validations';
 import type { TipoRecargo } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface TipoRecargoFormProps {
     open: boolean;
@@ -90,6 +91,7 @@ export function TipoRecargoForm({
                             {...register('codigo')}
                             placeholder="Ej: RNO, HED, etc."
                             maxLength={10}
+                            className={errors.codigo ? 'border-red-500 focus-visible:ring-red-400' : ''}
                         />
                         {errors.codigo && (
                             <p className="text-sm text-red-500">{errors.codigo.message}</p>
@@ -105,6 +107,7 @@ export function TipoRecargoForm({
                             {...register('nombre_recargo')}
                             placeholder="Ej: Recargo Nocturno Ordinario"
                             maxLength={60}
+                            className={errors.nombre_recargo ? 'border-red-500 focus-visible:ring-red-400' : ''}
                         />
                         {errors.nombre_recargo && (
                             <p className="text-sm text-red-500">
@@ -123,6 +126,7 @@ export function TipoRecargoForm({
                             step="0.01"
                             {...register('porcentaje_recargo')}
                             placeholder="Ej: 35"
+                            className={errors.porcentaje_recargo ? 'border-red-500 focus-visible:ring-red-400' : ''}
                         />
                         {errors.porcentaje_recargo && (
                             <p className="text-sm text-red-500">
@@ -160,6 +164,8 @@ export function TipoRecargoForm({
                     <p className="text-xs text-muted-foreground">
                         Si está activado, el sistema usará este tipo de recargo para las liquidaciones.
                     </p>
+
+                    <FormErrorSummary errors={errors} />
 
                     <DialogFooter>
                         <Button

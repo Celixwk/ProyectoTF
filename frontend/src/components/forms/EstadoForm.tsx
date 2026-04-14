@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { estadoSchema, type EstadoFormData } from '@/lib/validations';
 import type { EstadoEmpleado } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface EstadoFormProps {
     open: boolean;
@@ -76,6 +77,7 @@ export function EstadoForm({
                             id="nombre_estado"
                             {...register('nombre_estado')}
                             placeholder="Ej: Activo, Inactivo, Vacaciones..."
+                            className={errors.nombre_estado ? 'border-red-500 focus-visible:ring-red-400' : ''}
                         />
                         {errors.nombre_estado && (
                             <p className="text-sm text-red-500">
@@ -83,6 +85,8 @@ export function EstadoForm({
                             </p>
                         )}
                     </div>
+
+                    <FormErrorSummary errors={errors} />
 
                     <DialogFooter>
                         <Button

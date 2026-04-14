@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cargoSchema, type CargoFormData } from '@/lib/validations';
 import type { Cargo } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface CargoFormProps {
   open: boolean;
@@ -80,6 +81,7 @@ export function CargoForm({
               id="nombre_cargo"
               {...register('nombre_cargo')}
               placeholder="Ej: Operario, Supervisor, etc."
+              className={errors.nombre_cargo ? 'border-red-500 focus-visible:ring-red-400' : ''}
             />
             {errors.nombre_cargo && (
               <p className="text-sm text-red-500">
@@ -99,6 +101,7 @@ export function CargoForm({
               {...register('salario_base', { valueAsNumber: true })}
               placeholder="0.00"
               min={0}
+              className={errors.salario_base ? 'border-red-500 focus-visible:ring-red-400' : ''}
             />
             {errors.salario_base && (
               <p className="text-sm text-red-500">
@@ -106,6 +109,8 @@ export function CargoForm({
               </p>
             )}
           </div>
+
+          <FormErrorSummary errors={errors} />
 
           <DialogFooter>
             <Button

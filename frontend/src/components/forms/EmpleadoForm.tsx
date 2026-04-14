@@ -11,6 +11,7 @@ import { User, Users } from 'lucide-react';
 import { empleadoSchema, type EmpleadoFormData } from '@/lib/validations';
 import { empleadosService } from '@/services/api.service';
 import type { EmpleadoCompleto } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface EmpleadoFormProps {
   open: boolean;
@@ -23,7 +24,7 @@ interface EmpleadoFormProps {
 }
 
 export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, areas, loading }: EmpleadoFormProps) {
-  const { register, handleSubmit, setValue, watch, reset } = useForm<EmpleadoFormData>({
+  const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<EmpleadoFormData>({
     resolver: zodResolver(empleadoSchema),
     defaultValues: {
       nombre1: '', nombre2: '', apellido1: '', apellido2: '',
@@ -82,6 +83,9 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
     setValue('areas_permitidas', nuevos, { shouldValidate: true });
   };
 
+  const inputClass = (hasError: boolean) =>
+    hasError ? 'border-red-500 focus-visible:ring-red-400' : '';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -94,8 +98,9 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Primer Nombre *</Label>
-              <Input {...register('nombre1')} />
+              <Label>Primer Nombre <span className="text-red-500">*</span></Label>
+              <Input {...register('nombre1')} className={inputClass(!!errors.nombre1)} />
+              {errors.nombre1 && <p className="text-xs text-red-500">{errors.nombre1.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Segundo Nombre</Label>
@@ -104,8 +109,9 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Primer Apellido *</Label>
-              <Input {...register('apellido1')} />
+              <Label>Primer Apellido <span className="text-red-500">*</span></Label>
+              <Input {...register('apellido1')} className={inputClass(!!errors.apellido1)} />
+              {errors.apellido1 && <p className="text-xs text-red-500">{errors.apellido1.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Segundo Apellido</Label>
@@ -114,8 +120,9 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Cédula *</Label>
-              <Input {...register('cedula')} />
+              <Label>Cédula <span className="text-red-500">*</span></Label>
+              <Input {...register('cedula')} className={inputClass(!!errors.cedula)} />
+              {errors.cedula && <p className="text-xs text-red-500">{errors.cedula.message}</p>}
             </div>
             <div className="space-y-1">
               <Label>Fecha de Nacimiento</Label>
@@ -159,13 +166,16 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Cargo *</Label>
-            <Select value={watch('id_cargo')?.toString() || ""} onValueChange={(v) => setValue('id_cargo', parseInt(v))}>
-              <SelectTrigger><SelectValue placeholder="Selecciona cargo" /></SelectTrigger>
+            <Label>Cargo <span className="text-red-500">*</span></Label>
+            <Select value={watch('id_cargo')?.toString() || ""} onValueChange={(v) => setValue('id_cargo', parseInt(v), { shouldValidate: true })}>
+              <SelectTrigger className={inputClass(!!errors.id_cargo)}>
+                <SelectValue placeholder="Selecciona cargo" />
+              </SelectTrigger>
               <SelectContent>
                 {cargos.map(c => <SelectItem key={c.id_cargo} value={c.id_cargo.toString()}>{c.nombre_cargo}</SelectItem>)}
               </SelectContent>
             </Select>
+            {errors.id_cargo && <p className="text-xs text-red-500">{errors.id_cargo.message}</p>}
           </div>
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -185,6 +195,9 @@ export function EmpleadoForm({ open, onOpenChange, onSubmit, empleado, cargos, a
               ))}
             </div>
           </div>
+
+          <FormErrorSummary errors={errors} />
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={loading}>{loading ? 'Guardando...' : (empleado ? 'Actualizar' : 'Crear')}</Button>

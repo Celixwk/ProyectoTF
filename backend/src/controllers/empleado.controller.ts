@@ -42,17 +42,27 @@ export const empleadoController = {
 
     async crear(req: Request, res: Response) {
         try {
-            const { areas_permitidas, ...rawEmpleadoData } = req.body;
+            // Extraemos solo los campos conocidos del schema de Prisma
+            const {
+                areas_permitidas,
+                fecha_nacimiento, // campo del formulario pero NO existe en DB, se descarta
+                nombre1, nombre2, apellido1, apellido2,
+                cedula, edad, sexo, vehiculo,
+                id_cargo, id_area
+            } = req.body;
 
             const empleadoData = {
-                ...rawEmpleadoData,
-                edad: Number(rawEmpleadoData.edad),
-                id_cargo: Number(rawEmpleadoData.id_cargo),
-                id_area: rawEmpleadoData.id_area ? Number(rawEmpleadoData.id_area) : 13,
+                nombre1,
+                nombre2: nombre2 || null,
+                apellido1,
+                apellido2: apellido2 || null,
+                cedula,
+                edad: edad ? Number(edad) : null,
+                sexo: sexo || null,
+                id_cargo: Number(id_cargo),
+                id_area: id_area ? Number(id_area) : 13,
                 id_estado: 1,
-                vehiculo: rawEmpleadoData.vehiculo && rawEmpleadoData.vehiculo.trim() !== ""
-                    ? rawEmpleadoData.vehiculo
-                    : null
+                vehiculo: vehiculo && vehiculo.trim() !== '' ? vehiculo : null
             };
 
             const empleado = await prisma.empleado.create({
@@ -86,19 +96,29 @@ export const empleadoController = {
     async actualizar(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const { areas_permitidas, ...rawEmpleadoData } = req.body;
+            // Extraemos solo los campos conocidos del schema de Prisma
+            const {
+                areas_permitidas,
+                fecha_nacimiento, // campo del formulario pero NO existe en DB, se descarta
+                nombre1, nombre2, apellido1, apellido2,
+                cedula, edad, sexo, vehiculo,
+                id_cargo, id_area, id_estado
+            } = req.body;
 
-            const empleadoData: any = { ...rawEmpleadoData };
+            const empleadoData: any = {};
 
-            if (rawEmpleadoData.edad) empleadoData.edad = Number(rawEmpleadoData.edad);
-            if (rawEmpleadoData.id_cargo) empleadoData.id_cargo = Number(rawEmpleadoData.id_cargo);
-            if (rawEmpleadoData.id_area) empleadoData.id_area = Number(rawEmpleadoData.id_area);
-            if (rawEmpleadoData.id_estado) empleadoData.id_estado = Number(rawEmpleadoData.id_estado);
-
-            if (rawEmpleadoData.vehiculo !== undefined) {
-                empleadoData.vehiculo = rawEmpleadoData.vehiculo && rawEmpleadoData.vehiculo.trim() !== ""
-                    ? rawEmpleadoData.vehiculo
-                    : null;
+            if (nombre1 !== undefined) empleadoData.nombre1 = nombre1;
+            if (nombre2 !== undefined) empleadoData.nombre2 = nombre2 || null;
+            if (apellido1 !== undefined) empleadoData.apellido1 = apellido1;
+            if (apellido2 !== undefined) empleadoData.apellido2 = apellido2 || null;
+            if (cedula !== undefined) empleadoData.cedula = cedula;
+            if (edad !== undefined) empleadoData.edad = edad ? Number(edad) : null;
+            if (sexo !== undefined) empleadoData.sexo = sexo || null;
+            if (id_cargo !== undefined) empleadoData.id_cargo = Number(id_cargo);
+            if (id_area !== undefined) empleadoData.id_area = Number(id_area);
+            if (id_estado !== undefined) empleadoData.id_estado = Number(id_estado);
+            if (vehiculo !== undefined) {
+                empleadoData.vehiculo = vehiculo && vehiculo.trim() !== '' ? vehiculo : null;
             }
 
             const empleado = await prisma.empleado.update({

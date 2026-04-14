@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { usuariosService } from '@/services/api.service';
 import type { Usuario } from '@/types/api.types';
+import { FormErrorSummary } from '@/components/forms/FormErrorSummary';
 
 const usuarioSchema = z.object({
     id_usuario: z.number().optional(),
@@ -131,13 +132,17 @@ export function UsuarioForm({ open, onOpenChange, usuarioEditando }: Props) {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="usuario">User Login <span className="text-red-500">*</span></Label>
-                        <Input id="usuario" placeholder="ej. admin123" {...register('usuario')} />
+                        <Input id="usuario" placeholder="ej. admin123" {...register('usuario')}
+                            className={errors.usuario ? 'border-red-500 focus-visible:ring-red-400' : ''}
+                        />
                         {errors.usuario && <p className="text-sm text-red-500">{errors.usuario.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="nombre_completo">Nombre Completo <span className="text-red-500">*</span></Label>
-                        <Input id="nombre_completo" placeholder="Ej. Juan Pérez" {...register('nombre_completo')} />
+                        <Input id="nombre_completo" placeholder="Ej. Juan Pérez" {...register('nombre_completo')}
+                            className={errors.nombre_completo ? 'border-red-500 focus-visible:ring-red-400' : ''}
+                        />
                         {errors.nombre_completo && <p className="text-sm text-red-500">{errors.nombre_completo.message}</p>}
                     </div>
 
@@ -168,9 +173,12 @@ export function UsuarioForm({ open, onOpenChange, usuarioEditando }: Props) {
                             type="password"
                             placeholder={usuarioEditando ? "Dejar en blanco para no cambiarla" : "Contraseña segura"}
                             {...register('contrasenia')}
+                            className={errors.contrasenia ? 'border-red-500 focus-visible:ring-red-400' : ''}
                         />
                         {errors.contrasenia && <p className="text-sm text-red-500">{errors.contrasenia.message}</p>}
                     </div>
+
+                    <FormErrorSummary errors={errors} />
 
                     <DialogFooter className="pt-4">
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>

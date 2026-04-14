@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 
 import { turnoSchema, type TurnoFormData } from '@/lib/validations';
 import type { Turno } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface TurnoFormProps {
   open: boolean;
@@ -88,6 +89,7 @@ export function TurnoForm({
                 placeholder="Ej: T1, T2, T11, etc."
                 maxLength={20}
                 pattern="^T\d+$"
+                className={errors.codigo ? 'border-red-500 focus-visible:ring-red-400' : ''}
               />
               {errors.codigo && (
                 <p className="text-sm text-red-500">{errors.codigo.message}</p>
@@ -121,6 +123,7 @@ export function TurnoForm({
                 id="hora_entrada"
                 type="time"
                 {...register('hora_entrada')}
+                className={errors.hora_entrada ? 'border-red-500 focus-visible:ring-red-400' : ''}
               />
               {errors.hora_entrada && (
                 <p className="text-sm text-red-500">
@@ -137,6 +140,7 @@ export function TurnoForm({
                 id="hora_salida"
                 type="time"
                 {...register('hora_salida')}
+                className={errors.hora_salida ? 'border-red-500 focus-visible:ring-red-400' : ''}
               />
               {errors.hora_salida && (
                 <p className="text-sm text-red-500">
@@ -145,6 +149,8 @@ export function TurnoForm({
               )}
             </div>
           </div>
+
+          <FormErrorSummary errors={errors} />
 
           <DialogFooter>
             <Button

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { areaSchema, type AreaFormData } from '@/lib/validations';
 import type { Area } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface AreaFormProps {
   open: boolean;
@@ -76,6 +77,7 @@ export function AreaForm({
               id="nombre_area"
               {...register('nombre_area')}
               placeholder="Ej: Producción, Almacén, etc."
+              className={errors.nombre_area ? 'border-red-500 focus-visible:ring-red-400' : ''}
             />
             {errors.nombre_area && (
               <p className="text-sm text-red-500">
@@ -83,6 +85,8 @@ export function AreaForm({
               </p>
             )}
           </div>
+
+          <FormErrorSummary errors={errors} />
 
           <DialogFooter>
             <Button

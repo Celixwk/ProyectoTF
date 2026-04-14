@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { tipoNovedadSchema, type TipoNovedadFormData } from '@/lib/validations';
 import type { TipoNovedad } from '@/types/api.types';
+import { FormErrorSummary } from './FormErrorSummary';
 
 interface TipoNovedadFormProps {
   open: boolean;
@@ -88,6 +89,7 @@ export function TipoNovedadForm({
               {...register('codigo')}
               placeholder="Ej: INCAP, VAC, PERM, etc."
               maxLength={20}
+              className={errors.codigo ? 'border-red-500 focus-visible:ring-red-400' : ''}
             />
             {errors.codigo && (
               <p className="text-sm text-red-500">{errors.codigo.message}</p>
@@ -103,6 +105,7 @@ export function TipoNovedadForm({
               {...register('nombre_novedad')}
               placeholder="Ej: Incapacidad, Vacaciones, Permiso, etc."
               maxLength={100}
+              className={errors.nombre_novedad ? 'border-red-500 focus-visible:ring-red-400' : ''}
             />
             {errors.nombre_novedad && (
               <p className="text-sm text-red-500">
@@ -124,6 +127,8 @@ export function TipoNovedadForm({
           <p className="text-xs text-muted-foreground">
             Si está activado, esta novedad afectará el cálculo del pago del empleado
           </p>
+
+          <FormErrorSummary errors={errors} />
 
           <DialogFooter>
             <Button
