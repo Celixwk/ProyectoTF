@@ -133,7 +133,7 @@ export function TipoRecargoForm({
                                 {errors.porcentaje_recargo.message}
                             </p>
                         )}
-                        <p className="text-xs text-muted-foreground">Valor numérico de porcentaje para el cálculo.</p>
+<p className="text-xs text-muted-foreground">Valor numérico de porcentaje para el cálculo.</p>
                     </div>
 
                     <div className="space-y-2">

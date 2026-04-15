@@ -57,7 +57,7 @@ export type EstadoFormData = z.infer<typeof estadoSchema>;
 export const tipoRecargoSchema = z.object({
   codigo: z.string().min(1, 'El código es requerido').max(10),
   nombre_recargo: z.string().min(1, 'El nombre es requerido').max(60),
-  porcentaje_recargo: z.coerce.number().min(0, 'El porcentaje debe ser mayor o igual a 0').max(100, 'El porcentaje debe ser menor o igual a 100'),
+  porcentaje_recargo: z.coerce.number().min(0, 'El porcentaje debe ser mayor o igual a 0').max(999.99, 'El porcentaje no puede superar 999.99'),
   descripcion: z.string().max(255).optional().or(z.literal('')),
   activo: z.boolean().optional().default(true),
 });

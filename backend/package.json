@@ -8,7 +8,7 @@
     "start": "node dist/server.js",
     "build": "tsc && xcopy src\\generated dist\\generated /E /I /Y && xcopy src\\database dist\\database /E /I /Y",
     "electron:dev": "concurrently \"npm run dev\" \"electron .\"",
-    "dist": "npm run build && electron-builder",
+    "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "prisma:generate": "prisma generate --schema=src/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema=src/prisma/schema.prisma",
     "prisma:push": "prisma db push --schema=src/prisma/schema.prisma",
@@ -51,14 +51,8 @@
       }
     ],
     "win": {
-      "target": "nsis",
+      "target": "portable",
       "forceCodeSigning": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
     }
   },
   "keywords": [
