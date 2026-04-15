@@ -1,0 +1,9 @@
+src/pages/ProgramacionAreas/GestionMensual.tsx(14,1): error TS6192: All imports in import declaration are unused.
+src/pages/ProgramacionAreas/GestionMensual.tsx(354,51): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/pages/ProgramacionAreas/GestionMensual.tsx(439,11): error TS6133: 'handleDropRefuerzo' is declared but its value is never read.
+src/pages/ProgramacionAreas/ProgramacionAreas.tsx(100,15): error TS6133: 'current' is declared but its value is never read.
+src/pages/ProgramacionAreas/ProgramacionAreas.tsx(102,15): error TS6133: 'end' is declared but its value is never read.
+src/utils/calculadoraRecargos.ts(135,11): error TS6133: 'espacio' is declared but its value is never read.
+src/utils/calculadoraRecargos.ts(176,11): error TS6133: 'esDomFest' is declared but its value is never read.
+src/utils/calculadoraRecargos.ts(301,19): error TS6133: 'extraNoct' is declared but its value is never read.
+
