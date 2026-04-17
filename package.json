@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts",
     "start": "node dist/server.js",
-    "build": "tsc && xcopy src\\generated dist\\generated /E /I /Y && xcopy src\\database dist\\database /E /I /Y",
+    "build": "npx tsc && xcopy src\\generated dist\\generated /E /I /Y && xcopy src\\database dist\\database /E /I /Y",
     "electron:dev": "concurrently \"npm run dev\" \"electron .\"",
     "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
     "prisma:generate": "prisma generate --schema=src/prisma/schema.prisma",
