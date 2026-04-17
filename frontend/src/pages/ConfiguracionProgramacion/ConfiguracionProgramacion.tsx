@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { consultasService, empleadosService, areasService, novedadesService, programacionService, parametrizacionService } from '@/services/api.service';
+import { consultasService, empleadosService, areasService, novedadesService, programacionService, parametrizacionService, turnosService } from '@/services/api.service';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCirc
 import { format, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-import type { EmpleadoCompleto, Area } from '@/types/api.types';
+import type { EmpleadoCompleto, Area, Turno } from '@/types/api.types';
 
 const parseFechaSinAjuste = (fechaStr: string) => {
   if (!fechaStr) return null;
@@ -33,6 +33,12 @@ export default function ConfiguracionProgramacion() {
   const [metaHorasInput, setMetaHorasInput] = useState<string>('');
   const [inicioNocturnoInput, setInicioNocturnoInput] = useState<string>('');
   const [maximoExtrasInput, setMaximoExtrasInput] = useState<string>('');
+  const [maxDiasConsecutivosInput, setMaxDiasConsecutivosInput] = useState<string>('');
+  
+  // States para turnos globales y preferencias
+  const [configAreasTurnos, setConfigAreasTurnos] = useState<Record<number, number[]>>({}); // area -> turnoIds
+  const [preferenciasEmpleados, setPreferenciasEmpleados] = useState<Record<number, Record<number, number | null>>>({}); // idEmpleado -> area -> turnoId
+
   const isSaving = useRef(false);
 
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-01'));
@@ -71,6 +77,44 @@ export default function ConfiguracionProgramacion() {
     staleTime: 60_000
   });
 
+  const { data: maxDiasConsecutivosData, refetch: refetchMaxDiasConsecutivos } = useQuery({
+    queryKey: ['parametro-dias-consecutivos'],
+    queryFn: () => parametrizacionService.obtener('MAX_DIAS_CONSECUTIVOS'),
+    staleTime: 60_000
+  });
+
+  const { data: turnosSistema } = useQuery({
+    queryKey: ['turnos'],
+    queryFn: () => turnosService.listar(),
+    staleTime: 60_000,
+  });
+
+  const { data: configTurnosAreaParam, refetch: refetchTurnosAreas } = useQuery({
+    queryKey: ['parametro-turnos-areas'],
+    queryFn: () => parametrizacionService.obtener('CONFIGURACION_TURNOS_AREA'),
+  });
+
+  const { data: configTurnosEmpleadoParam, refetch: refetchTurnosEmpleados } = useQuery({
+    queryKey: ['parametro-turnos-empleados'],
+    queryFn: () => parametrizacionService.obtener('PREFERENCIAS_EMPLEADOS_TURNOS'),
+  });
+
+  useEffect(() => {
+    if (configTurnosAreaParam?.valor_texto) {
+      try {
+        setConfigAreasTurnos(JSON.parse(configTurnosAreaParam.valor_texto));
+      } catch (e) { console.error(e); }
+    }
+  }, [configTurnosAreaParam]);
+
+  useEffect(() => {
+    if (configTurnosEmpleadoParam?.valor_texto) {
+      try {
+        setPreferenciasEmpleados(JSON.parse(configTurnosEmpleadoParam.valor_texto));
+      } catch (e) { console.error(e); }
+    }
+  }, [configTurnosEmpleadoParam]);
+
   useEffect(() => {
     if (metaHorasData?.horas_maximas !== undefined) {
       setMetaHorasInput(String(Number(metaHorasData.horas_maximas)));
@@ -94,6 +138,14 @@ export default function ConfiguracionProgramacion() {
       setMaximoExtrasInput('48');
     }
   }, [maximoExtrasData]);
+
+  useEffect(() => {
+    if (maxDiasConsecutivosData?.horas_maximas !== undefined) {
+      setMaxDiasConsecutivosInput(String(Number(maxDiasConsecutivosData.horas_maximas)));
+    } else if (!maxDiasConsecutivosData) {
+      setMaxDiasConsecutivosInput('3');
+    }
+  }, [maxDiasConsecutivosData]);
 
   const { data: tiposNovedadData } = useQuery({
     queryKey: ['tipos-novedades'],
@@ -132,7 +184,7 @@ export default function ConfiguracionProgramacion() {
   }, [tiposNovedad, tipoSeleccionado]);
 
   const guardarMetaHorasMutation = useMutation({
-    mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_PERIODO', horas),
+    mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_PERIODO', { horas_maximas: horas }),
     onSuccess: () => {
       refetchMetaHoras();
       toast.success('Meta de horas guardada correctamente');
@@ -141,7 +193,7 @@ export default function ConfiguracionProgramacion() {
   });
 
   const guardarInicioNocturnaMutation = useMutation({
-    mutationFn: (hora: number) => parametrizacionService.guardar('HORA_INICIO_NOCTURNA', hora),
+    mutationFn: (hora: number) => parametrizacionService.guardar('HORA_INICIO_NOCTURNA', { horas_maximas: hora }),
     onSuccess: () => {
       refetchInicioNocturna();
       toast.success('Hora inicio de jornada nocturna guardada');
@@ -150,12 +202,37 @@ export default function ConfiguracionProgramacion() {
   });
 
   const guardarMaximoExtrasMutation = useMutation({
-    mutationFn: (horas: number) => parametrizacionService.guardar('MAXIMO_HORAS_EXTRAS', horas),
+    mutationFn: (horas: number) => parametrizacionService.guardar('MAXIMO_HORAS_EXTRAS', { horas_maximas: horas }),
     onSuccess: () => {
       refetchMaximoExtras();
       toast.success('Máximo de horas extras guardado');
     },
     onError: () => toast.error('Error guardando máximo de extras'),
+  });
+
+  const guardarMaxDiasConsecutivosMutation = useMutation({
+    mutationFn: (dias: number) => parametrizacionService.guardar('MAX_DIAS_CONSECUTIVOS', { horas_maximas: dias }),
+    onSuccess: () => {
+      refetchMaxDiasConsecutivos();
+      toast.success('Límite de días consecutivos guardado');
+    },
+    onError: () => toast.error('Error guardando límite de días consecutivos'),
+  });
+
+  const guardarTurnosAreasMutation = useMutation({
+    mutationFn: (turnos: Record<number, number[]>) => parametrizacionService.guardar('CONFIGURACION_TURNOS_AREA', { valor_texto: JSON.stringify(turnos) }),
+    onSuccess: () => {
+      refetchTurnosAreas();
+      toast.success('Configuración de turnos para áreas guardada');
+    },
+    onError: () => toast.error('Error guardando turnos de áreas'),
+  });
+
+  const guardarPreferenciasEmpleadosMutation = useMutation({
+    mutationFn: (preferencias: Record<number, Record<number, number | null>>) => parametrizacionService.guardar('PREFERENCIAS_EMPLEADOS_TURNOS', { valor_texto: JSON.stringify(preferencias) }),
+    onSuccess: () => {
+      refetchTurnosEmpleados();
+    },
   });
 
   const fechaConflicto = useMemo(() => {
@@ -334,6 +411,7 @@ export default function ConfiguracionProgramacion() {
       await queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
       await queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
       await queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
+      await queryClient.invalidateQueries({ queryKey: ['programacion-consolidado'] });
 
       await queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
       await refetchAlertas();
@@ -455,16 +533,61 @@ export default function ConfiguracionProgramacion() {
             </CardHeader>
             <CardContent className="p-4 bg-white">
               <div className="space-y-2">
-                {areas?.map((area: Area) => (
+                {areas?.map((area: Area) => {
+                  const isChecked = areasPermitidas.includes(area.id_area);
+                  const prefObj = preferenciasEmpleados[idEmpleadoSeleccionado] || {};
+                  const turnoPrefId = prefObj[area.id_area] || null;
+
+                  return (
                   <div
                     key={area.id_area}
-                    className={`flex items-center space-x-3 p-4 rounded-xl border transition-all cursor-pointer ${areasPermitidas.includes(area.id_area) ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-50' : 'hover:bg-slate-50 border-slate-100'}`}
-                    onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}
+                    className={`flex flex-col space-y-2 p-4 rounded-xl border transition-all ${isChecked ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-50' : 'hover:bg-slate-50 border-slate-100'}`}
                   >
-                    <Checkbox checked={areasPermitidas.includes(area.id_area)} className="h-5 w-5 rounded-md" />
-                    <span className={`text-sm font-bold ${areasPermitidas.includes(area.id_area) ? 'text-indigo-900' : 'text-slate-500'}`}>{area.nombre_area}</span>
+                    <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}>
+                      <Checkbox checked={isChecked} className="h-5 w-5 rounded-md" />
+                      <span className={`text-sm font-bold flex-1 ${isChecked ? 'text-indigo-900' : 'text-slate-500'}`}>{area.nombre_area}</span>
+                    </div>
+                    {isChecked && configAreasTurnos[area.id_area]?.length > 0 && (
+                      <div className="pl-8 pt-1 flex items-center gap-2">
+                        <Label className="text-[10px] uppercase text-indigo-500 font-bold whitespace-nowrap">Turno Fijo (Opc.):</Label>
+                        <Select
+                          value={turnoPrefId ? turnoPrefId.toString() : "none"}
+                          onValueChange={(val) => {
+                            const valId = val === "none" ? null : parseInt(val);
+                            setPreferenciasEmpleados(prev => {
+                              const newPrefs = { ...prev };
+                              if (!newPrefs[idEmpleadoSeleccionado]) newPrefs[idEmpleadoSeleccionado] = {};
+                              newPrefs[idEmpleadoSeleccionado][area.id_area] = valId;
+                              guardarPreferenciasEmpleadosMutation.mutate(newPrefs);
+                              return newPrefs;
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-[10px] font-bold flex-1 bg-white border-indigo-200">
+                            <SelectValue placeholder="Libre (Auto)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none" className="text-slate-500 italic text-xs">Libre (Auto)</SelectItem>
+                            {configAreasTurnos[area.id_area]?.map(tId => {
+                              const t = turnosSistema?.find((ts: Turno) => ts.id_turno === tId);
+                              if (!t) return null;
+                              return (
+                                <SelectItem key={t.id_turno} value={t.id_turno.toString()}>
+                                  <span className="font-black text-indigo-600">{t.tipo_turno}</span> 
+                                  <span className="text-[10px] text-slate-500 ml-2">
+                                    [{t.hora_entrada?.substring(0,5)} - {t.hora_salida?.substring(0,5)}
+                                    {t.hora_entrada_2 && t.hora_salida_2 ? ` y ${t.hora_entrada_2.substring(0,5)} - ${t.hora_salida_2.substring(0,5)}` : ''}]
+                                  </span>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -555,7 +678,7 @@ export default function ConfiguracionProgramacion() {
             Defina las variables fijas de control. Estos valores se utilizan automáticamente en todos los cálculos del sistema, como el reporte de desgloses y recargos.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
             {/* META HORAS PERIODO */}
             <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
@@ -659,6 +782,40 @@ export default function ConfiguracionProgramacion() {
               </div>
             </div>
 
+            {/* MAXIMO DIAS CONSECUTIVOS */}
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+              <div>
+                <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
+                  Días Consecutivos <CalendarIcon className="inline h-3 w-3 ml-1 text-slate-800" />
+                </Label>
+                <span className="text-xs text-slate-400 leading-tight block mb-3">Límite de días seguidos en la misma área antes de forzar rotación. Ej: 3.</span>
+              </div>
+              <div className="flex items-center gap-2 mt-auto">
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={maxDiasConsecutivosInput}
+                  onChange={(e) => setMaxDiasConsecutivosInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 3"
+                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200"
+                />
+                <Button
+                  onClick={() => {
+                    const val = parseInt(maxDiasConsecutivosInput);
+                    if (!isNaN(val) && val >= 1) guardarMaxDiasConsecutivosMutation.mutate(val);
+                    else toast.error('Ingrese un número válido mayor a 0');
+                  }}
+                  disabled={guardarMaxDiasConsecutivosMutation.isPending}
+                  size="icon"
+                  className="h-10 w-10 shrink-0 bg-slate-800 hover:bg-slate-900 rounded-lg"
+                  title="Guardar"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
           </div>
         </CardContent>
       </Card>
@@ -688,6 +845,57 @@ export default function ConfiguracionProgramacion() {
                   {(!maxTrabajadoresPorArea[area.id_area] || parseInt(maxTrabajadoresPorArea[area.id_area]) === 0) && (
                     <AlertCircle className="absolute right-2 top-2.5 h-5 w-5 text-rose-500" />
                   )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-emerald-100 bg-emerald-50/20 rounded-2xl overflow-hidden mt-6 shadow-md mb-6">
+        <CardHeader className="py-4 border-b border-emerald-100 bg-white/50 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black text-emerald-900 flex items-center gap-2 tracking-widest uppercase">
+            <Settings2 className="h-4 w-4" /> Configuración de Turnos por Área
+          </CardTitle>
+          <Button size="sm" onClick={() => guardarTurnosAreasMutation.mutate(configAreasTurnos)} className="bg-emerald-600 hover:bg-emerald-700 font-bold h-8 text-[10px]" disabled={guardarTurnosAreasMutation.isPending}>
+            <Save className="h-3 w-3 mr-2" /> GUARDAR TURNOS
+          </Button>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {areas?.filter((a: Area) => a.nombre_area.toUpperCase() !== 'REFUERZOS').map((area: Area) => (
+              <div key={area.id_area} className="p-4 bg-white rounded-2xl border border-emerald-100 shadow-sm space-y-3">
+                <Label className="text-xs uppercase text-emerald-900 font-black block leading-tight">{area.nombre_area}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {turnosSistema?.map((turno: Turno) => {
+                    const isSelected = configAreasTurnos[area.id_area]?.includes(turno.id_turno);
+                    return (
+                      <Button
+                        key={turno.id_turno}
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setConfigAreasTurnos(prev => {
+                            const newConfig = { ...prev };
+                            if (!newConfig[area.id_area]) newConfig[area.id_area] = [];
+                            if (isSelected) {
+                              newConfig[area.id_area] = newConfig[area.id_area].filter(id => id !== turno.id_turno);
+                            } else {
+                              newConfig[area.id_area] = [...newConfig[area.id_area], turno.id_turno];
+                            }
+                            return newConfig;
+                          });
+                        }}
+                        className={`h-8 font-bold text-xs ${isSelected ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                      >
+                        {turno.tipo_turno}
+                        <span className="opacity-60 ml-1 font-normal text-[9px] hidden sm:inline">
+                          [{turno.hora_entrada?.substring(0,5)} - {turno.hora_salida?.substring(0,5)}
+                          {turno.hora_entrada_2 && turno.hora_salida_2 ? ` y ${turno.hora_entrada_2.substring(0,5)} - ${turno.hora_salida_2.substring(0,5)}` : ''}]
+                        </span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             ))}

@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
-import { areasService, turnosService, programacionService, alertasService } from '@/services/api.service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { areasService, turnosService, programacionService, alertasService, parametrizacionService } from '@/services/api.service';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,23 @@ export default function ProgramacionAreas() {
 
     const [paso, setPaso] = useState<'inicio' | 'configuracion' | 'resultado'>('inicio');
     const [mostrarDialogoNovedades, setMostrarDialogoNovedades] = useState(false);
-    const [configAreas, setConfigAreas] = useState<Record<number, { turnosIds: number[] }>>({});
+    
+    // El frontend ya no administra configAreas, lo carga de los parametros globales
+    const { data: configTurnosAreaParam } = useQuery({
+        queryKey: ['parametro-turnos-areas'],
+        queryFn: () => parametrizacionService.obtener('CONFIGURACION_TURNOS_AREA'),
+    });
+
+    const configGlobalAreas = useMemo(() => {
+        if (!configTurnosAreaParam?.valor_texto) return {};
+        try {
+            const raw = JSON.parse(configTurnosAreaParam.valor_texto);
+            const parsed: Record<number, { turnosIds: number[] }> = {};
+            Object.keys(raw).forEach(key => parsed[Number(key)] = { turnosIds: raw[Number(key)] });
+            return parsed;
+        } catch (e) { return {}; }
+    }, [configTurnosAreaParam]);
+
     const [programacionGenerada, setProgramacionGenerada] = useState<any[]>([]);
     const [alertasMotor, setAlertasMotor] = useState<any[]>([]);
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
@@ -89,10 +105,6 @@ export default function ProgramacionAreas() {
         return areasRaw.filter(a => a.id_area !== 13); // Filtrar un área específica si es regla de negocio
     }, [areasRaw]);
 
-    const turnos = useMemo(() => {
-        if (!turnosRaw) return [];
-        return turnosRaw;
-    }, [turnosRaw]);
 
     const infoDias = useMemo(() => {
         if (diasDiferencia < 0 || diasDiferencia > 60) return [];
@@ -118,42 +130,7 @@ export default function ProgramacionAreas() {
 
     const alertasSeparadas = useMemo(() => procesarAlertas(alertasMotor), [alertasMotor]);
 
-    useEffect(() => {
-        if (areas.length > 0 && turnos.length > 0 && Object.keys(configAreas).length === 0 && !programacionExistente?.existe) {
-            const initialConfig: Record<number, { turnosIds: number[] }> = {};
-            const getTurnoId = (codigo: string) => {
-                const t = turnos.find(turno => turno.tipo_turno === codigo);
-                return t ? t.id_turno : undefined;
-            };
-
-            areas.forEach((area) => {
-                let codigosTurnos: string[] = [];
-                switch (area.id_area) {
-                    case 1: codigosTurnos = ['T1', 'T11']; break;
-                    case 2: codigosTurnos = ['T11', 'T5']; break;
-                    case 3: codigosTurnos = ['T5', 'T3']; break;
-                    case 4: codigosTurnos = ['T5', 'T11']; break;
-                    case 5: codigosTurnos = ['T5', 'T11']; break;
-                    case 6: codigosTurnos = ['T5', 'T13', 'T11']; break;
-                    case 7: codigosTurnos = ['T11', 'T5', 'T13']; break;
-                    case 8: codigosTurnos = ['T11', 'T5']; break;
-                    case 9: codigosTurnos = ['T13', 'T11', 'T5']; break;
-                    case 10: codigosTurnos = ['T5', 'T11']; break;
-                    case 11: codigosTurnos = ['T6', 'T8', 'T2']; break;
-                    case 12: codigosTurnos = ['T6']; break;
-                    default: codigosTurnos = ['T5', 'T11'];
-                }
-
-                const idsSeleccionados = codigosTurnos
-                    .map(codigo => getTurnoId(codigo))
-                    .filter((id): id is number => id !== undefined);
-
-                initialConfig[area.id_area] = { turnosIds: idsSeleccionados };
-            });
-
-            setConfigAreas(initialConfig);
-        }
-    }, [areas, turnos, programacionExistente]);
+    // Ya no se pre-configuran turnos localmente, se usa la variable global.
 
     useEffect(() => {
         if (fechasRecienGeneradas.length > 0) {
@@ -164,18 +141,14 @@ export default function ProgramacionAreas() {
         }
     }, [fechasRecienGeneradas]);
 
-    const formatTime = (time: string | null | undefined): string => {
-        if (!time) return '--:--';
-        const formatted = time.includes('T') ? time.split('T')[1] : time;
-        return formatted.substring(0, 5);
-    };
+
 
     const generarMutation = useMutation({
         mutationFn: async () => {
             const result = await programacionService.generarAutomatica({
                 fechaInicio,
                 fechaFin,
-                configuracion: configAreas,
+                configuracion: configGlobalAreas,
                 balancearHoras
             });
             const data = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
@@ -311,64 +284,40 @@ export default function ProgramacionAreas() {
 
             {paso === 'configuracion' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
-                    <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 border rounded-lg shadow-sm gap-4">
-                        <div className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                            <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                            Rango: {fechaInicio} al {fechaFin}
+                    <div className="flex flex-col border rounded-xl overflow-hidden shadow-sm bg-white">
+                        <div className="bg-slate-50 p-6 border-b">
+                            <h3 className="text-xl font-bold text-slate-800">Todo listo para generar</h3>
+                            <p className="text-sm text-slate-500 mt-1">
+                                Los turnos a asignar para cada área se tomarán de la <strong>Configuración Global del Sistema</strong>.
+                            </p>
                         </div>
-                        <div className="flex items-center gap-6">
-                            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-md border text-sm hover:bg-slate-100 transition-colors">
+                        <div className="p-6 space-y-6">
+                            <div className="flex bg-slate-50 border p-4 rounded-lg items-center justify-between">
+                                <div className="space-y-1">
+                                    <div className="font-bold text-slate-900 tracking-wider flex items-center gap-2 text-sm uppercase">
+                                        Rango a programar: {fechaInicio} al {fechaFin}
+                                    </div>
+                                    <p className="text-xs text-slate-500">Asegúrese de haber revisado las novedades del periodo.</p>
+                                </div>
+                            </div>
+                            <div className="bg-white p-4 border rounded-xl shadow-sm border-indigo-100 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setBalancearHoras(!balancearHoras)}>
                                 <Checkbox
                                     checked={balancearHoras}
                                     onCheckedChange={(checked) => setBalancearHoras(checked as boolean)}
+                                    className="h-6 w-6"
                                 />
-                                <span className="font-medium text-slate-700">Equilibrar Horas Asignadas</span>
-                            </label>
-                            <Button variant="outline" size="sm" onClick={() => setPaso('inicio')}>Cambiar Rango</Button>
+                                <div>
+                                    <span className="font-bold text-slate-700 block">Equilibrar Horas Asignadas</span>
+                                    <span className="text-xs text-slate-500">El motor intentará llegar a la meta de horas maximizando la distribución equitativa.</span>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-3 mt-6">
+                                <Button variant="outline" size="lg" onClick={() => setPaso('inicio')}>Cambiar Rango</Button>
+                                <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
+                                    {generarMutation.isPending ? 'Generando...' : 'Proceder y Generar'}
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div className="grid gap-4">
-                        {areas.map((area) => (
-                            <Card key={area.id_area} className="border-l-4 border-l-indigo-500 overflow-hidden shadow-sm">
-                                <CardHeader className="pb-3 bg-slate-50/50">
-                                    <CardTitle className="text-lg text-slate-800">{area.nombre_area}</CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-4">
-                                    <div className="flex flex-wrap gap-3">
-                                        {turnos.map((turno) => {
-                                            const isSelected = configAreas[area.id_area]?.turnosIds?.includes(turno.id_turno);
-                                            return (
-                                                <div
-                                                    key={turno.id_turno}
-                                                    onClick={() => {
-                                                        const currentIds = configAreas[area.id_area]?.turnosIds || [];
-                                                        const newIds = isSelected
-                                                            ? currentIds.filter(id => id !== turno.id_turno)
-                                                            : [...currentIds, turno.id_turno];
-                                                        setConfigAreas(prev => ({ ...prev, [area.id_area]: { turnosIds: newIds } }));
-                                                    }}
-                                                    className={`cursor-pointer px-4 py-3 rounded-lg border text-sm flex items-center gap-3 transition-all ${isSelected ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-200' : 'bg-white hover:border-slate-300'}`}
-                                                >
-                                                    <Checkbox checked={Boolean(isSelected)} onCheckedChange={() => { }} />
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-slate-700">{turno.tipo_turno}</span>
-                                                        <span className="text-[11px] text-slate-500">{formatTime(turno.hora_entrada)} - {formatTime(turno.hora_salida)}</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-
-                    <div className="sticky bottom-4 bg-white/95 backdrop-blur-sm p-4 border rounded-xl shadow-2xl flex justify-end gap-3 z-50">
-                        <Button variant="outline" onClick={() => setPaso('inicio')}>Atrás</Button>
-                        <Button size="lg" className="px-10 bg-indigo-600 hover:bg-indigo-700" onClick={() => generarMutation.mutate()} disabled={generarMutation.isPending}>
-                            {generarMutation.isPending ? 'Generando...' : 'Generar Programación'}
-                        </Button>
                     </div>
                 </div>
             )}
@@ -406,7 +355,7 @@ export default function ProgramacionAreas() {
                     )}
 
                     {areas.map((area) => {
-                        const turnosActivos = configAreas[area.id_area]?.turnosIds || [];
+                        const turnosActivos = configGlobalAreas[area.id_area]?.turnosIds || [];
                         if (turnosActivos.length === 0) return null;
 
                         return (

@@ -51,8 +51,16 @@
       }
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SIGH Celixwk"
     }
   },
   "keywords": [

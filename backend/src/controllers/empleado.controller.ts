@@ -6,7 +6,8 @@ export const empleadoController = {
         try {
             const empleados = await prisma.empleado.findMany({
                 where: { id_estado: 1 },
-                include: { cargo: true }
+                include: { cargo: true },
+                orderBy: [ { nombre1: 'asc' }, { apellido1: 'asc' } ]
             });
             res.status(200).json({ success: true, data: empleados });
         } catch (error: any) {
@@ -172,7 +173,7 @@ export const empleadoController = {
 export const vistasController = {
     async obtenerEmpleadosCompletos(req: Request, res: Response) {
         try {
-            const { busqueda, estado, page = 1, limit = 20 } = req.query;
+            const { busqueda, estado, page = 1, limit = 1000 } = req.query;
             const skip = (Number(page) - 1) * Number(limit);
 
             const where: any = {
@@ -205,7 +206,7 @@ export const vistasController = {
                             include: { detalle_programacion: { include: { turno: true } } }
                         }
                     },
-                    orderBy: { apellido1: 'asc' }
+                    orderBy: [ { nombre1: 'asc' }, { apellido1: 'asc' } ]
                 }) as unknown as Promise<any[]>
             ]);
 

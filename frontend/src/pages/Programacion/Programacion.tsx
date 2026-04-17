@@ -249,6 +249,12 @@ export default function Programacion() {
         const entrada = asig.turno.hora_entrada.includes('T') ? asig.turno.hora_entrada.split('T')[1] : asig.turno.hora_entrada;
         const salida = asig.turno.hora_salida?.includes('T') ? asig.turno.hora_salida.split('T')[1] : asig.turno.hora_salida;
         horaFormateada = `${entrada.substring(0, 5)} - ${salida?.substring(0, 5) || '??'}`;
+        
+        if (asig.turno?.hora_entrada_2 && asig.turno?.hora_salida_2) {
+          const ent2 = asig.turno.hora_entrada_2.includes('T') ? asig.turno.hora_entrada_2.split('T')[1] : asig.turno.hora_entrada_2;
+          const sal2 = asig.turno.hora_salida_2.includes('T') ? asig.turno.hora_salida_2.split('T')[1] : asig.turno.hora_salida_2;
+          horaFormateada += ` \n ${ent2.substring(0,5)} - ${sal2.substring(0,5)}`;
+        }
       }
 
       let diasDescanso: number[] = [];

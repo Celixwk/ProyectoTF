@@ -54,8 +54,14 @@ export const getTurnos = async (req: Request, res: Response) => {
         const turnosRaw = await prisma.turno.findMany({
             where: estado !== undefined ? {
                 estado: estado === 'true' ? 'Activo' : 'Inactivo'
-            } : {},
-            orderBy: { tipo_turno: 'asc' }
+            } : {}
+        });
+
+        turnosRaw.sort((a, b) => {
+            const numA = parseInt(String(a.tipo_turno).replace(/\D/g, '')) || 0;
+            const numB = parseInt(String(b.tipo_turno).replace(/\D/g, '')) || 0;
+            if (numA !== numB) return numA - numB;
+            return String(a.tipo_turno).localeCompare(String(b.tipo_turno));
         });
 
         const turnos = turnosRaw.map(t => ({

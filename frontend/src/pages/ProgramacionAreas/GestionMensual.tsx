@@ -54,6 +54,7 @@ export default function GestionMensual() {
     const [cambiosLocales, setCambiosLocales] = useState<CambioLocal[]>([]);
     const [empleadoArrastrado, setEmpleadoArrastrado] = useState<any>(null);
     const [menuContextual, setMenuContextual] = useState<{ x: number, y: number, asig: any, areaId: number, turnoId: number, fecha: string } | null>(null);
+    const [menuContextualVacio, setMenuContextualVacio] = useState<{ x: number, y: number, areaId: number, turnoId: number, fecha: string } | null>(null);
     const [fechasRecienGeneradas, setFechasRecienGeneradas] = useState<string[]>([]);
     const [bannerIgnorado, setBannerIgnorado] = useState(false);
     const [filtroEmpleado, setFiltroEmpleado] = useState('');
@@ -357,52 +358,37 @@ export default function GestionMensual() {
         toast.success(`Cambio registrado`);
     };
 
-    const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
-        e.preventDefault();
-        if (!empleadoArrastrado) return;
-
+    const procesarAsignacion = (empArrastrado: any, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
         const fechaNorm = fechaDestino.split('T')[0];
-        const fechaOrigen = empleadoArrastrado.fecha?.split('T')[0] || fechaNorm;
+        const fechaOrigen = empArrastrado.fecha?.split('T')[0] || fechaNorm;
 
         // Evitar soltar en el mismo lugar
-        if (empleadoArrastrado.id_area_origen === idAreaDestino &&
-            empleadoArrastrado.id_turno_origen === idTurnoDestino &&
+        if (empArrastrado.id_area_origen === idAreaDestino &&
+            empArrastrado.id_turno_origen === idTurnoDestino &&
             fechaOrigen === fechaNorm) {
             setEmpleadoArrastrado(null);
             return;
         }
 
         // VALIDACIÓN DE DOBLE ASIGNACIÓN (Anti-Robo)
-        // Verificar si el empleado ya está asignado en OTRA área ese mismo día
-        // Excepción: Si es un movimiento dentro del mismo día (reubicación voluntaria), permitimos (el usuario sabe lo que hace al arrastrar desde el grid)
-        // Pero si viene de Refuerzos (id_area_origen === -1) y ya está en el grid, es un error de visualización -> BLOQUEAR.
-
-        if (empleadoArrastrado.id_area_origen === -1) {
-            // 1. Validar que esté DISPONIBLE ese día específico (no sea descanso ni novedad)
-            // Usamos noAsignadosPorDia que trae la verdad del backend sobre disponibilidad
+        if (empArrastrado.id_area_origen === -1) {
             const disponiblesHabil = noAsignadosPorDia[fechaNorm] || [];
-            const esHabil = disponiblesHabil.some((p: any) => Number(p.id_empleado) === Number(empleadoArrastrado.id_empleado));
+            const esHabil = disponiblesHabil.some((p: any) => Number(p.id_empleado) === Number(empArrastrado.id_empleado));
 
             if (!esHabil) {
-                // Si no está en la lista de disponibles, averiguar por qué para dar buen feedback
-                // Chequear novedades/descansos es complejo aquí sin data, pero podemos asumir que si no está disponible y no está asignado, es descanso/novedad.
-                // OJO: Podría estar asignado ya? el backend lo excluye de noAsignadosPorDia si está asignado.
-
-                // Verificamos asignación existente (Anti-Robo)
                 const yaTieneTurno = obtenerProgramacionParaValidar().find(p =>
-                    p.id_empleado === empleadoArrastrado.id_empleado &&
+                    p.id_empleado === empArrastrado.id_empleado &&
                     p.fecha.split('T')[0] === fechaNorm &&
                     !p._eliminado
                 );
 
                 if (yaTieneTurno) {
                     const nombreArea = yaTieneTurno.nombre_area || yaTieneTurno.area?.nombre_area || 'otra área';
-                    toast.error(`⚠️ CONFLICTO: ${empleadoArrastrado.nombre_empleado} ya trabaja el día ${fechaNorm} en ${nombreArea}.`);
+                    toast.error(`⚠️ CONFLICTO: ${empArrastrado.nombre_empleado} ya trabaja el día ${fechaNorm} en ${nombreArea}.`);
                     setEmpleadoArrastrado(null);
                     return;
                 } else {
-                    // Si no tiene turno y no está disponible, es Descanso o Novedad
-                    toast.error(`⛔ NO DISPONIBLE: ${empleadoArrastrado.nombre_empleado} tiene descanso o novedad el día ${fechaNorm}.`);
+                    toast.error(`⛔ NO DISPONIBLE: ${empArrastrado.nombre_empleado} tiene descanso o novedad el día ${fechaNorm}.`);
                     setEmpleadoArrastrado(null);
                     return;
                 }
@@ -416,7 +402,7 @@ export default function GestionMensual() {
         const maxPermitido = areaInfo?.max_trabajadores ?? 0;
 
         const empleadosEnAreaHoy = programacionBase.filter(p => Number(p.id_area) === Number(idAreaDestino) && p.fecha.split('T')[0] === fechaNorm);
-        const esMismoDiaYArea = empleadoArrastrado.id_area_origen === idAreaDestino && fechaOrigen === fechaNorm;
+        const esMismoDiaYArea = empArrastrado.id_area_origen === idAreaDestino && fechaOrigen === fechaNorm;
         const ocupacionGlobal = esMismoDiaYArea ? empleadosEnAreaHoy.length : empleadosEnAreaHoy.length + 1;
 
         if (maxPermitido > 0 && ocupacionGlobal > maxPermitido) {
@@ -426,14 +412,12 @@ export default function GestionMensual() {
                 setEmpleadoArrastrado(null);
                 return;
             }
-            // Swap
             cambiosAGenerar.push(
-                { id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0, empleado: empleadoArrastrado.nombre_empleado, id_empleado: empleadoArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino },
-                { id: cambioId, id_detalle_programacion: destinoDirecto.id_detalle_programacion, empleado: destinoDirecto.nombre_empleado || destinoDirecto.empleado?.nombre_completo || 'Empleado', id_empleado: destinoDirecto.id_empleado, fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino, id_area_destino: empleadoArrastrado.id_area_origen, id_turno_destino: empleadoArrastrado.id_turno_origen }
+                { id: cambioId, id_detalle_programacion: empArrastrado.id_detalle_programacion || 0, empleado: empArrastrado.nombre_empleado, id_empleado: empArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empArrastrado.id_area_origen, id_turno_origen: empArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino },
+                { id: cambioId, id_detalle_programacion: destinoDirecto.id_detalle_programacion, empleado: destinoDirecto.nombre_empleado || destinoDirecto.empleado?.nombre_completo || 'Empleado', id_empleado: destinoDirecto.id_empleado, fecha: fechaOrigen, id_area_origen: idAreaDestino, id_turno_origen: idTurnoDestino, id_area_destino: empArrastrado.id_area_origen, id_turno_destino: empArrastrado.id_turno_origen }
             );
         } else {
-            // Movimiento simple
-            cambiosAGenerar.push({ id: cambioId, id_detalle_programacion: empleadoArrastrado.id_detalle_programacion || 0, empleado: empleadoArrastrado.nombre_empleado, id_empleado: empleadoArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empleadoArrastrado.id_area_origen, id_turno_origen: empleadoArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino });
+            cambiosAGenerar.push({ id: cambioId, id_detalle_programacion: empArrastrado.id_detalle_programacion || 0, empleado: empArrastrado.nombre_empleado, id_empleado: empArrastrado.id_empleado, fecha: fechaNorm, id_area_origen: empArrastrado.id_area_origen, id_turno_origen: empArrastrado.id_turno_origen, id_area_destino: idAreaDestino, id_turno_destino: idTurnoDestino });
         }
 
         let advertenciasFinales: string[] = [];
@@ -445,7 +429,7 @@ export default function GestionMensual() {
                 cambio.id_area_destino,
                 programacionBase,
                 infoEmp,
-                cambio.id_empleado === empleadoArrastrado.id_empleado ? fechaOrigen : cambio.fecha,
+                cambio.id_empleado === empArrastrado.id_empleado ? fechaOrigen : cambio.fecha,
                 cambio.id_area_origen
             );
             advs.forEach(msg => {
@@ -464,6 +448,25 @@ export default function GestionMensual() {
             return;
         }
         aplicarCambios(cambiosAGenerar);
+    };
+
+    const handleDrop = (e: React.DragEvent, idAreaDestino: number, idTurnoDestino: number, fechaDestino: string) => {
+        e.preventDefault();
+        if (!empleadoArrastrado) return;
+        procesarAsignacion(empleadoArrastrado, idAreaDestino, idTurnoDestino, fechaDestino);
+    };
+
+    const handleAsignarRefuerzoDinamico = (empR: any, areaId: number, turnoId: number, fecha: string) => {
+        setMenuContextualVacio(null);
+        const fakeEmpleadoArrastrado = {
+            id_area_origen: -1,
+            id_turno_origen: -1,
+            id_empleado: empR.id_empleado,
+            nombre_empleado: empR.nombre_completo,
+            fecha: fecha,
+            id_detalle_programacion: 0
+        };
+        procesarAsignacion(fakeEmpleadoArrastrado, areaId, turnoId, fecha);
     };
 
 
@@ -721,10 +724,10 @@ export default function GestionMensual() {
                                                                             const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
                                                                             const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
                                                                             return (
-                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px]", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)}>
-                                                                                    <div className="flex flex-col gap-1">
+                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px] relative cursor-context-menu", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)} onContextMenu={(e) => { e.preventDefault(); if (esModoLectura) return; setMenuContextualVacio({ x: e.clientX, y: e.clientY, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }}>
+                                                                                    <div className="flex flex-col gap-1 w-full h-full min-h-[20px]">
                                                                                         {asignados.map((asig: any, idx: number) => (
-                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={() => abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO)} onContextMenu={(e) => { e.preventDefault(); if (esModoLectura) return; setMenuContextual({ x: e.clientX, y: e.clientY, asig, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500', esModoLectura && 'cursor-default opacity-90')}>
+                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={(e) => { e.stopPropagation(); abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (esModoLectura) return; setMenuContextual({ x: e.clientX, y: e.clientY, asig, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500', esModoLectura && 'cursor-default opacity-90')}>
                                                                                                 {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                             </div>
                                                                                         ))}
@@ -744,97 +747,7 @@ export default function GestionMensual() {
                                 </div>
                             </div>
 
-                            <div className="sticky bottom-0 z-40 bg-white border-t-2 border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] p-4">
-                                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-                                    <span>REFUERZOS DISPONIBLES</span>
-                                    <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Arrastre al día deseado</span>
-                                </h3>
 
-                                <div className="flex gap-2 overflow-x-auto pb-2">
-                                    {(() => {
-                                        // 1. Consolidar empleados únicos y contar disponibilidad
-                                        const consolidados = new Map<number, any>();
-
-                                        infoDias.forEach(dia => {
-                                            const poolDia = noAsignadosPorDia[dia.fechaISO] || [];
-                                            // Aplicar los mismos filtros de visibilidad (ocultar si ya se movieron al grid)
-                                            // Nota: La lógica de 'movidosAGridIds' es global para el render, 
-                                            // pero aquí necesitamos saber si el empleado está disponible *en general* (al menos 1 día).
-
-                                            poolDia.forEach((emp: any) => {
-                                                if (!consolidados.has(emp.id_empleado)) {
-                                                    consolidados.set(emp.id_empleado, { ...emp, _diasDisponibles: 0 });
-                                                }
-                                                const current = consolidados.get(emp.id_empleado);
-
-                                                // Verificar si para ESTE día específico ya fue asignado visualmente (Anti-Robo visual)
-                                                // Si ya lo moví al grid en ESTE día, no cuenta como disponible para este día
-                                                const yaEnGridHoy = cambiosLocales.some(c =>
-                                                    c.id_empleado === emp.id_empleado &&
-                                                    c.fecha === dia.fechaISO &&
-                                                    c.id_area_destino !== -1
-                                                );
-
-                                                if (!yaEnGridHoy) {
-                                                    current._diasDisponibles++;
-                                                }
-                                            });
-                                        });
-
-                                        // 2. Convertir a array y filtrar los que ya no tienen días (porque se asignaron todos)
-                                        const listaFinal = Array.from(consolidados.values())
-                                            .filter(e => e._diasDisponibles > 0)
-                                            .sort((a, b) => b._diasDisponibles - a._diasDisponibles); // Priorizar los que tienen más disponibilidad
-
-                                        if (listaFinal.length === 0) {
-                                            return <div className="text-xs text-slate-400 italic p-2">No hay personal disponible para refuerzos en este periodo.</div>;
-                                        }
-
-                                        return listaFinal.map(emp => (
-                                            <div
-                                                key={emp.id_empleado}
-                                                draggable={!esModoLectura}
-                                                onDragStart={(e) => !esModoLectura && handleDragStart(e, { ...emp, id_detalle_programacion: 0 }, -1, -1)}
-                                                onClick={() => abrirModalNovedad(emp.id_empleado, emp.nombre_completo, infoDias[0]?.fechaISO)} // Usar primer día por defecto para el modal info
-                                                className={cn(
-                                                    "flex flex-col gap-1 min-w-[140px] max-w-[160px] p-2 border border-slate-200 rounded-md bg-white hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing",
-                                                    esModoLectura && "cursor-default opacity-80"
-                                                )}
-                                            >
-                                                <div className="flex justify-between items-start gap-1">
-                                                    <span className="text-xs font-semibold text-slate-700 truncate" title={emp.nombre_completo}>
-                                                        {emp.nombre_completo}
-                                                    </span>
-                                                    {(emp.horas_acumuladas !== undefined && emp.meta_periodo) && (
-                                                        <span className={cn(
-                                                            "text-[9px] font-bold px-1 rounded-sm ml-1",
-                                                            emp.horas_acumuladas > emp.meta_periodo ? "bg-red-100 text-red-700" :
-                                                                emp.horas_acumuladas < (emp.meta_periodo - 12) ? "bg-amber-100 text-amber-700" :
-                                                                    "bg-green-100 text-green-700"
-                                                        )} title="Horas acumuladas / Meta periodo">
-                                                            {emp.horas_acumuladas} / {emp.meta_periodo}h
-                                                        </span>
-                                                    )}
-                                                    <span className="flex items-center justify-center bg-indigo-50 text-indigo-700 text-[9px] font-bold h-4 min-w-[1rem] px-1 rounded-full border border-indigo-100" title="Días disponibles en este rango">
-                                                        {emp._diasDisponibles}
-                                                    </span>
-                                                </div>
-
-                                                {emp.areas && emp.areas.length > 0 && (
-                                                    <div className="flex flex-wrap gap-0.5 mt-1 max-h-[32px] overflow-hidden">
-                                                        {emp.areas.slice(0, 3).map((a: any) => ( // Max 3 badges visuales
-                                                            <span key={a.id_area} className="px-1 text-[8px] rounded bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
-                                                                {a.nombre_area}
-                                                            </span>
-                                                        ))}
-                                                        {emp.areas.length > 3 && <span className="text-[8px] text-slate-400">+{emp.areas.length - 3}</span>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            </div>
                         </>
                     )}
 
@@ -868,6 +781,78 @@ export default function GestionMensual() {
                                 >
                                     <Trash className="w-4 h-4" /> Eliminar Turno
                                 </button>
+                            </div>
+                        </>
+                    )}
+                    {menuContextualVacio && (
+                        <>
+                            <div className="fixed inset-0 z-[100]" onClick={() => setMenuContextualVacio(null)} onContextMenu={(e) => { e.preventDefault(); setMenuContextualVacio(null); }} />
+                            <div 
+                                className="fixed z-[101] flex flex-col bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden w-64 max-h-80"
+                                style={{ top: Math.min(menuContextualVacio.y, window.innerHeight - 300), left: Math.min(menuContextualVacio.x, window.innerWidth - 250) }}
+                            >
+                                <div className="bg-slate-800 px-3 py-2 text-[10px] font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                                    <span>Asignar Refuerzo</span>
+                                    <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[9px]">{menuContextualVacio.fecha}</span>
+                                </div>
+                                <div className="overflow-y-auto flex-1 p-1">
+                                    {(() => {
+                                        const poolDia = noAsignadosPorDia[menuContextualVacio.fecha] || [];
+                                        const disponiblesHoy = poolDia.filter((emp: any) => {
+                                            const yaEnGridHoy = cambiosLocales.some(c =>
+                                                c.id_empleado === emp.id_empleado &&
+                                                c.fecha === menuContextualVacio.fecha &&
+                                                c.id_area_destino !== -1
+                                            );
+                                            return !yaEnGridHoy;
+                                        }).sort((a: any, b: any) => a.nombre_completo.localeCompare(b.nombre_completo));
+
+                                        if (disponiblesHoy.length === 0) {
+                                            return <div className="p-3 text-center text-xs text-slate-500 italic">No hay personal disponible este día.</div>;
+                                        }
+
+                                        const capacitados = disponiblesHoy.filter((emp: any) => 
+                                            emp.areas?.some((a: any) => Number(a.id_area) === Number(menuContextualVacio.areaId))
+                                        );
+                                        const apoyos = disponiblesHoy.filter((emp: any) => 
+                                            !emp.areas?.some((a: any) => Number(a.id_area) === Number(menuContextualVacio.areaId))
+                                        );
+
+                                        return (
+                                            <div className="flex flex-col gap-2 p-1">
+                                                {capacitados.length > 0 && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] font-bold text-indigo-600 uppercase px-2 mb-1">🌟 Capacitados (Área Actual)</span>
+                                                        {capacitados.map((emp: any) => (
+                                                            <button
+                                                                key={emp.id_empleado}
+                                                                className="w-full text-left px-2 py-1 text-xs text-slate-700 bg-indigo-50/50 hover:bg-indigo-100 font-medium rounded transition-colors"
+                                                                onClick={() => handleAsignarRefuerzoDinamico(emp, menuContextualVacio.areaId, menuContextualVacio.turnoId, menuContextualVacio.fecha)}
+                                                            >
+                                                                <div className="truncate" title={emp.nombre_completo}>{emp.nombre_completo}</div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {apoyos.length > 0 && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase px-2 mb-1 mt-1">🤝 Apoyo (Otras Áreas)</span>
+                                                        {apoyos.map((emp: any) => (
+                                                            <button
+                                                                key={emp.id_empleado}
+                                                                className="w-full text-left px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                                                onClick={() => handleAsignarRefuerzoDinamico(emp, menuContextualVacio.areaId, menuContextualVacio.turnoId, menuContextualVacio.fecha)}
+                                                            >
+                                                                <div className="truncate" title={emp.nombre_completo}>{emp.nombre_completo}</div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             </div>
                         </>
                     )}

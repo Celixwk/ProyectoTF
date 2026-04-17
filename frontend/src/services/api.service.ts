@@ -623,8 +623,8 @@ export const parametrizacionService = {
     const { data } = await api.get(`/parametrizacion/${nombre}`);
     return data.data;
   },
-  guardar: async (nombre: string, horas_maximas: number) => {
-    const { data } = await api.put(`/parametrizacion/${nombre}`, { horas_maximas });
+  guardar: async (nombre: string, payload: { horas_maximas?: number; valor_texto?: string; descripcion?: string }) => {
+    const { data } = await api.put(`/parametrizacion/${nombre}`, payload);
     return data.data;
   },
 };

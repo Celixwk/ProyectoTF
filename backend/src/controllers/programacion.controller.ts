@@ -182,6 +182,21 @@ export const generarAutomatica = async (req: Request, res: Response) => {
             });
         }
 
+        // Obtener parametrizaciones globales (días y preferencias)
+        const [paramDias, paramPreferencias] = await Promise.all([
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAX_DIAS_CONSECUTIVOS' } }),
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'PREFERENCIAS_EMPLEADOS_TURNOS' } })
+        ]);
+
+        const maxDiasConsecutivosArea = paramDias?.horas_maximas ? Number(paramDias.horas_maximas) : 3;
+
+        let preferenciasEmpleados = {};
+        if (paramPreferencias?.valor_texto) {
+            try {
+                preferenciasEmpleados = JSON.parse(paramPreferencias.valor_texto);
+            } catch (e) { console.error("Error parseando preferencias:", e); }
+        }
+
         let totalAsignaciones = 0;
         let totalGuardadas = 0;
         let totalErrores = 0;
@@ -196,7 +211,8 @@ export const generarAutomatica = async (req: Request, res: Response) => {
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
                 configuracion: configReal,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
-                maxDiasConsecutivosArea: 3,
+                maxDiasConsecutivosArea,
+                preferenciasTurnos: preferenciasEmpleados,
                 balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             });
 

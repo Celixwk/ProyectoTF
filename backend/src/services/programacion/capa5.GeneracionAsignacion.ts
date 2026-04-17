@@ -29,6 +29,8 @@ interface OpcionesAsignacion {
     permitirRefuerzoComoFallback?: boolean;
     areasQueUsanRefuerzo?: Set<number>;
     cuposRestantes?: Map<number, number>;
+    preferenciasTurnos?: Record<number, Record<number, number | null>>;
+    balancearHoras?: boolean;
 }
 
 const ID_AREA_REFUERZOS = 13;
@@ -38,9 +40,10 @@ export function capa5_calcularScore(
     idArea: number,
     programacionHistorica: Asignacion[],
     fecha: Date,
+    turno: Turno,
+    opciones?: OpcionesAsignacion,
     esFallback: boolean = false,
-    penalizacion: number = 500,
-    balancearHoras: boolean = false
+    penalizacion: number = 500
 ): number {
     const pesoClasificacion =
         empleado.clasificacion === "especialista" ? 0 :
@@ -78,10 +81,19 @@ export function capa5_calcularScore(
         (diasConsecutivos * 200);
 
     // Si está encendido el balanceo de horas, el peso principal se vuelve las horas trabajadas
-    if (balancearHoras && empleado.horas_acumuladas !== undefined) {
+    if (opciones?.balancearHoras && empleado.horas_acumuladas !== undefined) {
         // Multiplicamos por 1000 para que las horas superen (tengan más peso) que la clasificación o las repeticiones,
         // garantizando que siempre se priorice a quien menos horas tenga
         score += (empleado.horas_acumuladas * 1000);
+    }
+
+    // "Soft Constraint": si este empleado tiene un turno preferido en esta área que coincide con el turno actual
+    if (opciones?.preferenciasTurnos && opciones.preferenciasTurnos[empleado.id_empleado]) {
+        const turnoPreferido = opciones.preferenciasTurnos[empleado.id_empleado][idArea];
+        if (turnoPreferido === turno.id_turno) {
+            // Bonificación máxima para intentar asignar obligatoriamente este empleado a este turno si es posible
+            score -= 10000;
+        }
     }
 
     if (esFallback) score += penalizacion;
@@ -148,9 +160,10 @@ export function capa5_seleccionarEmpleadoParaArea(
                 area.id_area,
                 programacionExistente,
                 fecha,
+                turno,
+                opciones,
                 esFallback,
-                penalizacionRefuerzo,
-                (opciones as any)?.balancearHoras
+                penalizacionRefuerzo
             )
         })).sort((a, b) => a.score - b.score);
     };

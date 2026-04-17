@@ -33,7 +33,7 @@ import type { EmpleadoFormData } from '@/lib/validations';
 export default function Empleados() {
   const [busqueda, setBusqueda] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<boolean | undefined>(true);
-  const [page] = useState(1);
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<EmpleadoCompleto | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -46,7 +46,7 @@ export default function Empleados() {
       busqueda,
       estado: estadoFiltro,
       page,
-      limit: 20,
+      limit: 50,
     }),
   });
 
@@ -135,14 +135,14 @@ export default function Empleados() {
               <Input
                 placeholder="Buscar por nombre o cédula..."
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={(e) => { setBusqueda(e.target.value); setPage(1); }}
                 className="pl-10"
               />
             </div>
             <div className="flex gap-2">
-              <Button variant={estadoFiltro === true ? 'default' : 'outline'} onClick={() => setEstadoFiltro(true)}>Activos</Button>
-              <Button variant={estadoFiltro === false ? 'default' : 'outline'} onClick={() => setEstadoFiltro(false)}>Inactivos</Button>
-              <Button variant={estadoFiltro === undefined ? 'default' : 'outline'} onClick={() => setEstadoFiltro(undefined)}>Todos</Button>
+              <Button variant={estadoFiltro === true ? 'default' : 'outline'} onClick={() => { setEstadoFiltro(true); setPage(1); }}>Activos</Button>
+              <Button variant={estadoFiltro === false ? 'default' : 'outline'} onClick={() => { setEstadoFiltro(false); setPage(1); }}>Inactivos</Button>
+              <Button variant={estadoFiltro === undefined ? 'default' : 'outline'} onClick={() => { setEstadoFiltro(undefined); setPage(1); }}>Todos</Button>
             </div>
           </div>
         </CardContent>
@@ -158,6 +158,7 @@ export default function Empleados() {
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
+            <>
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
@@ -214,6 +215,41 @@ export default function Empleados() {
                 </TableBody>
               </Table>
             </div>
+            
+            {/* Paginación */}
+            {paginacion && paginacion.totalPaginas > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-4 bg-slate-50 p-3 rounded-lg border">
+                <span className="text-sm text-slate-500 font-medium">
+                  Mostrando {(paginacion.paginaActual - 1) * paginacion.limite + 1} - {Math.min(paginacion.paginaActual * paginacion.limite, paginacion.total)} de {paginacion.total} empleados.
+                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-slate-700">
+                    Página {paginacion.paginaActual} de {paginacion.totalPaginas}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={paginacion.paginaActual <= 1}
+                      className="bg-white hover:bg-slate-100"
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => p + 1)}
+                      disabled={paginacion.paginaActual >= paginacion.totalPaginas}
+                      className="bg-white hover:bg-slate-100"
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -16,14 +16,14 @@ export const parametrizacionController = {
     upsertParametro: async (req: Request, res: Response): Promise<void> => {
         try {
             const { nombre } = req.params;
-            const { horas_maximas } = req.body;
+            const { horas_maximas, valor_texto, descripcion } = req.body;
 
-            if (horas_maximas === undefined || isNaN(Number(horas_maximas))) {
-                res.status(400).json({ success: false, error: 'El valor de horas_maximas es inválido o requerido' });
-                return;
-            }
-
-            const parametro = await parametrizacionService.upsertParametro(nombre, Number(horas_maximas));
+            const parametro = await parametrizacionService.upsertParametro(
+                nombre, 
+                horas_maximas !== undefined ? Number(horas_maximas) : undefined, 
+                valor_texto, 
+                descripcion
+            );
             res.json({ success: true, data: parametro });
         } catch (error) {
             console.error('Error al guardar parametro:', error);

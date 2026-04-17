@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export const listarAreas = async (_req: Request, res: Response) => {
     try {
         const areas = await prisma.area.findMany({
-            orderBy: { id_area: 'asc' }
+            orderBy: { nombre_area: 'asc' }
         });
         res.json({ success: true, data: areas });
     } catch (error) {
