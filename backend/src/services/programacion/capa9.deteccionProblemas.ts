@@ -102,13 +102,13 @@ function detectarRachasUTC(programacion: Asignacion[], max: number, corruptas: a
   const grupos = new Map<string, Asignacion[]>();
 
   programacion.forEach(a => {
-    const key = `${a.id_empleado}-${a.id_area}`;
+    const key = `${a.id_empleado}-${a.id_area}-${a.id_turno}`;
     if (!grupos.has(key)) grupos.set(key, []);
     grupos.get(key)!.push(a);
   });
 
   grupos.forEach((asigs, key) => {
-    const [idEmp, idArea] = key.split('-').map(Number);
+    const [idEmp, idArea, idTurno] = key.split('-').map(Number);
     const ordenadas = asigs
       .map(a => ({ ...a, ms: fechaSoloDiaMsUTC(a.fecha) }))
       .filter(a => {
@@ -139,7 +139,7 @@ function crearAlertaRacha(asig: any, racha: number, max: number, idEmp: number, 
   return {
     tipo: 'advertencia',
     codigo: 'DIAS_CONSECUTIVOS_EXCEDIDOS',
-    mensaje: `Empleado ${asig.nombre_empleado || idEmp} trabajó ${racha} días seguidos en ${asig.nombre_area || idArea}`,
+    mensaje: `Empleado ${asig.nombre_empleado || idEmp} trabajó ${racha} días seguidos en ${asig.nombre_area || idArea} (mismo turno)`,
     empleado: idEmp,
     area: idArea
   };

@@ -145,6 +145,7 @@ export function capa5_seleccionarEmpleadoParaArea(
                     const fAsigMs = Date.UTC(fAsig.getFullYear(), fAsig.getMonth(), fAsig.getDate());
                     return p.id_empleado === e.id_empleado &&
                         p.id_area === area.id_area &&
+                        p.id_turno === turno.id_turno &&
                         fAsigMs === fBusqueda.getTime();
                 });
                 if (trabajoEseDia) dias++;
