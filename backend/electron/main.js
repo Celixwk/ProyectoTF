@@ -46,7 +46,12 @@ async function startPostgres() {
     console.log('📍 startPostgres - pg_ctl existe?', fs.existsSync(pgctlPath));
 
     return new Promise((resolve) => {
+        console.log('📍 startPostgres - Ejecutando spawn de pg_ctl...');
         const pgctl = spawn(pgctlPath, ['start', '-D', pgDataDir, '-o', `-p ${PORT} -k ""`]);
+
+        pgctl.on('error', (err) => {
+            console.error(`❌ Error en spawn de pg_ctl (${pgctlPath}):`, err);
+        });
 
         pgctl.stdout.on('data', (data) => console.log(`[PGCTL-OUT] ${data}`));
         pgctl.stderr.on('data', (data) => console.log(`[PGCTL-ERR] ${data}`));
@@ -73,6 +78,10 @@ async function ensureDatabaseExists() {
             '-d', 'postgres',
             '-c', `SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}'`
         ]);
+
+        psql.on('error', (err) => {
+            console.error(`❌ Error en spawn de psql (${psqlPath}):`, err);
+        });
 
         let output = '';
         psql.stdout.on('data', (data) => {
@@ -109,6 +118,10 @@ async function createDatabase() {
             DB_NAME
         ]);
 
+        createdb.on('error', (err) => {
+            console.error(`❌ Error en spawn de createdb (${createdbPath}):`, err);
+        });
+
         createdb.stdout.on('data', (data) => console.log(`[CREATEDB-OUT] ${data}`));
         createdb.stderr.on('data', (data) => console.log(`[CREATEDB-ERR] ${data}`));
 
@@ -134,6 +147,11 @@ async function initDatabase() {
             '--auth=trust',
             '--no-instructions'
         ]);
+
+        initdb.on('error', (err) => {
+            console.error(`❌ Error en spawn de initdb (${initdbPath}):`, err);
+            reject(err);
+        });
 
         initdb.stdout.on('data', (data) => console.log(`[INITDB-OUT] ${data}`));
         initdb.stderr.on('data', (data) => console.log(`[INITDB-ERR] ${data}`));
@@ -206,7 +224,6 @@ function startExpressServer() {
         },
         cwd: path.dirname(serverPath),
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false,
         windowsHide: true
     });
 
@@ -359,7 +376,7 @@ async function createWindow() {
             if (fs.existsSync(logPath)) dump = '\n\nLog del Servidor Interno:\n' + fs.readFileSync(logPath, 'utf8');
         } catch (e) { }
 
-        dialog.showErrorBox('Error de Inicio', `No se pudo iniciar la aplicación:\n\n${error.message}${dump}`);
+        dialog.showErrorBox('Error de Inicio', `No se pudo iniciar la aplicación:\n\n${error.message}\n\nDetalles: ${error.stack}${dump}`);
         app.quit();
     }
 }
