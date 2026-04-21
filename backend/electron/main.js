@@ -27,9 +27,9 @@ const pgBinDir = isDev
     ? path.join(__dirname, '../postgres-portable/bin')
     : path.join(process.resourcesPath, 'postgres-portable', 'bin');
 
+const PORT = 54320; // Volvemos al puerto original para evitar conflictos con instalaciones locales
 const DB_NAME = 'gestion_horarios_db';
 const DB_USER = 'postgres';
-const PORT = 5432;
 
 async function startPostgres() {
     console.log('📍 startPostgres - Verificando directorio pgData:', pgDataDir);
@@ -46,25 +46,26 @@ async function startPostgres() {
     console.log('📍 startPostgres - pg_ctl existe?', fs.existsSync(pgctlPath));
 
     return new Promise((resolve) => {
-        console.log('📍 startPostgres - Ejecutando spawn de pg_ctl...');
+        console.log('📍 startPostgres - Ejecutando execFile de pg_ctl...');
         
         if (!fs.existsSync(pgctlPath)) {
             console.error('❌ ERROR: pg_ctl.exe no encontrado en:', pgctlPath);
             return resolve();
         }
 
-        // Arrancamos en modo trust para máxima simplicidad local
-        const pgctl = spawn(`"${pgctlPath}"`, ['start', '-D', `"${pgDataDir}"`, '-o', `"-p ${PORT} -k \"\""`], { shell: true });
-
-        pgctl.on('error', (err) => {
-            console.error(`❌ Error en spawn de pg_ctl (${pgctlPath}):`, err);
+        // execFile maneja espacios de forma nativa sin shell: true
+        execFile(pgctlPath, ['start', '-D', pgDataDir, '-o', `-p ${PORT} -k ""`], (error, stdout, stderr) => {
+            if (error) {
+                console.error(`❌ Error al arrancar pg_ctl:`, error);
+            }
+            console.log('[PGCTL-OUT]', stdout);
+            
+            setTimeout(() => {
+                console.log(`✅ PostgreSQL iniciado en puerto ${PORT}`);
+                process.env.DATABASE_URL = `postgresql://${DB_USER}@localhost:${PORT}/${DB_NAME}`;
+                resolve();
+            }, 3000);
         });
-
-        setTimeout(() => {
-            console.log(`✅ PostgreSQL iniciado`);
-            process.env.DATABASE_URL = `postgresql://${DB_USER}@localhost:${PORT}/${DB_NAME}`;
-            resolve();
-        }, 3000);
     });
 }
 
@@ -89,32 +90,21 @@ async function initDatabase() {
             return reject(new Error('initdb.exe no encontrado'));
         }
 
-        const initdb = spawn(`"${initdbPath}"`, [
-            '-D', `"${pgDataDir}"`,
+        execFile(initdbPath, [
+            '-D', pgDataDir,
             '-U', DB_USER,
             '--encoding=UTF8',
             '--locale=C',
             '--auth=trust',
             '--no-instructions'
-        ], { shell: true });
-
-        initdb.on('error', (err) => {
-            console.error(`❌ Error en spawn de initdb (${initdbPath}):`, err);
-            reject(err);
-        });
-
-        initdb.stdout.on('data', (data) => console.log(`[INITDB-OUT] ${data}`));
-        initdb.stderr.on('data', (data) => console.log(`[INITDB-ERR] ${data}`));
-
-        initdb.on('close', (code) => {
-            console.log('📍 initDatabase - Cerrado con código:', code);
-            if (code === 0) {
-                console.log('✅ Cluster PostgreSQL inicializado');
-                resolve();
-            } else {
-                console.error('❌ initdb falló con código:', code);
-                reject(new Error(`initdb falló con código ${code}`));
+        ], (error, stdout, stderr) => {
+            if (error) {
+                console.error('❌ Error en initdb:', error);
+                console.error('Stderr:', stderr);
+                return reject(error);
             }
+            console.log('✅ Cluster PostgreSQL inicializado');
+            resolve();
         });
     });
 }
