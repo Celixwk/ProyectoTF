@@ -73,6 +73,16 @@ async function initDatabase() {
     const initdbPath = path.join(pgBinDir, 'initdb.exe');
     console.log('📍 initDatabase - Ruta initdb:', initdbPath);
 
+    // LIMPIEZA FORZADA: Para evitar el error "directory not empty" (código 1)
+    if (fs.existsSync(pgDataDir)) {
+        try {
+            console.log('📍 initDatabase - Limpiando directorio de datos previo...');
+            fs.rmSync(pgDataDir, { recursive: true, force: true });
+        } catch (e) {
+            console.error('⚠️ No se pudo limpiar el directorio:', e);
+        }
+    }
+
     return new Promise((resolve, reject) => {
         if (!fs.existsSync(initdbPath)) {
             console.error('❌ ERROR: initdb.exe no encontrado');
