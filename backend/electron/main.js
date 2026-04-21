@@ -1,6 +1,6 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 
 let mainWindow;
@@ -47,7 +47,13 @@ async function startPostgres() {
 
     return new Promise((resolve) => {
         console.log('📍 startPostgres - Ejecutando spawn de pg_ctl...');
-        const pgctl = spawn(pgctlPath, ['start', '-D', pgDataDir, '-o', `-p ${PORT} -k ""`]);
+        
+        if (!fs.existsSync(pgctlPath)) {
+            console.error('❌ ERROR: pg_ctl.exe no encontrado en:', pgctlPath);
+            return resolve();
+        }
+
+        const pgctl = spawn(`"${pgctlPath}"`, ['start', '-D', `"${pgDataDir}"`, '-o', `"-p ${PORT} -k \"\""`], { shell: true });
 
         pgctl.on('error', (err) => {
             console.error(`❌ Error en spawn de pg_ctl (${pgctlPath}):`, err);
@@ -71,13 +77,18 @@ async function ensureDatabaseExists() {
     console.log('📍 ensureDatabaseExists - Ruta psql:', psqlPath);
 
     return new Promise((resolve) => {
-        const psql = spawn(psqlPath, [
+        if (!fs.existsSync(psqlPath)) {
+            console.error('❌ ERROR: psql.exe no encontrado');
+            return resolve();
+        }
+
+        const psql = spawn(`"${psqlPath}"`, [
             '-U', DB_USER,
             '-p', PORT.toString(),
             '-h', 'localhost',
             '-d', 'postgres',
-            '-c', `SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}'`
-        ]);
+            '-c', `"${`SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}'`}"`
+        ], { shell: true });
 
         psql.on('error', (err) => {
             console.error(`❌ Error en spawn de psql (${psqlPath}):`, err);
@@ -111,12 +122,17 @@ async function createDatabase() {
     console.log('📍 createDatabase - Ruta createdb:', createdbPath);
 
     return new Promise((resolve) => {
-        const createdb = spawn(createdbPath, [
+        if (!fs.existsSync(createdbPath)) {
+            console.error('❌ ERROR: createdb.exe no encontrado');
+            return resolve();
+        }
+
+        const createdb = spawn(`"${createdbPath}"`, [
             '-U', DB_USER,
             '-p', PORT.toString(),
             '-h', 'localhost',
-            DB_NAME
-        ]);
+            `"${DB_NAME}"`
+        ], { shell: true });
 
         createdb.on('error', (err) => {
             console.error(`❌ Error en spawn de createdb (${createdbPath}):`, err);
@@ -139,14 +155,19 @@ async function initDatabase() {
     console.log('📍 initDatabase - Ruta initdb:', initdbPath);
 
     return new Promise((resolve, reject) => {
-        const initdb = spawn(initdbPath, [
-            '-D', pgDataDir,
+        if (!fs.existsSync(initdbPath)) {
+            console.error('❌ ERROR: initdb.exe no encontrado');
+            return reject(new Error('initdb.exe no encontrado'));
+        }
+
+        const initdb = spawn(`"${initdbPath}"`, [
+            '-D', `"${pgDataDir}"`,
             '-U', DB_USER,
             '--encoding=UTF8',
             '--locale=C',
             '--auth=trust',
             '--no-instructions'
-        ]);
+        ], { shell: true });
 
         initdb.on('error', (err) => {
             console.error(`❌ Error en spawn de initdb (${initdbPath}):`, err);
@@ -174,18 +195,17 @@ async function stopPostgres() {
     const pgctlPath = path.join(pgBinDir, 'pg_ctl.exe');
 
     return new Promise((resolve) => {
-        const pgctl = spawn(pgctlPath, ['stop', '-D', pgDataDir, '-m', 'fast', '-w']);
-
-        pgctl.stdout.on('data', (data) => console.log(`[PGCTL-STOP-OUT] ${data}`));
-        pgctl.stderr.on('data', (data) => console.log(`[PGCTL-STOP-ERR] ${data}`));
-
-        pgctl.on('close', (code) => {
-            console.log('📍 stopPostgres - Cerrado con código:', code);
+        const { execFile } = require('child_process');
+        execFile(pgctlPath, ['stop', '-D', pgDataDir, '-m', 'fast', '-w'], (error, stdout, stderr) => {
+            if (error) {
+                console.error('❌ Error al detener pg_ctl:', error);
+            }
+            console.log('[PGCTL-STOP-OUT]', stdout);
+            console.error('[PGCTL-STOP-ERR]', stderr);
+            console.log('📍 stopPostgres - Cerrado con código: 0');
             console.log('✅ PostgreSQL detenido');
             resolve();
         });
-
-        setTimeout(() => resolve(), 5000);
     });
 }
 
@@ -213,7 +233,7 @@ function startExpressServer() {
     console.log('📍 startExpressServer - Usando Node.js embebido de Electron');
     console.log('📍 startExpressServer - Ejecutable:', process.execPath);
 
-    serverProcess = spawn(process.execPath, [serverPath], {
+    serverProcess = spawn(`"${process.execPath}"`, [`"${serverPath}"`], {
         env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: '1',
@@ -224,6 +244,7 @@ function startExpressServer() {
         },
         cwd: path.dirname(serverPath),
         stdio: ['ignore', 'pipe', 'pipe'],
+        shell: true,
         windowsHide: true
     });
 
