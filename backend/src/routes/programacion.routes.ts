@@ -9,6 +9,7 @@ router.post('/generar', controller.generarAutomatica);
 router.post('/automatica', controller.generarAutomatica);
 router.post('/regenerar-desde', controller.regenerarDesdeFecha);
 router.post('/guardar-cambios', controller.guardarCambiosManuales);
+router.post('/ajustar-horas', controller.ajustarHorasReales);
 router.get('/detalle', controller.obtenerDetalleProgramacion);
 router.get('/novedades-periodo', controller.obtenerNovedadesPeriodo);
 router.get('/validar', controller.validarProgramacion);

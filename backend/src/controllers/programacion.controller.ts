@@ -182,13 +182,15 @@ export const generarAutomatica = async (req: Request, res: Response) => {
             });
         }
 
-        // Obtener parametrizaciones globales (días y preferencias)
-        const [paramDias, paramPreferencias] = await Promise.all([
+        // Obtener parametrizaciones globales (días, preferencias y máximo extras)
+        const [paramDias, paramPreferencias, paramExtras] = await Promise.all([
             prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAX_DIAS_CONSECUTIVOS' } }),
-            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'PREFERENCIAS_EMPLEADOS_TURNOS' } })
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'PREFERENCIAS_EMPLEADOS_TURNOS' } }),
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAXIMO_HORAS_EXTRAS' } })
         ]);
 
         const maxDiasConsecutivosArea = paramDias?.horas_maximas ? Number(paramDias.horas_maximas) : 3;
+        const maximoHorasExtras = paramExtras?.horas_maximas ? Number(paramExtras.horas_maximas) : 48;
 
         let preferenciasEmpleados = {};
         if (paramPreferencias?.valor_texto) {
@@ -212,6 +214,7 @@ export const generarAutomatica = async (req: Request, res: Response) => {
                 configuracion: configReal,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea,
+                maximoHorasExtras,
                 preferenciasTurnos: preferenciasEmpleados,
                 balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             });
@@ -301,12 +304,18 @@ export const regenerarDesdeFecha = async (req: Request, res: Response) => {
         let totalAsignaciones = 0;
         const diaInicio = inicioProceso.getUTCDate();
         const diaFin = ultimoDiaMes.getUTCDate();
+        
+        // Cargar parametro extras para la regeneración
+        const paramExtrasInfo = await prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAXIMO_HORAS_EXTRAS' } });
+        const maximoHorasExtras = paramExtrasInfo?.horas_maximas ? Number(paramExtrasInfo.horas_maximas) : 48;
+
         for (let d = diaInicio; d <= diaFin; d++) {
             const fechaProceso = new Date(Date.UTC(anio, mes - 1, d, 0, 0, 0, 0));
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
                 configuracion,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea: 3,
+                maximoHorasExtras,
                 programacionExistente: programacionAcumulada,
                 balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             } as any);
@@ -483,6 +492,55 @@ export const obtenerNovedadesPeriodo = async (req: Request, res: Response) => {
         });
         res.json({ success: true, data: novedades });
     } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+export const ajustarHorasReales = async (req: Request, res: Response) => {
+    try {
+        const { id_empleado, fecha, hora_entrada_real, hora_salida_real } = req.body;
+        if (!id_empleado || !fecha) return res.status(400).json({ success: false, error: 'Faltan parámetros' });
+
+        const [y, m, d] = fecha.split('T')[0].split('-').map(Number);
+        const fechaDate = new Date(Date.UTC(y, m - 1, d));
+        const fechaSiguiente = new Date(fechaDate);
+        fechaSiguiente.setUTCDate(fechaSiguiente.getUTCDate() + 1);
+
+        const existente = await prisma.detalleProgramacion.findFirst({
+            where: {
+                id_empleado: Number(id_empleado),
+                fecha: { gte: fechaDate, lt: fechaSiguiente }
+            }
+        });
+
+        if (!existente) return res.status(404).json({ success: false, error: 'No se encontró un turno asignado para ese día' });
+
+        // Parsear hora local a UTC para guardar
+        let he_real = null;
+        let hs_real = null;
+
+        if (hora_entrada_real) {
+            const [h, min] = hora_entrada_real.split(':').map(Number);
+            he_real = new Date(Date.UTC(1970, 0, 1, h, min, 0, 0));
+        }
+        
+        if (hora_salida_real) {
+            const [h, min] = hora_salida_real.split(':').map(Number);
+            hs_real = new Date(Date.UTC(1970, 0, 1, h, min, 0, 0));
+        }
+
+        await prisma.detalleProgramacion.update({
+            where: { id_detalle_programacion: existente.id_detalle_programacion },
+            data: {
+                hora_entrada_real: he_real,
+                hora_salida_real: hs_real,
+                updated_at: new Date()
+            }
+        });
+
+        res.json({ success: true, message: 'Horas ajustadas correctamente' });
+    } catch (error: any) {
+        console.error('Error ajustando horas reales:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 };

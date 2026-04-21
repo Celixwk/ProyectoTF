@@ -820,10 +820,10 @@ export default function GestionMensual() {
 
                                         return (
                                             <div className="flex flex-col gap-2 p-1">
-                                                {capacitados.length > 0 && (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[9px] font-bold text-indigo-600 uppercase px-2 mb-1">🌟 Capacitados (Área Actual)</span>
-                                                        {capacitados.map((emp: any) => (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[9px] font-bold text-indigo-600 uppercase px-2 mb-1">🌟 Capacitados (Área Actual)</span>
+                                                    {capacitados.length > 0 ? (
+                                                        capacitados.map((emp: any) => (
                                                             <button
                                                                 key={emp.id_empleado}
                                                                 className="w-full text-left px-2 py-1 text-xs text-slate-700 bg-indigo-50/50 hover:bg-indigo-100 font-medium rounded transition-colors"
@@ -831,9 +831,13 @@ export default function GestionMensual() {
                                                             >
                                                                 <div className="truncate" title={emp.nombre_completo}>{emp.nombre_completo}</div>
                                                             </button>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                        ))
+                                                    ) : (
+                                                        <div className="px-2 py-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 rounded">
+                                                            No hay capacitados disponibles hoy (ocupados/descanso).
+                                                        </div>
+                                                    )}
+                                                </div>
 
                                                 {apoyos.length > 0 && (
                                                     <div className="flex flex-col">

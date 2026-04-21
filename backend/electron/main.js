@@ -27,7 +27,7 @@ const pgBinDir = isDev
     ? path.join(__dirname, '../postgres-portable/bin')
     : path.join(process.resourcesPath, 'postgres-portable', 'bin');
 
-const PORT = 54320;
+const PORT = 5432; // Se cambió a 5432 para que sea el estándar de PostgreSQL
 const DB_NAME = 'gestion_horarios_db';
 const DB_USER = 'postgres';
 
@@ -368,10 +368,11 @@ app.whenReady().then(createWindow);
 
 app.on('before-quit', async (e) => {
     console.log('📍 Evento before-quit recibido');
-    e.preventDefault();
+    // e.preventDefault();
     if (serverProcess) serverProcess.kill();
-    await stopPostgres();
-    app.exit(0);
+    // Ya NO detenemos PostgreSQL aquí para que siga accesible desde Shell o pgAdmin
+    // await stopPostgres(); 
+    // app.exit(0);
 });
 
 app.on('window-all-closed', () => {

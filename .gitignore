@@ -1,35 +1,41 @@
+# ─── Dependencias ──────────────────────────────────────────────
 node_modules/
+
+# ─── Variables de entorno ──────────────────────────────────────
 .env
 .env.local
+
+# ─── Builds y distribuciones ───────────────────────────────────
 dist/
 build/
-logs/
-*.log
-.DS_Store
-package-lock.json
-node_modules/
-node_modules/electron/
-backend/release/*.exe
-backend/release/win-unpacked/*.exe
-backend/release/
-release/
-dist/
-*.exe
-# Builds y Distribuciones
-dist/
 release/
 frontend-build/
+backend/release/
 
-# Archivos grandes
-*.zip
+# ─── Executables y paquetes ────────────────────────────────────
 *.exe
+*.zip
 *.dmg
 
-# Base de Datos Viva
+# ─── Logs ──────────────────────────────────────────────────────
+logs/
+*.log
+
+# ─── Archivos temporales de debug (generados durante desarrollo)
+output_debug*.txt
+final_report.txt
+ts-errors.txt
+ts_errors.txt
+tsout.txt
+build-output.txt
+*.backup
+
+# ─── Base de datos viva (pgdata generado por el instalador) ────
 pgdata/
 
-# Prisma Generado
-src/generated/
+# ─── Prisma generado ───────────────────────────────────────────
+backend/src/generated/
 
-# Dependencias
-node_modules/
+# ─── Sistema operativo ─────────────────────────────────────────
+.DS_Store
+Thumbs.db

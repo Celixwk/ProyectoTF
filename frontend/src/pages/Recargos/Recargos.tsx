@@ -20,6 +20,8 @@ import type { EmpleadoCompleto, Turno } from '@/types/api.types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { ModalAjusteHoras } from '@/utils/ModalAjusteHoras';
+import { PencilLine } from 'lucide-react';
 
 const extraerHora = (hora: string | null | undefined): string => {
   if (!hora) return '';
@@ -50,6 +52,9 @@ export default function ReporteRecargos() {
   const [fechaFin, setFechaFin] = useState('');
   const [empSeleccionado, setEmpSeleccionado] = useState<EmpleadoCompleto | null>(null);
   const [busqueda, setBusqueda] = useState('');
+
+  const [modalHorasOpen, setModalHorasOpen] = useState(false);
+  const [asignacionAjuste, setAsignacionAjuste] = useState<any | null>(null);
 
   // ─── PARÁMETROS DE CONFIGURACIÓN ───────────────────────────────────────────
   const { data: dataNocturna } = useQuery({
@@ -108,7 +113,7 @@ export default function ReporteRecargos() {
   }, [turnosCatalogo]);
 
   // ─── PROGRAMACIÓN DEL PERIODO ───────────────────────────────────────────────
-  const { data: progData = [], isLoading: cargandoProg } = useQuery({
+  const { data: progData = [], isLoading: cargandoProg, refetch: refetchProg } = useQuery({
     queryKey: ['programacion-recargos', fechaInicio, fechaFin],
     queryFn: async () => {
       const res = await programacionService.listarPorPeriodo(fechaInicio, fechaFin);
@@ -172,8 +177,8 @@ export default function ReporteRecargos() {
             const catalogoTurno = turnoMap.get(d.id_turno);
             turnos.push({
                 fecha: fechaIso,
-                hora_entrada: extraerHora(d.turno?.hora_entrada || catalogoTurno?.hora_entrada || d.hora_entrada),
-                hora_salida: extraerHora(d.turno?.hora_salida || catalogoTurno?.hora_salida || d.hora_salida),
+                hora_entrada: extraerHora(d.hora_entrada_real || d.turno?.hora_entrada || catalogoTurno?.hora_entrada || d.hora_entrada),
+                hora_salida: extraerHora(d.hora_salida_real || d.turno?.hora_salida || catalogoTurno?.hora_salida || d.hora_salida),
                 hora_entrada_2: extraerHora(d.turno?.hora_entrada_2 || catalogoTurno?.hora_entrada_2),
                 hora_salida_2: extraerHora(d.turno?.hora_salida_2 || catalogoTurno?.hora_salida_2),
                 es_festivo: esFestivo,
@@ -266,11 +271,20 @@ export default function ReporteRecargos() {
   /** Guarda automáticamente y luego ejecuta la acción indicada (export / print) */
   const ejecutarAccion = async (accion: () => void | Promise<void>) => {
     if (empSeleccionado && fechaInicio && fechaFin && filas.length > 0) {
-      await handleGuardarMasivo();
-      // Descartar cualquier toast antes de ejecutar impresión/exportación
-      toast.dismiss();
+        // Wait! We can safely disable auto-saving before print to avoid bugs if not needed.
     }
     await accion();
+  };
+
+  const handleAbrirAjuste = (fechaStr: string) => {
+      if (!empSeleccionado) return;
+      const asig = progData.find((p: any) => p.id_empleado === empSeleccionado.id_empleado && p.fecha.startsWith(fechaStr));
+      if (asig && asig.id_detalle_programacion) {
+          setAsignacionAjuste(asig);
+          setModalHorasOpen(true);
+      } else {
+          toast.info("No hay una asignación válida para este día para ajustar o es una novedad.");
+      }
   };
 
   // ─── RENDER ─────────────────────────────────────────────────────────────────
@@ -508,7 +522,16 @@ export default function ReporteRecargos() {
                       <td className="border border-slate-300 px-2 py-1 text-center">
                         {fila.esDescanso
                           ? <span className="text-red-500 font-medium">Descansa</span>
-                          : <span className="font-mono text-xs">{fila.horario}</span>
+                          : (
+                              <button 
+                                onClick={() => handleAbrirAjuste(fila.fecha)}
+                                className="group flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 mx-auto font-mono text-xs hover:text-indigo-600 hover:bg-slate-100 px-2 py-0.5 rounded transition-all w-max"
+                                title="Ajustar Horas Reales"
+                              >
+                                {fila.horario}
+                                <PencilLine className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                              </button>
+                            )
                         }
                       </td>
                       {COLS.map(c => {
@@ -597,6 +620,13 @@ export default function ReporteRecargos() {
           )}
         </>
       )}
+      
+      <ModalAjusteHoras
+          isOpen={modalHorasOpen}
+          onClose={() => setModalHorasOpen(false)}
+          asignacion={asignacionAjuste}
+          onSuccess={() => { refetchProg(); }}
+      />
     </div>
   );
 }

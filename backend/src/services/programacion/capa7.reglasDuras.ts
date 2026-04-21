@@ -126,8 +126,8 @@ export function capa7_validarReglasDuras(
 
     // Phase B: Evitar si excederá horas laborables y se pide balancear
     if (opciones?.balancearHoras && empleado.horas_acumuladas !== undefined && empleado.meta_periodo !== undefined && turno.duracion_horas) {
-        // Permitimos un margen de 12 horas extra (máx un turno largo de sobretiempo) sobre la meta para no bloquear totalmente
-        const margen = 12;
+        // Permitimos un margen de horas extra controlado por el sistema para no bloquear totalmente
+        const margen = opciones?.maximoHorasExtras ?? 12;
         if ((empleado.horas_acumuladas + Number(turno.duracion_horas)) > (empleado.meta_periodo + margen)) {
             return {
                 valido: false,

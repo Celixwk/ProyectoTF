@@ -245,9 +245,16 @@ export default function Programacion() {
       }
 
       let horaFormateada = 'Sin horario';
-      if (!esRefuerzo && asig.turno?.hora_entrada) {
-        const entrada = asig.turno.hora_entrada.includes('T') ? asig.turno.hora_entrada.split('T')[1] : asig.turno.hora_entrada;
-        const salida = asig.turno.hora_salida?.includes('T') ? asig.turno.hora_salida.split('T')[1] : asig.turno.hora_salida;
+      let esReal = false;
+      
+      const hsEntrada = asig.hora_entrada_real || asig.turno?.hora_entrada;
+      const hsSalida = asig.hora_salida_real || asig.turno?.hora_salida;
+      
+      if (!esRefuerzo && hsEntrada) {
+        if (asig.hora_entrada_real || asig.hora_salida_real) esReal = true;
+        
+        const entrada = hsEntrada.includes('T') ? hsEntrada.split('T')[1] : hsEntrada;
+        const salida = hsSalida?.includes('T') ? hsSalida.split('T')[1] : hsSalida;
         horaFormateada = `${entrada.substring(0, 5)} - ${salida?.substring(0, 5) || '??'}`;
         
         if (asig.turno?.hora_entrada_2 && asig.turno?.hora_salida_2) {
@@ -255,6 +262,8 @@ export default function Programacion() {
           const sal2 = asig.turno.hora_salida_2.includes('T') ? asig.turno.hora_salida_2.split('T')[1] : asig.turno.hora_salida_2;
           horaFormateada += ` \n ${ent2.substring(0,5)} - ${sal2.substring(0,5)}`;
         }
+        
+        if (esReal) horaFormateada = `🔴 ${horaFormateada} (Modificado)`;
       }
 
       let diasDescanso: number[] = [];
@@ -298,9 +307,10 @@ export default function Programacion() {
           areaCompleta: nombreArea,
           detalle: esRefuerzo ? 'Disponible / Sin Turno' : asig.turno?.tipo_turno,
           hora: horaFormateada,
+          esModificado: !!(asig.hora_entrada_real || asig.hora_salida_real),
           estilo: esRefuerzo
             ? 'bg-cyan-100 text-cyan-900 border-cyan-300 font-bold'
-            : 'bg-white hover:bg-indigo-50 text-indigo-900 border-slate-200'
+            : (asig.hora_entrada_real || asig.hora_salida_real) ? 'bg-red-50 hover:bg-rose-100 text-rose-900 border-rose-300 shadow-sm' : 'bg-white hover:bg-indigo-50 text-indigo-900 border-slate-200'
         };
       }
     });

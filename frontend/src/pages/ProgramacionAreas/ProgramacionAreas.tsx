@@ -63,13 +63,14 @@ export default function ProgramacionAreas() {
     });
 
     // Validar rango (max 45 días)
-    const diasDiferencia = useMemo(() => {
+    const diasSeleccionados = useMemo(() => {
+        if (!fechaInicio || !fechaFin) return 0;
         const d1 = new Date(fechaInicio);
         const d2 = new Date(fechaFin);
-        return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+        return Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     }, [fechaInicio, fechaFin]);
 
-    const rangoInvalido = diasDiferencia < 0 || diasDiferencia > 45;
+    const rangoInvalido = diasSeleccionados < 1 || diasSeleccionados > 45;
 
     // Obtener mes/año del inicio para consultas de novedades (referencial)
     const dateInicioObj = new Date(fechaInicio);
@@ -107,7 +108,7 @@ export default function ProgramacionAreas() {
 
 
     const infoDias = useMemo(() => {
-        if (diasDiferencia < 0 || diasDiferencia > 60) return [];
+        if (diasSeleccionados < 1 || diasSeleccionados > 60) return [];
         const dias = [];
         // Ajustamos zona horaria para evitar desfases al iterar
 
@@ -126,7 +127,7 @@ export default function ProgramacionAreas() {
             dCurrent.setDate(dCurrent.getDate() + 1);
         }
         return dias;
-    }, [fechaInicio, fechaFin, diasDiferencia]);
+    }, [fechaInicio, fechaFin, diasSeleccionados]);
 
     const alertasSeparadas = useMemo(() => procesarAlertas(alertasMotor), [alertasMotor]);
 
@@ -244,12 +245,12 @@ export default function ProgramacionAreas() {
                                 <div className={cn("px-3 py-1 rounded-full font-medium",
                                     rangoInvalido ? "bg-red-100 text-red-700" : "bg-indigo-100 text-indigo-700"
                                 )}>
-                                    {diasDiferencia} días seleccionados
+                                    {diasSeleccionados} días seleccionados
                                 </div>
                                 {rangoInvalido && (
                                     <span className="text-red-600 flex items-center gap-1">
                                         <AlertCircle className="h-4 w-4" />
-                                        El rango debe ser entre 0 y 45 días
+                                        El rango debe ser entre 1 y 45 días
                                     </span>
                                 )}
                             </div>

@@ -60,8 +60,9 @@ export function capa5_calcularScore(
     let diasConsecutivos = 0;
     const fechaRef = new Date(fecha);
     fechaRef.setHours(0, 0, 0, 0);
+    const limiteDias = opciones?.maxDiasConsecutivos ?? 3;
 
-    for (let d = 1; d <= 3; d++) {
+    for (let d = 1; d <= limiteDias; d++) {
         const fechaAnterior = new Date(fechaRef);
         fechaAnterior.setDate(fechaRef.getDate() - d);
         const trabajoEseDia = programacionHistorica.some(p => {
@@ -69,6 +70,7 @@ export function capa5_calcularScore(
             fP.setHours(0, 0, 0, 0);
             return p.id_empleado === empleado.id_empleado &&
                 p.id_area === idArea &&
+                p.id_turno === turno.id_turno && // Amarrar (Sticky) exactamente al mismo turno
                 fP.getTime() === fechaAnterior.getTime();
         });
         if (trabajoEseDia) diasConsecutivos++;
@@ -77,8 +79,7 @@ export function capa5_calcularScore(
 
     let score = pesoClasificacion +
         (totalAsignaciones * 50) +
-        (repeticionesArea * 100) +
-        (diasConsecutivos * 200);
+        (repeticionesArea * 100);
 
     // Si está encendido el balanceo de horas, el peso principal se vuelve las horas trabajadas
     if (opciones?.balancearHoras && empleado.horas_acumuladas !== undefined) {
@@ -86,6 +87,11 @@ export function capa5_calcularScore(
         // garantizando que siempre se priorice a quien menos horas tenga
         score += (empleado.horas_acumuladas * 1000);
     }
+
+    // APLICACIÓN DE TURNOS PEGAJOSOS (BLOQUES ININTERRUMPIDOS)
+    // El bono por día consecutivo DEBE superar la penalización de horas acumuladas (que puede subir ~8000 puntos al día).
+    // Con -50000 garantizamos que NUNCA suelten el turno a menos que choquen contra la barrera del límite global de días.
+    score -= (diasConsecutivos * 50000);
 
     // "Soft Constraint": si este empleado tiene un turno preferido en esta área que coincide con el turno actual
     if (opciones?.preferenciasTurnos && opciones.preferenciasTurnos[empleado.id_empleado]) {
@@ -133,6 +139,23 @@ export function capa5_seleccionarEmpleadoParaArea(
         }
 
         filtrados = filtrados.filter(e => {
+            // Turno Fijo Absoluto / Hard Constraint Global
+            const prefEmpleado = opciones?.preferenciasTurnos?.[e.id_empleado];
+            if (prefEmpleado) {
+                const areasConTurnoFijo = Object.keys(prefEmpleado).filter(k => prefEmpleado[Number(k)] !== null);
+                if (areasConTurnoFijo.length > 0) {
+                    // Este empleado es un especialista fijo en al menos un área.
+                    // REGLA: Si están configurados como Turno Fijo, no pueden ser comodines ni refuerzos fuera de su(s) área(s) fija(s).
+                    const turnoFijoParaEstaArea = prefEmpleado[area.id_area];
+                    if (!turnoFijoParaEstaArea || turnoFijoParaEstaArea !== turno.id_turno) {
+                        // Rechazado porque:
+                        // a) No es su área fija configurada.
+                        // b) Sí es su área fija, pero no es el turno configurado.
+                        return false;
+                    }
+                }
+            }
+
             let dias = 0;
             const hoy = new Date(fecha);
             const hoyTime = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());

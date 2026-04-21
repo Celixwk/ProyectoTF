@@ -539,6 +539,10 @@ export const programacionService = {
     const { data } = await api.post('/programacion/guardar-cambios', { cambios });
     return data;
   },
+  ajustarHoras: async (payload: { id_empleado: number; fecha: string; hora_entrada_real?: string; hora_salida_real?: string }) => {
+    const { data } = await api.post('/programacion/ajustar-horas', payload);
+    return data;
+  },
   listarPorPeriodo: async (inicio: string, fin: string) => {
     const { data } = await api.get('/programacion/detalle', { params: { inicio, fin } });
     return data.data || data;

@@ -129,6 +129,7 @@ export interface OpcionesGeneracion {
   configuracion?: Record<number, { turnosIds: number[] }>;
   preferenciasTurnos?: Record<number, Record<number, number | null>>;
   balancearHoras?: boolean;
+  maximoHorasExtras?: number;
 }
 
 export interface ParamsGenerarAsignaciones {
