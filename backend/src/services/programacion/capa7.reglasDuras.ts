@@ -1,4 +1,4 @@
-import type { EmpleadoOrdenado, Asignacion, ValidacionReglasDuras, Turno, PeriodoTurno } from "./tipos";
+import type { EmpleadoOrdenado, Asignacion, ValidacionReglasDuras, Turno, PeriodoTurno, OpcionesGeneracion } from "./tipos";
 
 const MS_POR_DIA = 86400000;
 
@@ -103,7 +103,7 @@ export function capa7_validarReglasDuras(
     fecha: Date,
     programacionExistente: Asignacion[],
     empleadoDisponible?: { disponible: boolean; tipoNovedad?: string },
-    opciones?: { balancearHoras?: boolean }
+    opciones?: OpcionesGeneracion
 ): ValidacionReglasDuras {
 
     if (empleadoDisponible && !empleadoDisponible.disponible) {
