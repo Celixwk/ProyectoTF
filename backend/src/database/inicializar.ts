@@ -5,9 +5,13 @@ import { Client } from 'pg';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/nomina_db';
 
 export async function verificarEstructuraBD() {
-    let client: Client | null = null;
     try {
+        // 1. Asegurar que la base de datos existe (conectando a 'postgres')
+        await asegurarBaseDeDatosExiste();
+
+        // 2. Verificar si la tabla principal existe
         const tablaExiste = await verificarTabla();
+        
         if (!tablaExiste) {
             console.log('⚠️ Estructura de BD no detectada. Inicializando...');
             await ejecutarScriptSQL();
@@ -16,12 +20,33 @@ export async function verificarEstructuraBD() {
             console.log('✅ Estructura de BD verificada');
         }
     } catch (error) {
-        console.error('❌ Error verificando estructura BD:', error);
+        console.error('❌ Error fatal en inicialización de BD:', error);
         throw error;
-    } finally {
-        if (client) {
-            await client.end();
+    }
+}
+
+async function asegurarBaseDeDatosExiste() {
+    // Extraemos los datos de la URL actual para conectar a 'postgres'
+    // DATABASE_URL suele ser postgresql://postgres@localhost:5432/gestion_horarios_db
+    const baseUri = DATABASE_URL.substring(0, DATABASE_URL.lastIndexOf('/'));
+    const targetDb = DATABASE_URL.substring(DATABASE_URL.lastIndexOf('/') + 1);
+    
+    const client = new Client({ connectionString: `${baseUri}/postgres` });
+    
+    try {
+        await client.connect();
+        const res = await client.query(`SELECT 1 FROM pg_database WHERE datname = $1`, [targetDb]);
+        
+        if (res.rowCount === 0) {
+            console.log(` Creando base de datos "${targetDb}"...`);
+            // CREATE DATABASE no se puede usar con parámetros ($1), hay que concatenar
+            await client.query(`CREATE DATABASE "${targetDb}"`);
+            console.log(`✅ Base de datos "${targetDb}" creada.`);
         }
+    } catch (error) {
+        console.error('❌ Error asegurando existencia de BD:', error);
+    } finally {
+        await client.end();
     }
 }
 

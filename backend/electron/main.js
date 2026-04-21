@@ -27,10 +27,9 @@ const pgBinDir = isDev
     ? path.join(__dirname, '../postgres-portable/bin')
     : path.join(process.resourcesPath, 'postgres-portable', 'bin');
 
-const PORT = 5432; // Se cambió a 5432 para que sea el estándar de PostgreSQL
 const DB_NAME = 'gestion_horarios_db';
 const DB_USER = 'postgres';
-const DB_PASS = 'postgres'; // Contraseña técnica para evitar error SASL
+const PORT = 5432;
 
 async function startPostgres() {
     console.log('📍 startPostgres - Verificando directorio pgData:', pgDataDir);
@@ -54,99 +53,18 @@ async function startPostgres() {
             return resolve();
         }
 
+        // Arrancamos en modo trust para máxima simplicidad local
         const pgctl = spawn(`"${pgctlPath}"`, ['start', '-D', `"${pgDataDir}"`, '-o', `"-p ${PORT} -k \"\""`], { shell: true });
 
         pgctl.on('error', (err) => {
             console.error(`❌ Error en spawn de pg_ctl (${pgctlPath}):`, err);
         });
 
-        pgctl.stdout.on('data', (data) => console.log(`[PGCTL-OUT] ${data}`));
-        pgctl.stderr.on('data', (data) => console.log(`[PGCTL-ERR] ${data}`));
-
-        const waitTime = fs.existsSync(pgDataDir) ? 2000 : 4000;
         setTimeout(() => {
-            console.log(`✅ PostgreSQL listo (${waitTime}ms wait)`);
-            process.env.DATABASE_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${PORT}/${DB_NAME}`;
+            console.log(`✅ PostgreSQL iniciado`);
+            process.env.DATABASE_URL = `postgresql://${DB_USER}@localhost:${PORT}/${DB_NAME}`;
             resolve();
-        }, waitTime);
-    });
-}
-
-async function ensureDatabaseExists() {
-    console.log('📍 ensureDatabaseExists - Iniciando verificación de BD...');
-    const psqlPath = path.join(pgBinDir, 'psql.exe');
-    console.log('📍 ensureDatabaseExists - Ruta psql:', psqlPath);
-
-    return new Promise((resolve) => {
-        if (!fs.existsSync(psqlPath)) {
-            console.error('❌ ERROR: psql.exe no encontrado');
-            return resolve();
-        }
-
-        const psql = spawn(`"${psqlPath}"`, [
-            '-U', DB_USER,
-            '-p', PORT.toString(),
-            '-h', 'localhost',
-            '-d', 'postgres',
-            '-c', `"${`SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}'`}"`
-        ], { shell: true });
-
-        psql.on('error', (err) => {
-            console.error(`❌ Error en spawn de psql (${psqlPath}):`, err);
-        });
-
-        let output = '';
-        psql.stdout.on('data', (data) => {
-            output += data.toString();
-            console.log(`[PSQL-OUT] ${data}`);
-        });
-        psql.stderr.on('data', (data) => console.log(`[PSQL-ERR] ${data}`));
-
-        psql.on('close', (code) => {
-            console.log('📍 ensureDatabaseExists - psql cerrado con código:', code);
-            console.log('📍 ensureDatabaseExists - Output:', output);
-
-            if (output.includes('(1 row)') || output.includes('(1 fila)') || output.includes('1')) {
-                console.log(`✅ Base de datos "${DB_NAME}" ya existe`);
-                resolve();
-            } else {
-                console.log('📍 ensureDatabaseExists - BD no existe, creando...');
-                createDatabase().then(resolve);
-            }
-        });
-    });
-}
-
-async function createDatabase() {
-    console.log('📍 createDatabase - Iniciando creación de BD...');
-    const createdbPath = path.join(pgBinDir, 'createdb.exe');
-    console.log('📍 createDatabase - Ruta createdb:', createdbPath);
-
-    return new Promise((resolve) => {
-        if (!fs.existsSync(createdbPath)) {
-            console.error('❌ ERROR: createdb.exe no encontrado');
-            return resolve();
-        }
-
-        const createdb = spawn(`"${createdbPath}"`, [
-            '-U', DB_USER,
-            '-p', PORT.toString(),
-            '-h', 'localhost',
-            `"${DB_NAME}"`
-        ], { shell: true });
-
-        createdb.on('error', (err) => {
-            console.error(`❌ Error en spawn de createdb (${createdbPath}):`, err);
-        });
-
-        createdb.stdout.on('data', (data) => console.log(`[CREATEDB-OUT] ${data}`));
-        createdb.stderr.on('data', (data) => console.log(`[CREATEDB-ERR] ${data}`));
-
-        createdb.on('close', (code) => {
-            console.log('📍 createDatabase - Cerrado con código:', code);
-            console.log(code === 0 ? `✅ Base de datos "${DB_NAME}" creada exitosamente` : `⚠️ La base de datos ya podría existir o hubo un error`);
-            resolve();
-        });
+        }, 3000);
     });
 }
 
@@ -344,10 +262,7 @@ async function createWindow() {
         console.log('\n1️⃣ Iniciando PostgreSQL...');
         await startPostgres();
 
-        console.log('\n2️⃣ Verificando/creando base de datos...');
-        await ensureDatabaseExists();
-
-        console.log('\n3️⃣ Iniciando servidor Express...');
+        console.log('\n2️⃣ Iniciando servidor Express...');
         startExpressServer();
 
         console.log('\n4️⃣ Esperando respuesta del servidor...');
