@@ -30,6 +30,7 @@ const pgBinDir = isDev
 const PORT = 5432; // Se cambió a 5432 para que sea el estándar de PostgreSQL
 const DB_NAME = 'gestion_horarios_db';
 const DB_USER = 'postgres';
+const DB_PASS = 'postgres'; // Contraseña técnica para evitar error SASL
 
 async function startPostgres() {
     console.log('📍 startPostgres - Verificando directorio pgData:', pgDataDir);
@@ -62,12 +63,12 @@ async function startPostgres() {
         pgctl.stdout.on('data', (data) => console.log(`[PGCTL-OUT] ${data}`));
         pgctl.stderr.on('data', (data) => console.log(`[PGCTL-ERR] ${data}`));
 
+        const waitTime = fs.existsSync(pgDataDir) ? 2000 : 4000;
         setTimeout(() => {
-            console.log('✅ PostgreSQL listo (timeout completado)');
-            process.env.DATABASE_URL = `postgresql://${DB_USER}:@localhost:${PORT}/${DB_NAME}`;
-            console.log('📍 DATABASE_URL establecida:', process.env.DATABASE_URL);
+            console.log(`✅ PostgreSQL listo (${waitTime}ms wait)`);
+            process.env.DATABASE_URL = `postgresql://${DB_USER}:${DB_PASS}@localhost:${PORT}/${DB_NAME}`;
             resolve();
-        }, 4000);
+        }, waitTime);
     });
 }
 
