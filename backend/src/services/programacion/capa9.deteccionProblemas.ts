@@ -24,6 +24,7 @@ export function capa9_detectarProblemas(
     descansosRequeridos?: Map<number, number>;
     empleados?: EmpleadoOrdenado[];
     balancearHoras?: boolean;
+    maximoHorasExtras?: number; // viene del parámetro MAXIMO_HORAS_EXTRAS
   }
 ): Alerta[] {
   const alertas: Alerta[] = [];
@@ -65,20 +66,18 @@ export function capa9_detectarProblemas(
 
   // Phase B: Detección de problemas de subprogramación (déficit de horas) o extra programación (exceso)
   if (opciones?.balancearHoras) {
+    const margenHoras = opciones?.maximoHorasExtras ?? 12; // usa el parámetro real o 12h como fallback (1 turno)
     empleadosDisponibles.forEach(emp => {
       const info = emp as EmpleadoDisponible & { horas_acumuladas?: number; meta_periodo?: number };
       if (info.horas_acumuladas !== undefined && info.meta_periodo !== undefined) {
-        const margenAceptableDebajo = 12; // Un turno por debajo
-        const margenAceptableEncima = 12; // Un turno por encima (extras toleradas)
-
-        if (info.horas_acumuladas < (info.meta_periodo - margenAceptableDebajo)) {
+        if (info.horas_acumuladas < (info.meta_periodo - margenHoras)) {
           alertas.push({
             tipo: 'advertencia',
             codigo: 'DEFICIT_HORAS_PERIODO',
             mensaje: `${info.nombre_completo} está bajo el margen de horas estimadas (${info.horas_acumuladas}/${info.meta_periodo}h). Verifique si hay áreas donde pueda apoyar.`,
             empleado: info.id_empleado
           });
-        } else if (info.horas_acumuladas > (info.meta_periodo + margenAceptableEncima)) {
+        } else if (info.horas_acumuladas > (info.meta_periodo + margenHoras)) {
           alertas.push({
             tipo: 'info',
             codigo: 'EXCESO_HORAS_PERIODO',

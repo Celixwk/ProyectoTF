@@ -139,7 +139,7 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     });
   }
 
-  const alertasFinales = capa9_detectarProblemas(todasLasAsignaciones, areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })), candidatos, necesidadesPorArea, fechaNormalizada, { maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3, empleados: candidatos });
+  const alertasFinales = capa9_detectarProblemas(todasLasAsignaciones, areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })), candidatos, necesidadesPorArea, fechaNormalizada, { maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3, empleados: candidatos, balancearHoras: opciones?.balancearHoras, maximoHorasExtras: opciones?.maximoHorasExtras });
   const respuestaBase = { fecha: fechaNormalizada, asignaciones: todasLasAsignaciones, alertas: alertasFinales, resumen: { total_asignaciones: todasLasAsignaciones.length, total_empleados: empleadosBD.length, total_areas: areasBD.length, huecos: [] } };
 
   if (todasLasAsignaciones.length === 0 && poolTrabajo.filter(e => e.disponible).length > 0) {

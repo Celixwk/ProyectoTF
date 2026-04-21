@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:54320/nomina_db';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/nomina_db';
 
 export async function verificarEstructuraBD() {
     let client: Client | null = null;

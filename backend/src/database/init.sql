@@ -319,3 +319,35 @@ INSERT INTO estados_empleado (id_estado, nombre_estado) VALUES (1, 'Activo'), (2
 INSERT INTO usuario (usuario, contrasenia, tipo_usuario, nombre_completo, estado)
 VALUES ('admin', 'admin123', 'Administrador', 'Administrador del Sistema', 'Activo')
 ON CONFLICT (usuario) DO NOTHING;
+
+-- ─── Tipos de Recargo (Legislación Colombiana) ──────────────────────────────
+INSERT INTO tipo_recargo (codigo, nombre_recargo, porcentaje_recargo, descripcion, activo) VALUES
+    ('RNO',  'Recargo Nocturno Ordinario',        35,  'Recargo por laborar en jornada ordinaria nocturna (21:00 a 06:00)', true),
+    ('RNF',  'Recargo Nocturno Festivo',           110, 'Recargo por laborar en jornada nocturna durante domingo o festivo', true),
+    ('HEOD', 'Hora Extra Ordinaria Diurna',        25,  'Hora extra laborada en jornada diurna (06:00 a 21:00)', true),
+    ('HEON', 'Hora Extra Ordinaria Nocturna',      75,  'Hora extra laborada en jornada nocturna (21:00 a 06:00)', true),
+    ('HEFD', 'Hora Extra Festiva Diurna',          100, 'Hora extra laborada en domingo o festivo en jornada diurna', true),
+    ('HEFN', 'Hora Extra Festiva Nocturna',        150, 'Hora extra laborada en domingo o festivo en jornada nocturna', true),
+    ('D',    'Dominical Diurno',                   75,  'Recargo por laborar en día de descanso obligatorio (Domingo)', true),
+    ('F',    'Festivo Diurno',                     75,  'Recargo por laborar en día festivo', true)
+ON CONFLICT (codigo) DO NOTHING;
+
+-- ─── Tipos de Novedad ────────────────────────────────────────────────────────
+INSERT INTO tipo_novedad (codigo, nombre_novedad, descripcion, afecta_pago, activo) VALUES
+    ('VAC',  'Vacaciones',            'Periodo de vacaciones remuneradas del empleado',              false, true),
+    ('INC',  'Incapacidad',           'Ausencia por incapacidad médica certificada',                 true,  true),
+    ('LIC',  'Licencia',              'Licencia autorizada remunerada o no remunerada',              false, true),
+    ('AUS',  'Ausencia Injustificada','Falta al trabajo sin justificación válida',                   true,  true),
+    ('COM',  'Compensatorio',         'Día compensatorio por trabajo en festivo o domingo',          false, true),
+    ('CAP',  'Capacitación',          'Ausencia autorizada por capacitación o formación',            false, true),
+    ('PER',  'Permiso',               'Permiso particular autorizado por el empleador',              false, true),
+    ('MAT',  'Maternidad/Paternidad', 'Licencia de maternidad o paternidad',                        false, true)
+ON CONFLICT (codigo) DO NOTHING;
+
+-- ─── Parámetros del Sistema (valores por defecto) ────────────────────────────
+INSERT INTO parametrizacion (nombre_parametro, horas_maximas, descripcion, periodicidad, activo) VALUES
+    ('META_HORAS_PERIODO',    192, 'Horas ordinarias a cumplir por periodo (ej: 192 mensual, 96 quincenal)', 'MENSUAL',   true),
+    ('HORA_INICIO_NOCTURNA',   21, 'Hora de inicio de la jornada nocturna en formato militar (21 = 9PM)',    'SIEMPRE',   true),
+    ('MAXIMO_HORAS_EXTRAS',    48, 'Límite de horas extras laborables por periodo (legal Colombia: 48/mes)', 'MENSUAL',   true),
+    ('MAX_DIAS_CONSECUTIVOS',   6, 'Máximo de días consecutivos que un empleado puede trabajar en la misma área y turno', 'SIEMPRE', true)
+ON CONFLICT (nombre_parametro) DO NOTHING;

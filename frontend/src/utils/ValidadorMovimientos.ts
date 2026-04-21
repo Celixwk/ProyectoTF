@@ -18,7 +18,8 @@ export const validarMovimiento = (
     programacionActual: { id_empleado: number; fecha: string; id_area: number; id_turno?: number }[],
     infoEmpleado?: EmpleadoInfoValidacion,
     fechaOrigen?: string,
-    idAreaOrigen?: number
+    idAreaOrigen?: number,
+    maxDiasConsecutivos: number = 3
 ): string[] => {
     const errores: string[] = [];
     if (idAreaDestino === -1) return errores;
@@ -80,8 +81,8 @@ export const validarMovimiento = (
         }
     }
 
-    if (rachaQueIncluyeDestino > 3) {
-        errores.push(`⛔ FATIGA: ${nombre} excedería el límite de días consecutivos (${rachaQueIncluyeDestino}/3 días).`);
+    if (rachaQueIncluyeDestino > maxDiasConsecutivos) {
+        errores.push(`⛔ FATIGA: ${nombre} excedería el límite de días consecutivos (${rachaQueIncluyeDestino}/${maxDiasConsecutivos} días).`);
     }
 
     return errores;

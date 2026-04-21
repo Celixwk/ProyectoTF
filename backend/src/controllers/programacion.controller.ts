@@ -305,16 +305,20 @@ export const regenerarDesdeFecha = async (req: Request, res: Response) => {
         const diaInicio = inicioProceso.getUTCDate();
         const diaFin = ultimoDiaMes.getUTCDate();
         
-        // Cargar parametro extras para la regeneración
-        const paramExtrasInfo = await prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAXIMO_HORAS_EXTRAS' } });
+        // Cargar parametro extras y dias consecutivos para la regeneración
+        const [paramExtrasInfo, paramDiasInfo] = await Promise.all([
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAXIMO_HORAS_EXTRAS' } }),
+            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAX_DIAS_CONSECUTIVOS' } })
+        ]);
         const maximoHorasExtras = paramExtrasInfo?.horas_maximas ? Number(paramExtrasInfo.horas_maximas) : 48;
+        const maxDiasConsecutivosRegen = paramDiasInfo?.horas_maximas ? Number(paramDiasInfo.horas_maximas) : 3;
 
         for (let d = diaInicio; d <= diaFin; d++) {
             const fechaProceso = new Date(Date.UTC(anio, mes - 1, d, 0, 0, 0, 0));
             const resultadoDia = await capa6_generarProgramacionDia(fechaProceso, {
                 configuracion,
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
-                maxDiasConsecutivosArea: 3,
+                maxDiasConsecutivosArea: maxDiasConsecutivosRegen,
                 maximoHorasExtras,
                 programacionExistente: programacionAcumulada,
                 balancearHoras: balancearHoras === true || String(balancearHoras) === "true"

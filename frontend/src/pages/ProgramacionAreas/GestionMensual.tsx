@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { areasService, turnosService, programacionService, alertasService, consultasService } from '@/services/api.service';
+import { areasService, turnosService, programacionService, alertasService, consultasService, parametrizacionService } from '@/services/api.service';
 import { ModalNovedadRapida } from '@/utils/ModalNovedadRapida';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { VisualizacionAlertas, procesarAlertas } from '@/utils/VisualizacionAlertas';
@@ -69,6 +69,14 @@ export default function GestionMensual() {
 
     const { data: areasRaw } = useQuery<Area[]>({ queryKey: ['areas'], queryFn: () => areasService.listar() });
     const { data: turnosRaw } = useQuery<Turno[]>({ queryKey: ['turnos'], queryFn: () => turnosService.listar({ estado: true }) });
+
+    // Parámetro de días consecutivos configurado en el sistema
+    const { data: paramMaxDias } = useQuery({
+        queryKey: ['parametro-dias-consecutivos'],
+        queryFn: () => parametrizacionService.obtener('MAX_DIAS_CONSECUTIVOS'),
+        staleTime: 60_000
+    });
+    const maxDiasConsecutivos = paramMaxDias?.horas_maximas ? Number(paramMaxDias.horas_maximas) : 3;
 
     useEffect(() => {
         if (fechasRecienGeneradas.length > 0) {
@@ -430,7 +438,8 @@ export default function GestionMensual() {
                 programacionBase,
                 infoEmp,
                 cambio.id_empleado === empArrastrado.id_empleado ? fechaOrigen : cambio.fecha,
-                cambio.id_area_origen
+                cambio.id_area_origen,
+                maxDiasConsecutivos
             );
             advs.forEach(msg => {
                 let limpio = msg.replace(/^⛔\s(PROHIBIDO|CONFLICTO|FATIGA):\s/i, '').replace(/El empleado/i, cambio.empleado);

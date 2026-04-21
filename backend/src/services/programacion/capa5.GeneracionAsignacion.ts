@@ -25,6 +25,7 @@ interface OpcionesAsignacion {
     empleadosYaAsignados?: Set<number>;
     programacionExistente?: Asignacion[];
     maxDiasConsecutivos?: number;
+    maxDiasConsecutivosArea?: number; // alias usado por controller y capa6
     penalizacionRefuerzoFallback?: number;
     permitirRefuerzoComoFallback?: boolean;
     areasQueUsanRefuerzo?: Set<number>;
@@ -60,7 +61,7 @@ export function capa5_calcularScore(
     let diasConsecutivos = 0;
     const fechaRef = new Date(fecha);
     fechaRef.setHours(0, 0, 0, 0);
-    const limiteDias = opciones?.maxDiasConsecutivos ?? 3;
+    const limiteDias = opciones?.maxDiasConsecutivos ?? opciones?.maxDiasConsecutivosArea ?? 3;
 
     for (let d = 1; d <= limiteDias; d++) {
         const fechaAnterior = new Date(fechaRef);
@@ -116,7 +117,8 @@ export function capa5_seleccionarEmpleadoParaArea(
 ): { empleado: EmpleadoDisponible | null; razon?: string; score?: number; fuente?: string } {
     const empleadosYaAsignados = opciones?.empleadosYaAsignados || new Set<number>();
     const programacionExistente = opciones?.programacionExistente || [];
-    const maxDiasConsecutivos = opciones?.maxDiasConsecutivos ?? 3;
+    // Lee maxDiasConsecutivos O maxDiasConsecutivosArea (nombre usado en el controller y capa6)
+    const maxDiasConsecutivos = opciones?.maxDiasConsecutivos ?? opciones?.maxDiasConsecutivosArea ?? 3;
     const penalizacionRefuerzo = opciones?.penalizacionRefuerzoFallback ?? 500;
     const permitirFallback = opciones?.permitirRefuerzoComoFallback !== false;
 
