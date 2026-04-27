@@ -56,9 +56,13 @@
     },
     "nsis": {
       "oneClick": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "perMachine": true,
-      "shortcutName": "Sistema de Gestión de Horarios"
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sistema de Gestión de Horarios",
+      "include": "build/installer.nsh"
     }
   },
   "keywords": [
