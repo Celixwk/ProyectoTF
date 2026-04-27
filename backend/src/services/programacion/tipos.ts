@@ -72,6 +72,7 @@ export interface Asignacion {
   nombre_empleado?: string;
   nombre_area?: string;
   codigo_turno?: string;
+  fuente_asignacion?: string;
 }
 
 export interface Alerta {

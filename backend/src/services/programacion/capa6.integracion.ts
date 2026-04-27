@@ -50,6 +50,11 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     select: { id_empleado: true, id_area: true, fecha: true, id_turno: true }
   });
 
+  const manualesHoy = await prisma.detalleProgramacion.findMany({
+    where: { fecha: fechaNormalizada, origen_registro: { not: "Automatico" } },
+    select: { id_empleado: true, id_area: true, fecha: true, id_turno: true }
+  });
+
   const idsEnNovedad = new Set(novedades.map(n => n.novedad_empleado.id_empleado));
 
   const candidatos: EmpleadoDisponible[] = empleadosBD.map((emp) => ({
@@ -69,9 +74,42 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
 
   const cuposRestantesDia = new Map(necesidadesPorArea);
   const empleadosYaAsignadosHoy = new Set<number>();
-  let todasLasAsignaciones: Asignacion[] = [];
+  let asignacionesAutomaticas: Asignacion[] = [];
+  let asignacionesManuales: Asignacion[] = [];
 
   const poolTrabajo = candidatos.map(c => ({ ...c }));
+
+  // Descontar cupos y marcar como ocupados a los asignados manualmente hoy
+  manualesHoy.forEach(m => {
+    empleadosYaAsignadosHoy.add(m.id_empleado);
+    
+    if (m.id_area) {
+      const actual = cuposRestantesDia.get(m.id_area) || 0;
+      cuposRestantesDia.set(m.id_area, Math.max(0, actual - 1));
+    }
+
+    const idx = poolTrabajo.findIndex(e => e.id_empleado === m.id_empleado);
+    if (idx !== -1) {
+      poolTrabajo[idx].disponible = false;
+    }
+
+    if (m.id_area && m.id_turno) {
+      const empInfo = candidatos.find(e => e.id_empleado === m.id_empleado);
+      const turnoInfo = turnosBD.find(t => t.id_turno === m.id_turno);
+      asignacionesManuales.push({
+        id_empleado: m.id_empleado,
+        id_area: m.id_area,
+        id_turno: m.id_turno,
+        fecha: m.fecha,
+        fuente_asignacion: "manual",
+        nombre_empleado: empInfo?.nombre_completo || "Desconocido",
+        nombre_area: areasBD.find(a => a.id_area === m.id_area)?.nombre_area || "Sin Área",
+        codigo_turno: turnoInfo?.tipo_turno,
+        cedula: empInfo?.cedula,
+        id_labor_mes: empInfo?.id_labor_mes
+      });
+    }
+  });
 
   const turnosOrdenados = turnosBD.sort((a, b) => String(a.hora_entrada || "00:00").localeCompare(String(b.hora_entrada || "00:00")));
 
@@ -111,7 +149,7 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
       fechaNormalizada,
       {
         ...opciones,
-        programacionExistente: [...programacionDelMes, ...todasLasAsignaciones],
+        programacionExistente: [...programacionDelMes, ...asignacionesManuales, ...asignacionesAutomaticas],
         cuposRestantes: maximosTemporales,
         empleadosYaAsignados: empleadosYaAsignadosHoy
       }
@@ -119,7 +157,7 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
 
     resultadoTurno.asignaciones.forEach(asig => {
       const empInfo = candidatos.find(e => e.id_empleado === asig.id_empleado);
-      todasLasAsignaciones.push({
+      asignacionesAutomaticas.push({
         ...asig,
         nombre_empleado: empInfo?.nombre_completo || "Desconocido",
         nombre_area: areasBD.find(a => a.id_area === asig.id_area)?.nombre_area || "Sin Área",
@@ -139,14 +177,16 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
     });
   }
 
+  const todasLasAsignaciones = [...asignacionesManuales, ...asignacionesAutomaticas];
+
   const alertasFinales = capa9_detectarProblemas(todasLasAsignaciones, areasPriorizadas.map(a => ({ id_area: a.id_area, nombre_area: a.nombre_area, prioridad: a.prioridad })), candidatos, necesidadesPorArea, fechaNormalizada, { maxDiasConsecutivos: opciones?.maxDiasConsecutivosArea ?? 3, empleados: candidatos, balancearHoras: opciones?.balancearHoras, maximoHorasExtras: opciones?.maximoHorasExtras });
   const respuestaBase = { fecha: fechaNormalizada, asignaciones: todasLasAsignaciones, alertas: alertasFinales, resumen: { total_asignaciones: todasLasAsignaciones.length, total_empleados: empleadosBD.length, total_areas: areasBD.length, huecos: [] } };
 
-  if (todasLasAsignaciones.length === 0 && poolTrabajo.filter(e => e.disponible).length > 0) {
+  if (asignacionesAutomaticas.length === 0 && poolTrabajo.filter(e => e.disponible).length > 0) {
     return { ...respuestaBase, guardado: { realizado: false, razon: 'fallo_distribucion_con_personal_disponible' } };
   }
 
-  const resultadoGuardado = await capa6_guardarAsignaciones(todasLasAsignaciones, opciones?.idUsuario);
+  const resultadoGuardado = await capa6_guardarAsignaciones(asignacionesAutomaticas, opciones?.idUsuario);
   return { ...respuestaBase, guardado: { realizado: resultadoGuardado.guardadas > 0, ...resultadoGuardado } };
 }
 
