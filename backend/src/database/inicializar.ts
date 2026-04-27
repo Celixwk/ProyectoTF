@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:admin@localhost:5432/sistema_nomina';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres@localhost:54320/gestion_horarios_db';
 
 export async function verificarEstructuraBD() {
     let client: Client | null = null;

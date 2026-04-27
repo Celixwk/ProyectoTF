@@ -434,10 +434,10 @@ export default function ConfiguracionProgramacion() {
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Programación Técnica</h1>
-          <p className="text-slate-500 font-medium">Gestión de disponibilidad y capacidades</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Programación Técnica</h1>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">Gestión de disponibilidad y capacidades</p>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-2xl border shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-2xl border dark:border-slate-700 shadow-sm">
           <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-bold text-slate-400 block px-1">Inicio</span>
@@ -448,10 +448,10 @@ export default function ConfiguracionProgramacion() {
               <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="h-9 text-xs" />
             </div>
           </div>
-          <div className="hidden sm:block text-slate-300"><ArrowRight className="h-5 w-5" /></div>
-          <div className="bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 min-w-[140px] text-center">
-            <p className="text-[10px] font-black text-indigo-400 uppercase">Días en Rango</p>
-            <p className="text-lg font-black text-indigo-700">{diasEnRango.length}</p>
+          <div className="hidden sm:block text-slate-300 dark:text-slate-600"><ArrowRight className="h-5 w-5" /></div>
+          <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-xl border border-indigo-100 dark:border-indigo-800/50 min-w-[140px] text-center">
+            <p className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase">Días en Rango</p>
+            <p className="text-lg font-black text-indigo-700 dark:text-indigo-400">{diasEnRango.length}</p>
           </div>
         </div>
       </header>
@@ -466,9 +466,9 @@ export default function ConfiguracionProgramacion() {
         />
       )}
 
-      <div className="bg-white p-6 rounded-2xl border shadow-sm border-slate-200">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm border-slate-200">
         <div className="max-w-md space-y-2">
-          <Label className="font-bold text-slate-700 flex items-center gap-2">
+          <Label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
             <Users className="h-4 w-4 text-indigo-500" /> Colaborador
           </Label>
           <Select
@@ -479,12 +479,12 @@ export default function ConfiguracionProgramacion() {
               setBusquedaEmpleado('');
             }}
           >
-            <SelectTrigger className="h-12 bg-slate-50 border-slate-200">
+            <SelectTrigger className="h-12 bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 dark:text-white">
               <SelectValue placeholder="Seleccione un empleado..." />
             </SelectTrigger>
             <SelectContent className="w-[var(--radix-select-trigger-width)]">
               <div
-                className="flex items-center px-3 pb-2 border-b"
+                className="flex items-center px-3 pb-2 border-b dark:border-slate-700"
                 onPointerDown={(e) => e.stopPropagation()}
               >
                 <Search className="h-4 w-4 mr-2 text-slate-400" />
@@ -525,13 +525,13 @@ export default function ConfiguracionProgramacion() {
 
       {idEmpleadoSeleccionado ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <Card className="lg:col-span-1 shadow-lg border-slate-200 rounded-2xl overflow-hidden">
-            <CardHeader className="bg-slate-50/80 border-b py-4">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700">
+          <Card className="lg:col-span-1 shadow-lg border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+            <CardHeader className="bg-slate-50/80 dark:bg-slate-800/80 border-b dark:border-slate-700 py-4">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <Settings2 className="h-4 w-4" /> Áreas de Cobertura
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 bg-white">
+            <CardContent className="p-4 bg-white dark:bg-slate-800">
               <div className="space-y-2">
                 {areas?.map((area: Area) => {
                   const isChecked = areasPermitidas.includes(area.id_area);
@@ -541,11 +541,11 @@ export default function ConfiguracionProgramacion() {
                   return (
                   <div
                     key={area.id_area}
-                    className={`flex flex-col space-y-2 p-4 rounded-xl border transition-all ${isChecked ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-50' : 'hover:bg-slate-50 border-slate-100'}`}
+                    className={`flex flex-col space-y-2 p-4 rounded-xl border transition-all ${isChecked ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-50 dark:ring-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 border-slate-100 dark:border-slate-700'}`}
                   >
                     <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}>
                       <Checkbox checked={isChecked} className="h-5 w-5 rounded-md" />
-                      <span className={`text-sm font-bold flex-1 ${isChecked ? 'text-indigo-900' : 'text-slate-500'}`}>{area.nombre_area}</span>
+                      <span className={`text-sm font-bold flex-1 ${isChecked ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400'}`}>{area.nombre_area}</span>
                     </div>
                     {isChecked && configAreasTurnos[area.id_area]?.length > 0 && (
                       <div className="pl-8 pt-1 flex items-center gap-2">
@@ -592,10 +592,10 @@ export default function ConfiguracionProgramacion() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2 shadow-lg border-slate-200 rounded-2xl overflow-hidden">
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/80 border-b gap-4 py-3">
+          <Card className="lg:col-span-2 shadow-lg border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/80 dark:bg-slate-800/80 border-b dark:border-slate-700 gap-4 py-3">
               <div className="flex items-center gap-4">
-                <CardTitle className="text-sm font-bold text-slate-700">Calendario de Disponibilidad</CardTitle>
+                <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-300">Calendario de Disponibilidad</CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -605,12 +605,12 @@ export default function ConfiguracionProgramacion() {
                   <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
                 </Button>
               </div>
-              <div className="flex bg-white px-2 py-1 rounded-xl border shadow-sm items-center">
+              <div className="flex bg-white dark:bg-slate-800 px-2 py-1 rounded-xl border dark:border-slate-700 shadow-sm items-center">
                 <Select
                   value={tipoSeleccionado?.toString() || ""}
                   onValueChange={v => setTipoSeleccionado(parseInt(v))}
                 >
-                  <SelectTrigger className="h-8 text-xs font-bold w-[200px] border-none bg-transparent shadow-none focus:ring-0">
+                  <SelectTrigger className="h-8 text-xs font-bold w-[200px] border-none bg-transparent shadow-none focus:ring-0 dark:text-slate-300">
                     <SelectValue placeholder="Seleccione Novedad..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -626,7 +626,7 @@ export default function ConfiguracionProgramacion() {
                 </Select>
               </div>
             </CardHeader>
-            <CardContent className="p-6 bg-white">
+            <CardContent className="p-6 bg-white dark:bg-slate-800">
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
                 {diasEnRango.map(fecha => {
                   const fechaISO = format(fecha, 'yyyy-MM-dd');
@@ -636,7 +636,7 @@ export default function ConfiguracionProgramacion() {
                     <div
                       key={fechaISO}
                       onClick={() => handleDiaToggle(fecha)}
-                      className={`h-20 border-2 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative group shadow-sm ${novedad ? `${tipo?.color} border-transparent scale-[1.02]` : 'bg-white hover:border-indigo-300 border-slate-50 text-slate-900'}`}
+                      className={`h-20 border-2 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative group shadow-sm ${novedad ? `${tipo?.color} border-transparent scale-[1.02]` : 'bg-white dark:bg-slate-900/50 hover:border-indigo-300 border-slate-50 dark:border-slate-700 text-slate-900 dark:text-slate-300'}`}
                     >
                       <span className="text-[10px] font-bold opacity-60 uppercase mb-1">{format(fecha, 'eee', { locale: es })}</span>
                       <span className="text-lg font-black">{format(fecha, 'dd')}</span>
@@ -661,27 +661,27 @@ export default function ConfiguracionProgramacion() {
           </Card>
         </div>
       ) : (
-        <div className="h-80 flex flex-col items-center justify-center border-4 border-dashed rounded-3xl text-slate-300 bg-slate-50/30">
-          <CalendarIcon className="h-12 w-12 mb-4 opacity-20 text-indigo-600" />
+        <div className="h-80 flex flex-col items-center justify-center border-4 border-dashed dark:border-slate-700 rounded-3xl text-slate-300 dark:text-slate-500 bg-slate-50/30 dark:bg-slate-800/30">
+          <CalendarIcon className="h-12 w-12 mb-4 opacity-20 text-indigo-600 dark:text-indigo-400" />
           <p className="font-bold text-lg">Seleccione un colaborador para configurar</p>
         </div>
       )}
 
-      <Card className="border-violet-100 bg-violet-50/20 rounded-2xl overflow-hidden mt-6 shadow-md">
-        <CardHeader className="py-4 border-b border-violet-100 bg-white/50 flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-black text-violet-900 flex items-center gap-2 tracking-widest uppercase">
+      <Card className="border-violet-100 dark:border-slate-700 bg-violet-50/20 dark:bg-slate-800/50 rounded-2xl overflow-hidden mt-6 shadow-md">
+        <CardHeader className="py-4 border-b border-violet-100 dark:border-slate-700 bg-white/50 dark:bg-slate-800/80 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black text-violet-900 dark:text-violet-400 flex items-center gap-2 tracking-widest uppercase">
             <Settings2 className="h-4 w-4" /> Parámetros para Programación y Recargos
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6 bg-white">
-          <p className="text-sm text-slate-500 mb-6 max-w-2xl">
+        <CardContent className="p-6 bg-white dark:bg-slate-800">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 max-w-2xl">
             Defina las variables fijas de control. Estos valores se utilizan automáticamente en todos los cálculos del sistema, como el reporte de desgloses y recargos.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
 
             {/* META HORAS PERIODO */}
-            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
               <div>
                 <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
                   Meta de Horas por Periodo <Clock className="inline h-3 w-3 ml-1 text-violet-500" />
@@ -696,7 +696,7 @@ export default function ConfiguracionProgramacion() {
                   value={metaHorasInput}
                   onChange={(e) => setMetaHorasInput(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ej: 192"
-                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300 transition-all border border-slate-200"
+                  className="w-full h-10 bg-white dark:bg-slate-800 rounded-lg px-3 font-semibold text-violet-700 dark:text-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-300 transition-all border border-slate-200 dark:border-slate-700"
                 />
                 <Button
                   onClick={() => {
@@ -715,7 +715,7 @@ export default function ConfiguracionProgramacion() {
             </div>
 
             {/* HORA INICIO NOCTURNO */}
-            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
               <div>
                 <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
                   Inicio Jornada Nocturna <Clock className="inline h-3 w-3 ml-1 text-slate-800" />
@@ -730,7 +730,7 @@ export default function ConfiguracionProgramacion() {
                   value={inicioNocturnoInput}
                   onChange={(e) => setInicioNocturnoInput(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ej: 21"
-                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200"
+                  className="w-full h-10 bg-white dark:bg-slate-800 rounded-lg px-3 font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200 dark:border-slate-700"
                 />
                 <Button
                   onClick={() => {
@@ -749,7 +749,7 @@ export default function ConfiguracionProgramacion() {
             </div>
 
             {/* MAXIMO HORAS EXTRAS */}
-            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
               <div>
                 <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
                   Máximo Legal Horas Extras <AlertCircle className="inline h-3 w-3 ml-1 text-rose-500" />
@@ -764,7 +764,7 @@ export default function ConfiguracionProgramacion() {
                   value={maximoExtrasInput}
                   onChange={(e) => setMaximoExtrasInput(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ej: 48"
-                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-300 transition-all border border-slate-200"
+                  className="w-full h-10 bg-white dark:bg-slate-800 rounded-lg px-3 font-semibold text-rose-700 dark:text-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-300 transition-all border border-slate-200 dark:border-slate-700"
                 />
                 <Button
                   onClick={() => {
@@ -783,7 +783,7 @@ export default function ConfiguracionProgramacion() {
             </div>
 
             {/* MAXIMO DIAS CONSECUTIVOS */}
-            <div className="flex flex-col gap-2 p-4 bg-slate-50 border rounded-xl">
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
               <div>
                 <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
                   Días Consecutivos <CalendarIcon className="inline h-3 w-3 ml-1 text-slate-800" />
@@ -798,7 +798,7 @@ export default function ConfiguracionProgramacion() {
                   value={maxDiasConsecutivosInput}
                   onChange={(e) => setMaxDiasConsecutivosInput(e.target.value.replace(/[^0-9]/g, ''))}
                   placeholder="Ej: 3"
-                  className="w-full h-10 bg-white rounded-lg px-3 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200"
+                  className="w-full h-10 bg-white dark:bg-slate-800 rounded-lg px-3 font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-300 transition-all border border-slate-200 dark:border-slate-700"
                 />
                 <Button
                   onClick={() => {
@@ -820,19 +820,19 @@ export default function ConfiguracionProgramacion() {
         </CardContent>
       </Card>
 
-      <Card className="border-indigo-100 bg-indigo-50/30 rounded-2xl overflow-hidden mt-6 shadow-md">
-        <CardHeader className="py-4 border-b border-indigo-100 bg-white/50 flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-black text-indigo-900 flex items-center gap-2 tracking-widest uppercase">
+      <Card className="border-indigo-100 dark:border-slate-700 bg-indigo-50/30 dark:bg-slate-800/50 rounded-2xl overflow-hidden mt-6 shadow-md">
+        <CardHeader className="py-4 border-b border-indigo-100 dark:border-slate-700 bg-white/50 dark:bg-slate-800/80 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black text-indigo-900 dark:text-indigo-400 flex items-center gap-2 tracking-widest uppercase">
             <Settings2 className="h-4 w-4" /> Capacidad Máxima por Área
           </CardTitle>
           <Button size="sm" onClick={guardarCapacidadesGlobales} className="bg-indigo-600 hover:bg-indigo-700 font-bold h-8 text-[10px]">
             <Save className="h-3 w-3 mr-2" /> ACTUALIZAR CAPACIDADES
           </Button>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-6 bg-white dark:bg-slate-800">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
             {areas?.map((area: Area) => (
-              <div key={area.id_area} className="p-4 bg-white rounded-2xl border border-indigo-100 shadow-sm space-y-2">
+              <div key={area.id_area} className="p-4 bg-white dark:bg-slate-900/50 rounded-2xl border border-indigo-100 dark:border-slate-700 shadow-sm space-y-2">
                 <Label className="text-[10px] uppercase text-slate-400 font-black block leading-tight">{area.nombre_area}</Label>
                 <div className="relative group">
                   <input
@@ -840,7 +840,7 @@ export default function ConfiguracionProgramacion() {
                     value={maxTrabajadoresPorArea[area.id_area] ?? ""}
                     onChange={(e) => handleCapacidadChange(area.id_area, e.target.value)}
                     placeholder="0"
-                    className={`w-full h-10 bg-indigo-50/50 rounded-xl px-3 font-black text-indigo-700 text-lg focus:outline-none focus:ring-2 transition-all border-none ${(!maxTrabajadoresPorArea[area.id_area] || parseInt(maxTrabajadoresPorArea[area.id_area]) === 0) ? 'ring-2 ring-rose-300 bg-rose-50' : 'focus:ring-indigo-300'}`}
+                    className={`w-full h-10 bg-indigo-50/50 dark:bg-slate-800 rounded-xl px-3 font-black text-indigo-700 dark:text-indigo-400 text-lg focus:outline-none focus:ring-2 transition-all border-none ${(!maxTrabajadoresPorArea[area.id_area] || parseInt(maxTrabajadoresPorArea[area.id_area]) === 0) ? 'ring-2 ring-rose-300 bg-rose-50 dark:bg-rose-900/20' : 'focus:ring-indigo-300'}`}
                   />
                   {(!maxTrabajadoresPorArea[area.id_area] || parseInt(maxTrabajadoresPorArea[area.id_area]) === 0) && (
                     <AlertCircle className="absolute right-2 top-2.5 h-5 w-5 text-rose-500" />
@@ -852,20 +852,20 @@ export default function ConfiguracionProgramacion() {
         </CardContent>
       </Card>
 
-      <Card className="border-emerald-100 bg-emerald-50/20 rounded-2xl overflow-hidden mt-6 shadow-md mb-6">
-        <CardHeader className="py-4 border-b border-emerald-100 bg-white/50 flex flex-row items-center justify-between">
-          <CardTitle className="text-xs font-black text-emerald-900 flex items-center gap-2 tracking-widest uppercase">
+      <Card className="border-emerald-100 dark:border-slate-700 bg-emerald-50/20 dark:bg-slate-800/50 rounded-2xl overflow-hidden mt-6 shadow-md mb-6">
+        <CardHeader className="py-4 border-b border-emerald-100 dark:border-slate-700 bg-white/50 dark:bg-slate-800/80 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black text-emerald-900 dark:text-emerald-400 flex items-center gap-2 tracking-widest uppercase">
             <Settings2 className="h-4 w-4" /> Configuración de Turnos por Área
           </CardTitle>
           <Button size="sm" onClick={() => guardarTurnosAreasMutation.mutate(configAreasTurnos)} className="bg-emerald-600 hover:bg-emerald-700 font-bold h-8 text-[10px]" disabled={guardarTurnosAreasMutation.isPending}>
             <Save className="h-3 w-3 mr-2" /> GUARDAR TURNOS
           </Button>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-6 bg-white dark:bg-slate-800">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {areas?.filter((a: Area) => a.nombre_area.toUpperCase() !== 'REFUERZOS').map((area: Area) => (
-              <div key={area.id_area} className="p-4 bg-white rounded-2xl border border-emerald-100 shadow-sm space-y-3">
-                <Label className="text-xs uppercase text-emerald-900 font-black block leading-tight">{area.nombre_area}</Label>
+              <div key={area.id_area} className="p-4 bg-white dark:bg-slate-900/50 rounded-2xl border border-emerald-100 dark:border-slate-700 shadow-sm space-y-3">
+                <Label className="text-xs uppercase text-emerald-900 dark:text-emerald-400 font-black block leading-tight">{area.nombre_area}</Label>
                 <div className="flex flex-wrap gap-2">
                   {turnosSistema?.map((turno: Turno) => {
                     const isSelected = configAreasTurnos[area.id_area]?.includes(turno.id_turno);
@@ -886,7 +886,7 @@ export default function ConfiguracionProgramacion() {
                             return newConfig;
                           });
                         }}
-                        className={`h-8 font-bold text-xs ${isSelected ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50'}`}
+                        className={`h-8 font-bold text-xs ${isSelected ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent' : 'text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-slate-800'}`}
                       >
                         {turno.tipo_turno}
                         <span className="opacity-60 ml-1 font-normal text-[9px] hidden sm:inline">

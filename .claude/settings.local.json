@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(file initdb.exe)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

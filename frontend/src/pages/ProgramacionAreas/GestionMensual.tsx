@@ -536,30 +536,32 @@ export default function GestionMensual() {
         <div className="space-y-6 max-w-full mx-auto pb-6 px-6">
             {paso === 'seleccion' ? (
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión Mensual / Por Rango</h1>
-                    <p className="text-slate-500">Seleccione el rango de fechas a gestionar</p>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestión Mensual / Por Rango</h1>
+                    <p className="text-slate-500 dark:text-slate-400">Seleccione el rango de fechas a gestionar</p>
                 </div>
             ) : null}
 
             {paso === 'seleccion' && (
                 <div className="max-w-4xl mx-auto space-y-6">
-                    <Card className="bg-white border shadow-sm">
+                    <Card className="bg-white dark:bg-slate-800 border dark:border-slate-700 shadow-sm">
                         <CardContent className="pt-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <Label>Fecha Inicio</Label>
+                                    <Label className="dark:text-slate-300">Fecha Inicio</Label>
                                     <Input
                                         type="date"
                                         value={fechaInicio}
                                         onChange={(e) => setFechaInicio(e.target.value)}
+                                        className="dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Fecha Fin</Label>
+                                    <Label className="dark:text-slate-300">Fecha Fin</Label>
                                     <Input
                                         type="date"
                                         value={fechaFin}
                                         onChange={(e) => setFechaFin(e.target.value)}
+                                        className="dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
                                     />
                                 </div>
                             </div>
@@ -572,10 +574,10 @@ export default function GestionMensual() {
                             </Button>
                         </CardContent>
                     </Card>
-                    <div className="bg-slate-50 border-dashed border-2 rounded-xl p-8 text-center">
-                        <CalendarDays className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                        <h3 className="text-lg font-medium text-slate-900">¿No hay programación generada?</h3>
-                        <p className="text-slate-500 mb-6">Debe generar primero la distribución automática en el motor de áreas.</p>
+                    <div className="bg-slate-50 dark:bg-slate-800/30 border-dashed border-2 dark:border-slate-700 rounded-xl p-8 text-center">
+                        <CalendarDays className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500 mb-4" />
+                        <h3 className="text-lg font-medium text-slate-900 dark:text-slate-300">¿No hay programación generada?</h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-6">Debe generar primero la distribución automática en el motor de áreas.</p>
                         <Button variant="outline" onClick={() => navigate('/programacion-areas')}>Ir a Programación Áreas <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
                 </div>
@@ -591,13 +593,13 @@ export default function GestionMensual() {
                     ) : programacionOriginal.length === 0 ? (
                         <div className="space-y-6 mt-6">
                             <div className="flex flex-col gap-2 mb-4">
-                                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Gestión del Periodo</h1>
-                                <p className="text-slate-500">Del {fechaInicio} al {fechaFin}</p>
+                                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Gestión del Periodo</h1>
+                                <p className="text-slate-500 dark:text-slate-400">Del {fechaInicio} al {fechaFin}</p>
                             </div>
-                            <div className="flex justify-start bg-white p-4 border rounded-xl shadow-sm">
+                            <div className="flex justify-start bg-white dark:bg-slate-800 p-4 border dark:border-slate-700 rounded-xl shadow-sm">
                                 <Button variant="ghost" onClick={() => { setPaso('seleccion'); setSearchParams({}); }}><ChevronLeft className="mr-2 h-4 w-4" /> Cambiar Periodo</Button>
                             </div>
-                            <Card className="p-12 text-center border-dashed">
+                            <Card className="p-12 text-center border-dashed dark:border-slate-700 dark:bg-slate-800/30">
                                 <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
                                 <h3 className="text-xl font-bold">Sin Registros</h3>
                                 <p className="text-slate-500 mb-4">No se encontró programación para este rango.</p>
@@ -606,10 +608,10 @@ export default function GestionMensual() {
                         </div>
                     ) : (
                         <>
-                            <div className="sticky top-0 z-50 flex justify-between items-center bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 p-3 border-b border-slate-300 shadow-sm gap-4">
+                            <div className="sticky top-0 z-50 flex justify-between items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-slate-900/80 p-3 border-b border-slate-300 dark:border-slate-700 shadow-sm gap-4">
                                 <div className="flex items-center gap-4">
                                     <Button variant="ghost" size="sm" onClick={() => { setPaso('seleccion'); setSearchParams({}); }}><ChevronLeft className="mr-2 h-4 w-4" /> Atrás</Button>
-                                    <h2 className="text-lg font-bold text-slate-800 hidden md:block">
+                                    <h2 className="text-lg font-bold text-slate-800 dark:text-white hidden md:block">
                                         <div className="flex items-center gap-2">
                                             <Calendar className="w-4 h-4 text-slate-500" />
                                             {fechaInicio} <span className="text-slate-400">➜</span> {fechaFin}
@@ -625,15 +627,15 @@ export default function GestionMensual() {
                                                 setBusquedaSelect('');
                                             }}
                                         >
-                                            <SelectTrigger className="h-9 bg-white border-slate-200">
-                                                <div className="flex items-center text-slate-700">
+                                            <SelectTrigger className="h-9 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                                <div className="flex items-center text-slate-700 dark:text-slate-300">
                                                     <Users className="h-4 w-4 mr-2 text-indigo-500" />
                                                     <SelectValue placeholder="Seleccione un empleado..." />
                                                 </div>
                                             </SelectTrigger>
                                             <SelectContent className="w-[var(--radix-select-trigger-width)]">
                                                 <div
-                                                    className="flex items-center px-3 pb-2 border-b"
+                                                    className="flex items-center px-3 pb-2 border-b dark:border-slate-700"
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                 >
                                                     <Search className="h-4 w-4 mr-2 text-slate-400" />
@@ -702,20 +704,20 @@ export default function GestionMensual() {
                                     {areas.filter(area => (configAreasTurnos[area.id_area] || []).length > 0).map((area) => (
                                         <div key={area.id_area} className="space-y-4">
                                             {alertasSeparadas.alertasPorArea[area.id_area] && <VisualizacionAlertas alertas={alertasMotor} mostrarPorArea={true} idArea={area.id_area} nombreArea={area.nombre_area} />}
-                                            <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                                                <div className="bg-slate-800 text-white px-5 py-2 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
+                                            <div className="border dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
+                                                <div className="bg-slate-800 dark:bg-slate-900 text-white px-5 py-2 font-bold uppercase text-xs tracking-widest">{area.nombre_area}</div>
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full border-collapse">
                                                         <thead>
-                                                            <tr className="bg-slate-50">
-                                                                <th className="border p-2 text-left w-24 sticky left-0 bg-slate-100 z-10 text-[10px] font-bold text-slate-600">TURNO</th>
+                                                            <tr className="bg-slate-50 dark:bg-slate-900">
+                                                                <th className="border dark:border-slate-700 p-2 text-left w-24 sticky left-0 bg-slate-100 dark:bg-slate-800 z-10 text-[10px] font-bold text-slate-600 dark:text-slate-400">TURNO</th>
                                                                 {infoDias.map((dia) => {
                                                                     const esSucio = fechaConflictoPersistente && dia.objetoFecha >= fechaConflictoPersistente;
                                                                     const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                                     return (
-                                                                        <th key={dia.fechaISO} className={cn("border p-1 text-center text-[9px] min-w-[100px]", esSucio ? 'bg-red-50/50' : 'text-slate-500', esRegenerado && "bg-emerald-100")}>
+                                                                        <th key={dia.fechaISO} className={cn("border dark:border-slate-700 p-1 text-center text-[9px] min-w-[100px]", esSucio ? 'bg-red-50/50 dark:bg-red-900/30' : 'text-slate-500 dark:text-slate-400', esRegenerado && "bg-emerald-100 dark:bg-emerald-900/50")}>
                                                                             <div className="flex flex-col relative">
-                                                                                <span className={cn("font-bold", esSucio ? 'text-red-600' : 'text-indigo-600')}>{dia.nombreDia}</span>
+                                                                                <span className={cn("font-bold", esSucio ? 'text-red-600 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-400')}>{dia.nombreDia}</span>
                                                                                 <span>{dia.numero}</span>
                                                                             </div>
                                                                         </th>
@@ -728,15 +730,15 @@ export default function GestionMensual() {
                                                                 const turnoInfo = turnos.find(t => t.id_turno === tId);
                                                                 return (
                                                                     <tr key={tId}>
-                                                                        <td className="border p-2 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-[10px]">{turnoInfo?.tipo_turno || `T${tId}`}</td>
+                                                                        <td className="border dark:border-slate-700 p-2 font-bold text-indigo-700 dark:text-indigo-400 sticky left-0 bg-white dark:bg-slate-900 z-10 text-[10px]">{turnoInfo?.tipo_turno || `T${tId}`}</td>
                                                                         {infoDias.map((dia) => {
                                                                             const asignados = programacion.filter((p: any) => Number(p.id_area) === area.id_area && Number(p.id_turno) === tId && p.fecha.split('T')[0] === dia.fechaISO);
                                                                             const tieneNovedad = validacionAlertas.some(a => a.fecha === dia.fechaISO && a.tipo === 'NOVEDAD' && asignados.some((asig: any) => asig.id_empleado === a.id_empleado));
                                                                             return (
-                                                                                <td key={dia.fechaISO} className={cn("border p-1 min-h-[40px] relative cursor-context-menu", tieneNovedad && 'bg-red-200')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)} onContextMenu={(e) => { e.preventDefault(); if (esModoLectura) return; setMenuContextualVacio({ x: e.clientX, y: e.clientY, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }}>
+                                                                                <td key={dia.fechaISO} className={cn("border dark:border-slate-700 p-1 min-h-[40px] relative cursor-context-menu", tieneNovedad && 'bg-red-200 dark:bg-red-900/50')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, area.id_area, tId, dia.fechaISO)} onContextMenu={(e) => { e.preventDefault(); if (esModoLectura) return; setMenuContextualVacio({ x: e.clientX, y: e.clientY, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }}>
                                                                                     <div className="flex flex-col gap-1 w-full h-full min-h-[20px]">
                                                                                         {asignados.map((asig: any, idx: number) => (
-                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={(e) => { e.stopPropagation(); abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (esModoLectura) return; setMenuContextual({ x: e.clientX, y: e.clientY, asig, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }} className={cn("px-1 py-0.5 border rounded text-[9px] cursor-pointer shadow-sm bg-white truncate max-w-[95px]", asig._modificado && 'bg-amber-100 border-amber-400', tieneNovedad && 'border-red-500', esModoLectura && 'cursor-default opacity-90')}>
+                                                                                            <div key={idx} draggable={!esModoLectura} onDragStart={(e) => !esModoLectura && handleDragStart(e, asig, area.id_area, tId)} onClick={(e) => { e.stopPropagation(); abrirModalNovedad(asig.id_empleado, asig.nombre_empleado || asig.empleado?.nombre_completo, dia.fechaISO); }} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (esModoLectura) return; setMenuContextual({ x: e.clientX, y: e.clientY, asig, areaId: area.id_area, turnoId: tId, fecha: dia.fechaISO }); }} className={cn("px-1 py-0.5 border dark:border-slate-600 rounded text-[9px] cursor-pointer shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 truncate max-w-[95px]", asig._modificado && 'bg-amber-100 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600 text-amber-900 dark:text-amber-100', tieneNovedad && 'border-red-500 dark:border-red-500', esModoLectura && 'cursor-default opacity-90')}>
                                                                                                 {asig.nombre_empleado || asig.empleado?.nombre_completo}
                                                                                             </div>
                                                                                         ))}
@@ -781,11 +783,11 @@ export default function GestionMensual() {
                         <>
                             <div className="fixed inset-0 z-[100]" onClick={() => setMenuContextual(null)} onContextMenu={(e) => { e.preventDefault(); setMenuContextual(null); }} />
                             <div 
-                                className="fixed z-[101] bg-white border border-slate-200 shadow-xl rounded-md overflow-hidden min-w-[160px] py-1"
+                                className="fixed z-[101] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-md overflow-hidden min-w-[160px] py-1"
                                 style={{ top: Math.min(menuContextual.y, window.innerHeight - 50), left: Math.min(menuContextual.x, window.innerWidth - 180) }}
                             >
                                 <button 
-                                    className="w-full text-left px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors"
+                                    className="w-full text-left px-3 py-2 text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 flex items-center gap-2 transition-colors"
                                     onClick={() => handleEliminarAsignacion(menuContextual)}
                                 >
                                     <Trash className="w-4 h-4" /> Eliminar Turno
@@ -797,12 +799,12 @@ export default function GestionMensual() {
                         <>
                             <div className="fixed inset-0 z-[100]" onClick={() => setMenuContextualVacio(null)} onContextMenu={(e) => { e.preventDefault(); setMenuContextualVacio(null); }} />
                             <div 
-                                className="fixed z-[101] flex flex-col bg-white border border-slate-200 shadow-2xl rounded-lg overflow-hidden w-64 max-h-80"
+                                className="fixed z-[101] flex flex-col bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xl rounded-lg overflow-hidden w-64 max-h-80"
                                 style={{ top: Math.min(menuContextualVacio.y, window.innerHeight - 300), left: Math.min(menuContextualVacio.x, window.innerWidth - 250) }}
                             >
-                                <div className="bg-slate-800 px-3 py-2 text-[10px] font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                                <div className="bg-slate-800 dark:bg-slate-900 px-3 py-2 text-[10px] font-bold text-white dark:text-slate-200 uppercase tracking-wider flex items-center justify-between">
                                     <span>Asignar Refuerzo</span>
-                                    <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[9px]">{menuContextualVacio.fecha}</span>
+                                    <span className="bg-slate-700 dark:bg-slate-800 text-slate-300 dark:text-slate-400 px-1.5 py-0.5 rounded text-[9px]">{menuContextualVacio.fecha}</span>
                                 </div>
                                 <div className="overflow-y-auto flex-1 p-1">
                                     {(() => {
@@ -817,7 +819,7 @@ export default function GestionMensual() {
                                         }).sort((a: any, b: any) => a.nombre_completo.localeCompare(b.nombre_completo));
 
                                         if (disponiblesHoy.length === 0) {
-                                            return <div className="p-3 text-center text-xs text-slate-500 italic">No hay personal disponible este día.</div>;
+                                            return <div className="p-3 text-center text-xs text-slate-500 dark:text-slate-400 italic">No hay personal disponible este día.</div>;
                                         }
 
                                         const capacitados = disponiblesHoy.filter((emp: any) => 
@@ -830,19 +832,19 @@ export default function GestionMensual() {
                                         return (
                                             <div className="flex flex-col gap-2 p-1">
                                                 <div className="flex flex-col">
-                                                    <span className="text-[9px] font-bold text-indigo-600 uppercase px-2 mb-1">🌟 Capacitados (Área Actual)</span>
+                                                    <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase px-2 mb-1">🌟 Capacitados (Área Actual)</span>
                                                     {capacitados.length > 0 ? (
                                                         capacitados.map((emp: any) => (
                                                             <button
                                                                 key={emp.id_empleado}
-                                                                className="w-full text-left px-2 py-1 text-xs text-slate-700 bg-indigo-50/50 hover:bg-indigo-100 font-medium rounded transition-colors"
+                                                                className="w-full text-left px-2 py-1 text-xs text-slate-700 dark:text-slate-300 bg-indigo-50/50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 font-medium rounded transition-colors"
                                                                 onClick={() => handleAsignarRefuerzoDinamico(emp, menuContextualVacio.areaId, menuContextualVacio.turnoId, menuContextualVacio.fecha)}
                                                             >
                                                                 <div className="truncate" title={emp.nombre_completo}>{emp.nombre_completo}</div>
                                                             </button>
                                                         ))
                                                     ) : (
-                                                        <div className="px-2 py-1 text-[10px] text-slate-400 italic font-medium bg-slate-50 rounded">
+                                                        <div className="px-2 py-1 text-[10px] text-slate-400 dark:text-slate-500 italic font-medium bg-slate-50 dark:bg-slate-800/50 rounded">
                                                             No hay capacitados disponibles hoy (ocupados/descanso).
                                                         </div>
                                                     )}
@@ -850,11 +852,11 @@ export default function GestionMensual() {
 
                                                 {apoyos.length > 0 && (
                                                     <div className="flex flex-col">
-                                                        <span className="text-[9px] font-bold text-slate-500 uppercase px-2 mb-1 mt-1">🤝 Apoyo (Otras Áreas)</span>
+                                                        <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase px-2 mb-1 mt-1">🤝 Apoyo (Otras Áreas)</span>
                                                         {apoyos.map((emp: any) => (
                                                             <button
                                                                 key={emp.id_empleado}
-                                                                className="w-full text-left px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                                                                className="w-full text-left px-2 py-1 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
                                                                 onClick={() => handleAsignarRefuerzoDinamico(emp, menuContextualVacio.areaId, menuContextualVacio.turnoId, menuContextualVacio.fecha)}
                                                             >
                                                                 <div className="truncate" title={emp.nombre_completo}>{emp.nombre_completo}</div>

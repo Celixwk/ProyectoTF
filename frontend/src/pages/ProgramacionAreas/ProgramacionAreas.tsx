@@ -199,8 +199,8 @@ export default function ProgramacionAreas() {
     return (
         <div className="space-y-6 max-w-full mx-auto pb-20 px-6">
             <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Motor de Programación</h1>
-                <p className="text-slate-500">
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Motor de Programación</h1>
+                <p className="text-slate-500 dark:text-slate-400">
                     {paso === 'inicio' && 'Defina el rango de fechas a programar (ej: Quincena).'}
                     {paso === 'configuracion' && 'Seleccione los turnos habilitados por cada área de trabajo.'}
                     {paso === 'resultado' && 'Revise la distribución del personal asignado automáticamente.'}
@@ -209,11 +209,11 @@ export default function ProgramacionAreas() {
 
             {paso === 'inicio' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
-                    <Card className="bg-slate-50 border-none shadow-sm">
+                    <Card className="bg-slate-50 dark:bg-slate-800 border-none shadow-sm">
                         <CardContent className="pt-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Fecha Inicio</Label>
+                                    <Label className="dark:text-slate-300">Fecha Inicio</Label>
                                     <Input
                                         type="date"
                                         value={fechaInicio}
@@ -222,11 +222,11 @@ export default function ProgramacionAreas() {
                                             setPaso('inicio');
                                             setProgramacionGenerada([]);
                                         }}
-                                        className="bg-white"
+                                        className="bg-white dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Fecha Fin</Label>
+                                    <Label className="dark:text-slate-300">Fecha Fin</Label>
                                     <Input
                                         type="date"
                                         value={fechaFin}
@@ -235,7 +235,7 @@ export default function ProgramacionAreas() {
                                             setPaso('inicio');
                                             setProgramacionGenerada([]);
                                         }}
-                                        className="bg-white"
+                                        className="bg-white dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
                                     />
                                 </div>
                             </div>
@@ -243,7 +243,7 @@ export default function ProgramacionAreas() {
                             {/* Información del rango */}
                             <div className="mt-4 flex items-center gap-2 text-sm">
                                 <div className={cn("px-3 py-1 rounded-full font-medium",
-                                    rangoInvalido ? "bg-red-100 text-red-700" : "bg-indigo-100 text-indigo-700"
+                                    rangoInvalido ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400"
                                 )}>
                                     {diasSeleccionados} días seleccionados
                                 </div>
@@ -258,14 +258,14 @@ export default function ProgramacionAreas() {
                         </CardContent>
                     </Card>
 
-                    <Card className="border-dashed border-2 bg-white hover:border-indigo-200 transition-colors">
+                    <Card className="border-dashed border-2 bg-white dark:bg-slate-800 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-500 transition-colors">
                         <CardContent className="pt-6 flex flex-col items-center justify-center text-center py-12 gap-4">
-                            <div className="h-16 w-16 bg-indigo-50 rounded-full flex items-center justify-center">
-                                <CalendarDays className="h-8 w-8 text-indigo-600" />
+                            <div className="h-16 w-16 bg-indigo-50 dark:bg-slate-900/50 rounded-full flex items-center justify-center">
+                                <CalendarDays className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="text-xl font-semibold">Configurar Distribución</h3>
-                                <p className="text-sm text-slate-500">Se validarán novedades antes de proceder</p>
+                                <h3 className="text-xl font-semibold dark:text-slate-200">Configurar Distribución</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">Se validarán novedades antes de proceder</p>
                             </div>
                             <Button
                                 size="lg"
@@ -285,31 +285,31 @@ export default function ProgramacionAreas() {
 
             {paso === 'configuracion' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
-                    <div className="flex flex-col border rounded-xl overflow-hidden shadow-sm bg-white">
-                        <div className="bg-slate-50 p-6 border-b">
-                            <h3 className="text-xl font-bold text-slate-800">Todo listo para generar</h3>
-                            <p className="text-sm text-slate-500 mt-1">
+                    <div className="flex flex-col border dark:border-slate-700 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-slate-800">
+                        <div className="bg-slate-50 dark:bg-slate-800/80 p-6 border-b dark:border-slate-700">
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Todo listo para generar</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                                 Los turnos a asignar para cada área se tomarán de la <strong>Configuración Global del Sistema</strong>.
                             </p>
                         </div>
                         <div className="p-6 space-y-6">
-                            <div className="flex bg-slate-50 border p-4 rounded-lg items-center justify-between">
+                            <div className="flex bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 p-4 rounded-lg items-center justify-between">
                                 <div className="space-y-1">
-                                    <div className="font-bold text-slate-900 tracking-wider flex items-center gap-2 text-sm uppercase">
+                                    <div className="font-bold text-slate-900 dark:text-slate-200 tracking-wider flex items-center gap-2 text-sm uppercase">
                                         Rango a programar: {fechaInicio} al {fechaFin}
                                     </div>
                                     <p className="text-xs text-slate-500">Asegúrese de haber revisado las novedades del periodo.</p>
                                 </div>
                             </div>
-                            <div className="bg-white p-4 border rounded-xl shadow-sm border-indigo-100 flex items-center gap-4 cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setBalancearHoras(!balancearHoras)}>
+                            <div className="bg-white dark:bg-slate-800/50 p-4 border dark:border-slate-700 rounded-xl shadow-sm border-indigo-100 flex items-center gap-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" onClick={() => setBalancearHoras(!balancearHoras)}>
                                 <Checkbox
                                     checked={balancearHoras}
                                     onCheckedChange={(checked) => setBalancearHoras(checked as boolean)}
                                     className="h-6 w-6"
                                 />
                                 <div>
-                                    <span className="font-bold text-slate-700 block">Equilibrar Horas Asignadas</span>
-                                    <span className="text-xs text-slate-500">El motor intentará llegar a la meta de horas maximizando la distribución equitativa.</span>
+                                    <span className="font-bold text-slate-700 dark:text-slate-300 block">Equilibrar Horas Asignadas</span>
+                                    <span className="text-xs text-slate-500 dark:text-slate-400">El motor intentará llegar a la meta de horas maximizando la distribución equitativa.</span>
                                 </div>
                             </div>
                             <div className="flex justify-end gap-3 mt-6">
@@ -325,14 +325,14 @@ export default function ProgramacionAreas() {
 
             {paso === 'resultado' && (
                 <div className="space-y-8">
-                    <div className="flex items-center justify-between bg-emerald-50 p-6 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/30 p-6 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
                         <div className="flex items-center gap-4">
                             <div className="bg-emerald-600 p-2 rounded-full">
                                 <CheckCircle2 className="h-6 w-6 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-bold text-emerald-900">Programación Lista</h2>
-                                <p className="text-emerald-700 text-sm">Se ha guardado la asignación automática en la base de datos.</p>
+                                <h2 className="text-xl font-bold text-emerald-900 dark:text-emerald-400">Programación Lista</h2>
+                                <p className="text-emerald-700 dark:text-emerald-300 text-sm">Se ha guardado la asignación automática en la base de datos.</p>
                             </div>
                         </div>
                         <div className="flex gap-3">
@@ -370,30 +370,30 @@ export default function ProgramacionAreas() {
                                     />
                                 )}
 
-                                <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                                    <div className="bg-slate-800 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
+                                <div className="border dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
+                                    <div className="bg-slate-800 dark:bg-slate-900 text-white px-5 py-3 font-bold uppercase text-xs tracking-widest">
                                         {area.nombre_area}
                                     </div>
                                     <div className="overflow-x-auto">
                                         <table className="w-full border-collapse">
                                             <thead>
-                                                <tr className="bg-slate-50">
-                                                    <th className="border p-3 text-left w-28 sticky left-0 bg-slate-100 z-10 text-[11px] font-bold text-slate-600">TURNO</th>
+                                                <tr className="bg-slate-50 dark:bg-slate-800/80">
+                                                    <th className="border dark:border-slate-700 p-3 text-left w-28 sticky left-0 bg-slate-100 dark:bg-slate-900 z-10 text-[11px] font-bold text-slate-600 dark:text-slate-400">TURNO</th>
                                                     {infoDias.map((dia) => {
                                                         const esRegenerado = fechasRecienGeneradas.includes(dia.fechaISO);
                                                         return (
                                                             <th
                                                                 key={dia.fechaISO}
                                                                 className={cn(
-                                                                    "border p-2 text-center text-[10px] min-w-[120px] transition-colors duration-1000",
-                                                                    esRegenerado ? "bg-emerald-100 border-emerald-300" : "text-slate-500"
+                                                                    "border dark:border-slate-700 p-2 text-center text-[10px] min-w-[120px] transition-colors duration-1000",
+                                                                    esRegenerado ? "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-800" : "text-slate-500 dark:text-slate-400"
                                                                 )}
                                                             >
                                                                 <div className="flex flex-col">
-                                                                    <span className={cn("font-bold", esRegenerado ? "text-emerald-700" : "text-indigo-600")}>
+                                                                    <span className={cn("font-bold", esRegenerado ? "text-emerald-700 dark:text-emerald-400" : "text-indigo-600 dark:text-indigo-400")}>
                                                                         {dia.nombreDia}
                                                                     </span>
-                                                                    <span className={esRegenerado ? "text-emerald-600" : ""}>
+                                                                    <span className={esRegenerado ? "text-emerald-600 dark:text-emerald-500" : ""}>
                                                                         {dia.numero} {dia.mesNombre}
                                                                     </span>
                                                                 </div>
@@ -406,8 +406,8 @@ export default function ProgramacionAreas() {
                                                 {turnosActivos.map((tId) => {
                                                     const turnoInfo = turnosRaw?.find(t => t.id_turno === tId);
                                                     return (
-                                                        <tr key={tId} className="hover:bg-slate-50/50">
-                                                            <td className="border p-3 font-bold text-indigo-700 sticky left-0 bg-white z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                                        <tr key={tId} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                                            <td className="border dark:border-slate-700 p-3 font-bold text-indigo-700 dark:text-indigo-400 sticky left-0 bg-white dark:bg-slate-900 z-10 text-xs shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                                                 {turnoInfo?.tipo_turno}
                                                             </td>
                                                             {infoDias.map((dia) => {
@@ -421,8 +421,8 @@ export default function ProgramacionAreas() {
                                                                     <td
                                                                         key={dia.fechaISO}
                                                                         className={cn(
-                                                                            "border p-2 min-h-[60px] transition-colors duration-1000",
-                                                                            esRegenerado && "bg-emerald-50/50 border-emerald-200"
+                                                                            "border dark:border-slate-700 p-2 min-h-[60px] transition-colors duration-1000",
+                                                                            esRegenerado && "bg-emerald-50/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50"
                                                                         )}
                                                                     >
                                                                         <div className="flex flex-col gap-1">
@@ -430,12 +430,12 @@ export default function ProgramacionAreas() {
                                                                                 <div key={idx} className={cn(
                                                                                     "px-1.5 py-1 border rounded text-[9px] leading-tight font-medium truncate",
                                                                                     esRegenerado
-                                                                                        ? "bg-emerald-100 border-emerald-200 text-emerald-800"
-                                                                                        : "bg-slate-50 border-slate-200 text-slate-700"
+                                                                                        ? "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+                                                                                        : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                                                                                 )}>
                                                                                     {asig.nombre_empleado || asig.empleado?.nombre_completo || 'Empleado'}
                                                                                 </div>
-                                                                            )) : <span className="text-slate-200 text-center text-xs">-</span>}
+                                                                            )) : <span className="text-slate-200 dark:text-slate-700 text-center text-xs">-</span>}
                                                                         </div>
                                                                     </td>
                                                                 );

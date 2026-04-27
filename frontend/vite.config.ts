@@ -6,6 +6,10 @@ import { fileURLToPath, URL } from 'url'
 export default defineConfig({
   base: '/',
   plugins: [react()],
+  build: {
+    outDir: '../backend/frontend-build',
+    emptyOutDir: true,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

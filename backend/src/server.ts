@@ -64,8 +64,12 @@ app.get('*', (req, res) => {
 
 async function iniciarServidor() {
   try {
-    console.log('🔄 Verificando estructura de base de datos...');
-    await verificarEstructuraBD();
+    if (process.env.DB_ALREADY_INITIALIZED !== '1') {
+      console.log('🔄 Verificando estructura de base de datos...');
+      await verificarEstructuraBD();
+    } else {
+      console.log('✅ BD ya inicializada, omitiendo verificación');
+    }
 
     app.listen(PORT, () => {
       console.log(`🚀 SERVIDOR CORRIENDO\n📡 Puerto: ${PORT}\n🔗 URL: http://localhost:${PORT}`);

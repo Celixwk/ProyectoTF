@@ -132,14 +132,14 @@ export default function Programacion() {
     if (!tiposNovedadData) return { tiposNovedadMap: map, leyendaTipos: leyenda };
 
     const PALETAS = [
-      { color: 'bg-blue-200 text-blue-900 border-blue-300' },
-      { color: 'bg-emerald-200 text-emerald-900 border-emerald-300' },
-      { color: 'bg-rose-200 text-rose-900 border-rose-300' },
-      { color: 'bg-amber-200 text-amber-900 border-amber-300' },
-      { color: 'bg-violet-200 text-violet-900 border-violet-300' },
-      { color: 'bg-pink-200 text-pink-900 border-pink-300' },
-      { color: 'bg-cyan-200 text-cyan-900 border-cyan-300' },
-      { color: 'bg-slate-800 text-white border-slate-600' },
+      { color: 'bg-blue-200 text-blue-900 border-blue-300 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-800' },
+      { color: 'bg-emerald-200 text-emerald-900 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-800' },
+      { color: 'bg-rose-200 text-rose-900 border-rose-300 dark:bg-rose-900/50 dark:text-rose-300 dark:border-rose-800' },
+      { color: 'bg-amber-200 text-amber-900 border-amber-300 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-800' },
+      { color: 'bg-violet-200 text-violet-900 border-violet-300 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-800' },
+      { color: 'bg-pink-200 text-pink-900 border-pink-300 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-800' },
+      { color: 'bg-cyan-200 text-cyan-900 border-cyan-300 dark:bg-cyan-900/50 dark:text-cyan-300 dark:border-cyan-800' },
+      { color: 'bg-slate-800 text-white border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800' },
     ];
 
     tiposNovedadData.forEach((t: any, index: number) => {
@@ -422,8 +422,8 @@ export default function Programacion() {
     <div className="space-y-6 max-w-full mx-auto pb-20 px-4 sm:px-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Programación de Turnos</h1>
-          <p className="text-slate-500 text-lg">
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Programación de Turnos</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-lg">
             {esRangoPersonalizado
               ? `Vista personalizada: ${fechaInicio} al ${fechaFin}`
               : 'Vista consolidada de asignaciones y novedades.'
@@ -435,11 +435,11 @@ export default function Programacion() {
         {/* Controles Agrupados para evitar saltos de layout */}
         <div className="flex items-center justify-end gap-2 flex-wrap">
           {/* Selector de Rango Manual */}
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
-            <span className="text-xs text-slate-400 font-bold px-1">RANGO</span>
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border dark:border-slate-700 shadow-sm">
+            <span className="text-xs text-slate-400 dark:text-slate-500 font-bold px-1">RANGO</span>
             <Input
               type="date"
-              className="w-auto h-8 text-xs"
+              className="w-auto h-8 text-xs dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
               value={pInicio || ''}
               onChange={(e) => {
                 const params: any = {};
@@ -448,10 +448,10 @@ export default function Programacion() {
                 setSearchParams(params);
               }}
             />
-            <span className="text-slate-300">-</span>
+            <span className="text-slate-300 dark:text-slate-600">-</span>
             <Input
               type="date"
-              className="w-auto h-8 text-xs"
+              className="w-auto h-8 text-xs dark:bg-slate-900/50 dark:border-slate-700 dark:text-slate-200"
               value={pFin || ''}
               onChange={(e) => {
                 const params: any = {};
@@ -472,9 +472,9 @@ export default function Programacion() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border dark:border-slate-700 shadow-sm">
             <Select value={areaFiltro} onValueChange={setAreaFiltro}>
-              <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs bg-slate-50 border-slate-300">
+              <SelectTrigger className="w-full sm:w-[180px] h-8 text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 dark:text-slate-200">
                 <SelectValue placeholder="Todas las Áreas" />
               </SelectTrigger>
               <SelectContent>
@@ -517,12 +517,12 @@ export default function Programacion() {
                 setBusquedaVista('');
               }}
             >
-              <SelectTrigger className="h-10 bg-white border-slate-200">
+              <SelectTrigger className="h-10 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-200">
                 <SelectValue placeholder="Buscar colaborador..." />
               </SelectTrigger>
               <SelectContent className="w-[var(--radix-select-trigger-width)]">
                 <div
-                  className="flex items-center px-3 pb-2 border-b"
+                  className="flex items-center px-3 pb-2 border-b dark:border-slate-700"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
                   <UserSearch className="h-4 w-4 mr-2 text-slate-400" />
@@ -559,21 +559,21 @@ export default function Programacion() {
       }
 
       {(!pInicio || !pFin) ? (
-        <Card className="border-dashed py-20 text-center bg-slate-50/50">
+        <Card className="border-dashed dark:border-slate-700 py-20 text-center bg-slate-50/50 dark:bg-slate-800/30">
           <div className="flex justify-center mb-6">
-            <CalendarDays className="h-16 w-16 text-slate-300" />
+            <CalendarDays className="h-16 w-16 text-slate-300 dark:text-slate-600" />
           </div>
-          <h3 className="text-xl font-medium text-slate-700">Seleccione un rango de fechas</h3>
-          <p className="text-slate-400 max-w-md mx-auto mt-2 text-base">
+          <h3 className="text-xl font-medium text-slate-700 dark:text-slate-400">Seleccione un rango de fechas</h3>
+          <p className="text-slate-400 dark:text-slate-500 max-w-md mx-auto mt-2 text-base">
             Ingrese las fechas de inicio y fin en el selector de rango para visualizar la programación.
           </p>
         </Card>
       ) : (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 flex gap-3 items-start">
-          <Info className="h-6 w-6 text-blue-600 mt-0.5 shrink-0" />
+        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800/50 text-blue-800 dark:text-blue-300 rounded-lg p-4 flex gap-3 items-start">
+          <Info className="h-6 w-6 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
           <div>
-            <h5 className="font-bold text-blue-700 text-base mb-1">Modo Lectura</h5>
-            <p className="text-blue-600/90 text-sm">
+            <h5 className="font-bold text-blue-700 dark:text-blue-400 text-base mb-1">Modo Lectura</h5>
+            <p className="text-blue-600/90 dark:text-blue-300/90 text-sm">
               Vista consolidada. Pase el mouse sobre las casillas para ver detalles del turno y el área asignada.
             </p>
           </div>
@@ -587,12 +587,12 @@ export default function Programacion() {
             Cargando datos frescos...
           </div>
         ) : programacion.length === 0 ? (
-          <Card className="border-dashed py-16 text-center bg-slate-50/50">
+          <Card className="border-dashed dark:border-slate-700 py-16 text-center bg-slate-50/50 dark:bg-slate-800/30">
             <div className="flex justify-center mb-6">
-              <CalendarDays className="h-16 w-16 text-slate-300" />
+              <CalendarDays className="h-16 w-16 text-slate-300 dark:text-slate-600" />
             </div>
-            <h3 className="text-xl font-medium text-slate-900">Sin programación generada</h3>
-            <p className="text-slate-500 max-w-md mx-auto mt-2 text-lg mb-6">
+            <h3 className="text-xl font-medium text-slate-900 dark:text-slate-300">Sin programación generada</h3>
+            <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-2 text-lg mb-6">
               No hay turnos asignados para {esRangoPersonalizado ? `${fechaInicio} al ${fechaFin}` : `${meses[mes - 1]} ${anio}`}.
             </p>
             <Button variant="outline" onClick={() => navigate('/programacion-areas')}>
@@ -600,10 +600,10 @@ export default function Programacion() {
             </Button>
           </Card>
         ) : (
-          <div className="border rounded-xl bg-white shadow-sm overflow-hidden animate-in fade-in duration-500">
-            <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+          <div className="border dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 shadow-sm overflow-hidden animate-in fade-in duration-500">
+            <div className="bg-slate-800 dark:bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
               <span className="font-bold uppercase tracking-wider text-base">Personal Programado</span>
-              <Badge variant="secondary" className="bg-slate-700 text-slate-100 border-0">
+              <Badge variant="secondary" className="bg-slate-700 dark:bg-slate-800 text-slate-100 dark:text-slate-300 border-0">
                 {datosProcesados.length} Colaboradores
               </Badge>
             </div>
@@ -612,19 +612,19 @@ export default function Programacion() {
               <table className="w-full border-collapse">
                 <thead className="sticky top-0 z-30 shadow-sm">
                   <tr>
-                    <th className="sticky left-0 top-0 z-40 bg-slate-50 border-b border-r p-4 text-left w-64 font-bold text-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
+                    <th className="sticky left-0 top-0 z-40 bg-slate-50 dark:bg-slate-900 border-b border-r dark:border-slate-700 p-4 text-left w-64 font-bold text-slate-700 dark:text-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] text-sm">
                       COLABORADOR
                     </th>
                     {diasDelRango.map(dia => (
                       <th key={dia.fechaISO} className={cn(
-                        "sticky top-0 z-30 border-b border-r min-w-[56px] p-2 text-center font-medium",
-                        dia.esFinDeSemana ? "bg-slate-50 text-slate-500" : "bg-white text-slate-700"
+                        "sticky top-0 z-30 border-b border-r dark:border-slate-700 min-w-[56px] p-2 text-center font-medium",
+                        dia.esFinDeSemana ? "bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
                       )}>
                         <div className="flex flex-col items-center">
                           <span className="text-[10px] uppercase font-bold">{dia.nombre}</span>
-                          <span className={cn("text-base font-bold", dia.esFinDeSemana && "text-slate-400")}>{dia.dia}</span>
+                          <span className={cn("text-base font-bold", dia.esFinDeSemana && "text-slate-400 dark:text-slate-500")}>{dia.dia}</span>
                           {/* Mostrar mes si es rango multi-mes */}
-                          {esRangoPersonalizado && <span className="text-[9px] text-slate-400 font-normal">{dia.mesNombre}</span>}
+                          {esRangoPersonalizado && <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal">{dia.mesNombre}</span>}
                         </div>
                       </th>
                     ))}
@@ -632,11 +632,11 @@ export default function Programacion() {
                 </thead>
                 <tbody>
                   {datosProcesados.map((emp, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="sticky left-0 z-20 bg-white border-r border-b px-4 py-3 font-medium text-slate-700 truncate shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="sticky left-0 z-20 bg-white dark:bg-slate-900 border-r border-b dark:border-slate-700 px-4 py-3 font-medium text-slate-700 dark:text-slate-300 truncate shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         <div className="flex flex-col">
                           <span className="truncate text-sm font-bold">{emp.nombre}</span>
-                          {emp.cedula && <span className="text-xs text-slate-400 font-mono">{emp.cedula}</span>}
+                          {emp.cedula && <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{emp.cedula}</span>}
                         </div>
                       </td>
                       {diasDelRango.map(dia => {
@@ -675,23 +675,23 @@ export default function Programacion() {
                         if (idAreaFiltro && infoDia.tipo === 'TURNO' && infoDia.id_area !== idAreaFiltro) {
                             // Turno de OTRA área cuando estamos filtrando, se oculta
                             return (
-                                <td key={dia.fechaISO} className={cn("border-r border-b p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50" : "bg-white")}>
-                                    <div className="w-full h-full flex flex-col items-center justify-center transition-all p-1 bg-white border cursor-default">
+                                <td key={dia.fechaISO} className={cn("border-r border-b dark:border-slate-700 p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50 dark:bg-slate-800/50" : "bg-white dark:bg-slate-800")}>
+                                    <div className="w-full h-full flex flex-col items-center justify-center transition-all p-1 bg-white dark:bg-slate-800 border dark:border-slate-700 cursor-default">
                                     </div>
                                 </td>
                             );
                         }
 
                         // Color base (sin arcoíris)
-                        let bgColorClass = 'bg-white';
-                        if (infoDia.tipo === 'DESCANSO') bgColorClass = 'bg-indigo-50/50 text-indigo-800 font-bold opacity-60 cursor-default';
-                        else if (infoDia.valor === 'LIBRE') bgColorClass = 'bg-slate-50 text-slate-500 font-bold cursor-default';
+                        let bgColorClass = 'bg-white dark:bg-slate-800';
+                        if (infoDia.tipo === 'DESCANSO') bgColorClass = 'bg-indigo-50/50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 font-bold opacity-60 cursor-default';
+                        else if (infoDia.valor === 'LIBRE') bgColorClass = 'bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 font-bold cursor-default';
                         else if (infoDia.tipo === 'NOVEDAD') bgColorClass = infoDia.estilo; // RESTAURAR ESTILO DE NOVEDAD
-                        else if (infoDia.tipo === 'TURNO') bgColorClass = 'bg-white text-slate-800 font-bold border-2';
+                        else if (infoDia.tipo === 'TURNO') bgColorClass = 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold border-2 dark:border-slate-600';
 
                         return (
-                          <td key={dia.fechaISO} className={cn("border-r border-b p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50" : "bg-white")}>
-                            <div className={cn("w-full h-full flex flex-col items-center justify-center transition-all p-1 border", bgColorClass)}>
+                          <td key={dia.fechaISO} className={cn("border-r border-b dark:border-slate-700 p-0 text-center h-[70px] w-14 relative group", dia.esFinDeSemana ? "bg-slate-50/50 dark:bg-slate-800/50" : "bg-white dark:bg-slate-800")}>
+                            <div className={cn("w-full h-full flex flex-col items-center justify-center transition-all p-1 border dark:border-slate-700", bgColorClass)}>
                               
                               <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-2 w-max max-w-[220px] bg-slate-900 text-white p-3 rounded-lg shadow-2xl pointer-events-none">
                                 <div className="text-base font-bold mb-1">{infoDia.detalle}</div>
@@ -724,13 +724,13 @@ export default function Programacion() {
       )}
 
 
-      <div className="flex flex-col gap-4 pt-8 border-t">
+      <div className="flex flex-col gap-4 pt-8 border-t dark:border-slate-700">
         <div className="flex flex-wrap gap-4 justify-center py-2">
-          <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-            <span className="w-6 h-6 rounded bg-slate-50 border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-500">LIBRE</span> Disponible
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium">
+            <span className="w-6 h-6 rounded bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-500 dark:text-slate-400">LIBRE</span> Disponible
           </div>
           {leyendaTipos.map(tipo => (
-            <div key={tipo.label} className="flex items-center gap-2 text-sm text-slate-600 font-medium">
+            <div key={tipo.label} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 font-medium">
               <span className={cn("w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold border", tipo.color)}>{tipo.label}</span> {tipo.full}
             </div>
           ))}

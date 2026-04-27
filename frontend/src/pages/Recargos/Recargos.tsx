@@ -34,15 +34,15 @@ const extraerHora = (hora: string | null | undefined): string => {
 
 // Columnas de recargos para la tabla
 const COLS = [
-  { key: 'D', label: 'D', title: 'Dominicales Diurnos', color: 'text-amber-700 bg-amber-50' },
-  { key: 'F', label: 'F', title: 'Festivos Diurnos', color: 'text-orange-700 bg-orange-50' },
-  { key: 'RNO', label: 'R N O', title: 'Recargo Nocturno Ordinario', color: 'text-blue-700 bg-blue-50' },
-  { key: 'RNF', label: 'R N F', title: 'Recargo Nocturno Festivo', color: 'text-indigo-700 bg-indigo-50' },
-  { key: 'HEOD', label: 'HEOD', title: 'H. Extra Ordinaria Diurna', color: 'text-rose-700 bg-rose-50' },
-  { key: 'HEON', label: 'HEON', title: 'H. Extra Ordinaria Nocturna', color: 'text-rose-700 bg-rose-50' },
-  { key: 'HEFD', label: 'HEFD', title: 'H. Extra Festiva Diurna', color: 'text-purple-700 bg-purple-50' },
-  { key: 'HEFN', label: 'HEFN', title: 'H. Extra Festiva Nocturna', color: 'text-purple-700 bg-purple-50' },
-  { key: 'thl', label: 'THL', title: 'Total Horas Laboradas', color: 'text-green-700 bg-green-50 font-bold' },
+  { key: 'D', label: 'D', title: 'Dominicales Diurnos', color: 'text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50' },
+  { key: 'F', label: 'F', title: 'Festivos Diurnos', color: 'text-orange-700 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800/50' },
+  { key: 'RNO', label: 'R N O', title: 'Recargo Nocturno Ordinario', color: 'text-blue-700 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800/50' },
+  { key: 'RNF', label: 'R N F', title: 'Recargo Nocturno Festivo', color: 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-400 dark:border-indigo-800/50' },
+  { key: 'HEOD', label: 'HEOD', title: 'H. Extra Ordinaria Diurna', color: 'text-rose-700 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800/50' },
+  { key: 'HEON', label: 'HEON', title: 'H. Extra Ordinaria Nocturna', color: 'text-rose-700 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800/50' },
+  { key: 'HEFD', label: 'HEFD', title: 'H. Extra Festiva Diurna', color: 'text-purple-700 bg-purple-50 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800/50' },
+  { key: 'HEFN', label: 'HEFN', title: 'H. Extra Festiva Nocturna', color: 'text-purple-700 bg-purple-50 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800/50' },
+  { key: 'thl', label: 'THL', title: 'Total Horas Laboradas', color: 'text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/50 font-bold' },
 ] as const;
 
 type ColKey = typeof COLS[number]['key'];
@@ -297,15 +297,15 @@ export default function ReporteRecargos() {
             <FileSpreadsheet className="h-7 w-7 text-emerald-600" />
             Reporte de Horas y Recargos
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">Desglose de horas, dominicales, nocturnos y extras por empleado</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">Desglose de horas, dominicales, nocturnos y extras por empleado</p>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex items-center gap-2 text-sm text-slate-500 bg-slate-50 border rounded-lg px-3 py-2">
+          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-lg px-3 py-2">
             <Calculator className="h-4 w-4 text-indigo-500" />
-            <span>Inicio nocturno: <strong>{parametros.horaInicioNocturna}:00</strong></span>
+            <span>Inicio nocturno: <strong className="dark:text-slate-300">{parametros.horaInicioNocturna}:00</strong></span>
             <span className="mx-1">·</span>
-            <span>Máx. extras: <strong>{parametros.maximoHorasExtras}h</strong></span>
+            <span>Máx. extras: <strong className="dark:text-slate-300">{parametros.maximoHorasExtras}h</strong></span>
           </div>
           {empSeleccionado && filas.length > 0 && (
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -336,29 +336,29 @@ export default function ReporteRecargos() {
       </div>
 
       {/* Filtros – ocultos al imprimir */}
-      <Card className="shadow-sm border-slate-200 print:hidden">
+      <Card className="shadow-sm border-slate-200 dark:border-slate-700 dark:bg-slate-800 print:hidden">
         <CardContent className="pt-5 pb-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Fecha Inicio</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Fecha Inicio</label>
               <input
                 type="date"
                 value={fechaInicio}
                 onChange={e => setFechaInicio(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Fecha Fin</label>
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Fecha Fin</label>
               <input
                 type="date"
                 value={fechaFin}
                 onChange={e => setFechaFin(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 dark:text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
             </div>
             <div className="md:col-span-1">
-              <Label className="font-bold text-slate-700 flex items-center gap-2 mb-2">
+              <Label className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 mb-2">
                 <Users className="h-4 w-4 text-indigo-500" /> Colaborador
               </Label>
               <Select
@@ -371,12 +371,12 @@ export default function ReporteRecargos() {
                   }
                 }}
               >
-                <SelectTrigger className="h-10 bg-white border-slate-200">
+                <SelectTrigger className="h-10 bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 dark:text-slate-200">
                   <SelectValue placeholder="Seleccione un colaborador..." />
                 </SelectTrigger>
                 <SelectContent className="w-[var(--radix-select-trigger-width)]">
                   <div
-                    className="flex items-center px-3 pb-2 border-b"
+                    className="flex items-center px-3 pb-2 border-b dark:border-slate-700"
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <Search className="h-4 w-4 mr-2 text-slate-400" />
@@ -421,12 +421,12 @@ export default function ReporteRecargos() {
 
       {/* Información de parámetros */}
       {!empSeleccionado && (
-        <Card className="border-dashed py-20 text-center bg-slate-50/50 print:hidden">
+        <Card className="border-dashed dark:border-slate-700 py-20 text-center bg-slate-50/50 dark:bg-slate-800/30 print:hidden">
           <div className="flex justify-center mb-4">
-            <CalendarDays className="h-14 w-14 text-slate-300" />
+            <CalendarDays className="h-14 w-14 text-slate-300 dark:text-slate-600" />
           </div>
-          <h3 className="text-lg font-medium text-slate-700">Seleccione un empleado</h3>
-          <p className="text-slate-400 max-w-md mx-auto mt-1 text-sm">
+          <h3 className="text-lg font-medium text-slate-700 dark:text-slate-400">Seleccione un empleado</h3>
+          <p className="text-slate-400 dark:text-slate-500 max-w-md mx-auto mt-1 text-sm">
             Busque por nombre o cédula para ver el desglose de recargos en el periodo seleccionado.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-4">
