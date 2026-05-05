@@ -210,7 +210,36 @@ async function stopPostgres() {
     console.log('✅ PostgreSQL detenido');
 }
 
-function startExpressServer() {
+function getAvailablePort(startingAt = 5000) {
+    return new Promise((resolve, reject) => {
+        let port = startingAt;
+
+        function isPortFree(p) {
+            return new Promise((res) => {
+                const server = net.createServer();
+                server.unref();
+                server.on('error', () => res(false));
+                server.listen(p, () => {
+                    server.close(() => res(true));
+                });
+            });
+        }
+
+        async function findPort() {
+            while (port < startingAt + 100) {
+                if (await isPortFree(port)) {
+                    return resolve(port);
+                }
+                port++;
+            }
+            reject(new Error('No se encontraron puertos disponibles en el rango especificado.'));
+        }
+
+        findPort();
+    });
+}
+
+function startExpressServer(expressPort) {
     const serverPath = isDev
         ? path.join(__dirname, '../dist/server.js')
         : path.join(process.resourcesPath, 'app.asar.unpacked', 'dist', 'server.js');
@@ -232,10 +261,10 @@ function startExpressServer() {
             ...process.env,
             ELECTRON_RUN_AS_NODE: '1',
             NODE_ENV: 'production',
-            PORT: '5000',
+            PORT: expressPort.toString(),
             DATABASE_URL: process.env.DATABASE_URL,
             FRONTEND_PATH: frontendPath,
-            DB_ALREADY_INITIALIZED: fs.existsSync(DB_INITIALIZED_FLAG) ? '1' : '0'
+            DB_ALREADY_INITIALIZED: '0'
         },
         cwd: path.dirname(serverPath),
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -344,13 +373,15 @@ async function createWindow() {
         }
 
         console.log('\n3️⃣ Iniciando servidor Express...');
-        startExpressServer();
+        const expressPort = await getAvailablePort(5000);
+        console.log(`📍 Puerto libre encontrado: ${expressPort}`);
+        startExpressServer(expressPort);
 
         console.log('\n4️⃣ Esperando respuesta del servidor...');
-        await waitForServer('http://127.0.0.1:5000/health', 30000);
+        await waitForServer(`http://127.0.0.1:${expressPort}/health`, 30000);
 
         console.log('✅ Navegando a la aplicación...');
-        mainWindow.loadURL('http://127.0.0.1:5000');
+        mainWindow.loadURL(`http://127.0.0.1:${expressPort}`);
         console.log('✅ APLICACIÓN INICIADA EXITOSAMENTE');
 
     } catch (error) {

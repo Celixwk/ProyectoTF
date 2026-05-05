@@ -30,12 +30,14 @@ export interface ParametrosCalculo {
     horaInicioNocturna: number; // hora militar: 21 = 9PM
     horaFinNocturna: number;    // siempre 6 (AM del día siguiente)
     maximoHorasExtras: number;  // límite de horas extras acumuladas en el periodo
+    metaHorasDiarias: number;   // límite de horas antes de empezar a marcar extras en el día
 }
 
 export const PARAMETROS_DEFAULT: ParametrosCalculo = {
     horaInicioNocturna: 21,
     horaFinNocturna: 6,
     maximoHorasExtras: 48,
+    metaHorasDiarias: 8,
 };
 
 /**
@@ -83,23 +85,22 @@ function minutosNocturnos(
 }
 
 /**
- * Calcula el desglose de recargos para un único segmento horario turno.
+ * Calcula el desglose de recargos para un único segmento horario dado en minutos absolutos.
  * Retorna las categorías en horas decimales.
  * 
- * @param horaEntrada  "HH:MM"
- * @param horaSalida   "HH:MM" (puede ser < horaEntrada si cruza medianoche)
+ * @param inicioMin    Minutos desde la medianoche del inicio del turno
+ * @param finMin       Minutos desde la medianoche del fin del turno (puede ser > 1440 si cruza día)
  * @param esDominical  true si es domingo
  * @param esFestivo    true si es festivo (distinto a domingo, o puede solaparse)
- * @param horasExtrasAcumuladas  horas extras ya usadas en el periodo
  * @param parametros   Configuración del sistema
  */
 function calcularSegmento(
-    horaEntrada: string,
-    horaSalida: string,
+    inicioMin: number,
+    finMin: number,
     esDominical: boolean,
     esFestivo: boolean,
     parametros: ParametrosCalculo
-): DesgloseDia & { extrasGeneradas: number } {
+): DesgloseDia {
     const resultado: DesgloseDia = {
         thl: 0, ord: 0,
         D: 0, F: 0,
@@ -107,14 +108,8 @@ function calcularSegmento(
         HEOD: 0, HEON: 0, HEFD: 0, HEFN: 0,
     };
 
-    const inicioMin = horaAMinutos(horaEntrada);
-    let finMin = horaAMinutos(horaSalida);
-
-    // Si la hora de salida es menor o igual a la de entrada → turno que cruza medianoche
-    if (finMin <= inicioMin) finMin += 1440;
-
     const totalMin = finMin - inicioMin;
-    if (totalMin <= 0) return { ...resultado, extrasGeneradas: 0 };
+    if (totalMin <= 0) return resultado;
 
     const totalHoras = totalMin / 60;
     resultado.thl = totalHoras;
@@ -130,10 +125,6 @@ function calcularSegmento(
 
     const esDomFest = esDominical || esFestivo;
 
-    // Por el momento simplificamos: el motor detecta el recargo según tipo de día.
-    // Las horas extras se calcularán en el nivel superior (periodo) comparando
-    // horas acumuladas vs meta del periodo.
-
     if (esDomFest) {
         // Festivo / Dominical
         resultado.D = esDominical && !esFestivo ? diurHoras : 0;
@@ -145,7 +136,7 @@ function calcularSegmento(
         resultado.RNO = noctHoras;
     }
 
-    return { ...resultado, extrasGeneradas: 0 };
+    return resultado;
 }
 
 export interface TurnoParaCalculo {
@@ -156,52 +147,127 @@ export interface TurnoParaCalculo {
     hora_salida_2?: string | null;
     es_festivo: boolean;
     es_domingo: boolean;
+    es_festivo_sig?: boolean;
+    es_domingo_sig?: boolean;
     codigo_turno?: string;
     tipo_turno?: string;
 }
 
 /**
  * Dado un turno completo (incluyendo doble segmento), calcula el desglose de recargos.
- * horasExtrasDisponibles = espacio restante del cupo de extras del periodo.
+ * Realiza la partición cronológica de las horas si el turno excede la meta diaria.
  */
 export function calcularDesgloseTurno(
     turno: TurnoParaCalculo,
     parametros: ParametrosCalculo = PARAMETROS_DEFAULT
 ): DesgloseDia {
-    // Segmento 1 siempre presente
-    const seg1 = calcularSegmento(
-        turno.hora_entrada,
-        turno.hora_salida,
-        turno.es_domingo,
-        turno.es_festivo,
-        parametros
-    );
+    const desgloseFinal: DesgloseDia = {
+        thl: 0, ord: 0, D: 0, F: 0, RNO: 0, RNF: 0, HEOD: 0, HEON: 0, HEFD: 0, HEFN: 0
+    };
 
-    let desglose = { ...seg1 };
+    const limiteMinutosDiarios = parametros.metaHorasDiarias * 60;
+    let minutosAcumulados = 0;
 
-    // Segmento 2 (turnos partidos como T6: 08-12 & 14-18)
-    if (turno.hora_entrada_2 && turno.hora_salida_2) {
-        const seg2 = calcularSegmento(
-            turno.hora_entrada_2,
-            turno.hora_salida_2,
-            turno.es_domingo,
-            turno.es_festivo,
-            parametros
-        );
+    const procesarSegmento = (inicio: number, fin: number) => {
+        if (fin <= inicio) return;
+        const duracion = fin - inicio;
 
-        desglose.thl += seg2.thl;
-        desglose.ord += seg2.ord;
-        desglose.D += seg2.D;
-        desglose.F += seg2.F;
-        desglose.RNO += seg2.RNO;
-        desglose.RNF += seg2.RNF;
-        desglose.HEOD += seg2.HEOD;
-        desglose.HEON += seg2.HEON;
-        desglose.HEFD += seg2.HEFD;
-        desglose.HEFN += seg2.HEFN;
+        const calcularConCruceMedianoche = (segInicio: number, segFin: number) => {
+            const des = { thl: 0, ord: 0, D: 0, F: 0, RNO: 0, RNF: 0, HEOD: 0, HEON: 0, HEFD: 0, HEFN: 0 };
+            
+            const sumarObj = (a: any, b: any) => {
+                for (const k in a) { a[k] += b[k]; }
+            };
+
+            if (segFin > 1440 && segInicio < 1440) {
+                // Divide en medianoche
+                const dia1 = calcularSegmento(segInicio, 1440, turno.es_domingo, turno.es_festivo, parametros);
+                const dia2 = calcularSegmento(1440, segFin, turno.es_domingo_sig || false, turno.es_festivo_sig || false, parametros);
+                sumarObj(des, dia1);
+                sumarObj(des, dia2);
+            } else if (segInicio >= 1440) {
+                // Todo es del día siguiente
+                const dia2 = calcularSegmento(segInicio, segFin, turno.es_domingo_sig || false, turno.es_festivo_sig || false, parametros);
+                sumarObj(des, dia2);
+            } else {
+                // Todo es del día original
+                const dia1 = calcularSegmento(segInicio, segFin, turno.es_domingo, turno.es_festivo, parametros);
+                sumarObj(des, dia1);
+            }
+            return des;
+        };
+
+        if (minutosAcumulados >= limiteMinutosDiarios) {
+            // El segmento es completamente EXTRA (excede la jornada diaria)
+            const seg = calcularConCruceMedianoche(inicio, fin);
+            desgloseFinal.thl += seg.thl;
+            
+            // Para extras, si cruzó la medianoche o diferentes días, las extraídas ya vienen combinadas.
+            // Una simplificación precisa es que las horas generadas (D, F, RNF) son extras festivas
+            // y las (ord, RNO) son extras ordinarias, independientemente de qué día provinieron.
+            desgloseFinal.HEFD += seg.D + seg.F;
+            desgloseFinal.HEFN += seg.RNF;
+            desgloseFinal.HEOD += seg.ord;
+            desgloseFinal.HEON += seg.RNO;
+            
+            minutosAcumulados += duracion;
+        } else if (minutosAcumulados + duracion <= limiteMinutosDiarios) {
+            // El segmento es completamente ORDINARIO/FESTIVO (dentro de la jornada diaria)
+            const seg = calcularConCruceMedianoche(inicio, fin);
+            desgloseFinal.thl += seg.thl;
+            desgloseFinal.ord += seg.ord;
+            desgloseFinal.D += seg.D;
+            desgloseFinal.F += seg.F;
+            desgloseFinal.RNO += seg.RNO;
+            desgloseFinal.RNF += seg.RNF;
+            minutosAcumulados += duracion;
+        } else {
+            // El segmento cruza el límite diario, se divide en dos:
+            const minutosRestantes = limiteMinutosDiarios - minutosAcumulados;
+            const puntoCorte = inicio + minutosRestantes;
+            
+            // 1. Parte Ordinaria (hasta llenar las 8 horas)
+            const segStd = calcularConCruceMedianoche(inicio, puntoCorte);
+            desgloseFinal.thl += segStd.thl;
+            desgloseFinal.ord += segStd.ord;
+            desgloseFinal.D += segStd.D;
+            desgloseFinal.F += segStd.F;
+            desgloseFinal.RNO += segStd.RNO;
+            desgloseFinal.RNF += segStd.RNF;
+
+            // 2. Parte Extra (el resto del turno)
+            const segExt = calcularConCruceMedianoche(puntoCorte, fin);
+            desgloseFinal.thl += segExt.thl;
+            
+            desgloseFinal.HEFD += segExt.D + segExt.F;
+            desgloseFinal.HEFN += segExt.RNF;
+            desgloseFinal.HEOD += segExt.ord;
+            desgloseFinal.HEON += segExt.RNO;
+
+            minutosAcumulados += duracion;
+        }
+    };
+
+    // Segmento 1
+    if (turno.hora_entrada && turno.hora_salida) {
+        const inicio1 = horaAMinutos(turno.hora_entrada);
+        let fin1 = horaAMinutos(turno.hora_salida);
+        if (fin1 <= inicio1) fin1 += 1440;
+        procesarSegmento(inicio1, fin1);
+
+        // Segmento 2 (turnos partidos como T6: 08-12 & 14-18)
+        if (turno.hora_entrada_2 && turno.hora_salida_2) {
+            let inicio2 = horaAMinutos(turno.hora_entrada_2);
+            let fin2 = horaAMinutos(turno.hora_salida_2);
+            
+            if (inicio2 < inicio1 && fin1 > 1440) inicio2 += 1440; 
+            if (fin2 <= inicio2) fin2 += 1440;
+            
+            procesarSegmento(inicio2, fin2);
+        }
     }
 
-    return desglose;
+    return desgloseFinal;
 }
 
 /**

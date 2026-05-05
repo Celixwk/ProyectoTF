@@ -33,6 +33,7 @@ export default function ConfiguracionProgramacion() {
   const [metaHorasInput, setMetaHorasInput] = useState<string>('');
   const [inicioNocturnoInput, setInicioNocturnoInput] = useState<string>('');
   const [maximoExtrasInput, setMaximoExtrasInput] = useState<string>('');
+  const [metaHorasDiariasInput, setMetaHorasDiariasInput] = useState<string>('');
   const [maxDiasConsecutivosInput, setMaxDiasConsecutivosInput] = useState<string>('');
   
   // States para turnos globales y preferencias
@@ -62,6 +63,12 @@ export default function ConfiguracionProgramacion() {
   const { data: metaHorasData, refetch: refetchMetaHoras } = useQuery({
     queryKey: ['parametro-meta-horas'],
     queryFn: () => parametrizacionService.obtener('META_HORAS_PERIODO'),
+    staleTime: 60_000
+  });
+
+  const { data: metaHorasDiariasData, refetch: refetchMetaHorasDiarias } = useQuery({
+    queryKey: ['parametro-meta-horas-diarias'],
+    queryFn: () => parametrizacionService.obtener('META_HORAS_DIARIAS'),
     staleTime: 60_000
   });
 
@@ -120,6 +127,14 @@ export default function ConfiguracionProgramacion() {
       setMetaHorasInput(String(Number(metaHorasData.horas_maximas)));
     }
   }, [metaHorasData]);
+
+  useEffect(() => {
+    if (metaHorasDiariasData?.horas_maximas !== undefined) {
+      setMetaHorasDiariasInput(String(Number(metaHorasDiariasData.horas_maximas)));
+    } else if (!metaHorasDiariasData) {
+      setMetaHorasDiariasInput('8');
+    }
+  }, [metaHorasDiariasData]);
 
   useEffect(() => {
     // Si no existe, sugerir 21 (9:00 PM)
@@ -190,6 +205,15 @@ export default function ConfiguracionProgramacion() {
       toast.success('Meta de horas guardada correctamente');
     },
     onError: () => toast.error('Error al guardar la meta de horas'),
+  });
+
+  const guardarMetaHorasDiariasMutation = useMutation({
+    mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_DIARIAS', { horas_maximas: horas }),
+    onSuccess: () => {
+      refetchMetaHorasDiarias();
+      toast.success('Límite de horas diarias guardado');
+    },
+    onError: () => toast.error('Error al guardar el límite de horas diarias'),
   });
 
   const guardarInicioNocturnaMutation = useMutation({
@@ -678,7 +702,7 @@ export default function ConfiguracionProgramacion() {
             Defina las variables fijas de control. Estos valores se utilizan automáticamente en todos los cálculos del sistema, como el reporte de desgloses y recargos.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
 
             {/* META HORAS PERIODO */}
             <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
@@ -782,6 +806,39 @@ export default function ConfiguracionProgramacion() {
               </div>
             </div>
 
+            {/* META HORAS DIARIAS */}
+            <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
+              <div>
+                <Label className="text-[11px] uppercase text-slate-500 font-bold block mb-1">
+                  Límite Horas Diarias (Extras) <Clock className="inline h-3 w-3 ml-1 text-emerald-500" />
+                </Label>
+                <span className="text-xs text-slate-400 leading-tight block mb-3">Tope de horas de un turno normal. El excedente será Hora Extra. Ej: 8.</span>
+              </div>
+              <div className="flex items-center gap-2 mt-auto">
+                <input
+                  type="number"
+                  min="1"
+                  max="24"
+                  value={metaHorasDiariasInput}
+                  onChange={(e) => setMetaHorasDiariasInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Ej: 8"
+                  className="w-full h-10 bg-white dark:bg-slate-800 rounded-lg px-3 font-semibold text-emerald-700 dark:text-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all border border-slate-200 dark:border-slate-700"
+                />
+                <Button
+                  onClick={() => {
+                    const val = parseInt(metaHorasDiariasInput);
+                    if (!isNaN(val) && val > 0 && val <= 24) guardarMetaHorasDiariasMutation.mutate(val);
+                    else toast.error('Ingrese un número válido (1-24)');
+                  }}
+                  disabled={guardarMetaHorasDiariasMutation.isPending}
+                  size="icon"
+                  className="h-10 w-10 shrink-0 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                  title="Guardar"
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
             {/* MAXIMO DIAS CONSECUTIVOS */}
             <div className="flex flex-col gap-2 p-4 bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-700 rounded-xl">
               <div>

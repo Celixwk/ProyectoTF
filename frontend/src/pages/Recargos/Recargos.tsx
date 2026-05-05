@@ -72,12 +72,18 @@ export default function ReporteRecargos() {
     queryFn: () => parametrizacionService.obtener('META_HORAS_PERIODO'),
     staleTime: 60_000,
   });
+  const { data: dataMetaDiaria } = useQuery({
+    queryKey: ['parametro-meta-horas-diarias'],
+    queryFn: () => parametrizacionService.obtener('META_HORAS_DIARIAS'),
+    staleTime: 60_000,
+  });
 
   const parametros = useMemo(() => ({
     horaInicioNocturna: dataNocturna?.horas_maximas !== undefined ? Number(dataNocturna.horas_maximas) : PARAMETROS_DEFAULT.horaInicioNocturna,
     horaFinNocturna: PARAMETROS_DEFAULT.horaFinNocturna,
     maximoHorasExtras: dataMaxExtras?.horas_maximas !== undefined ? Number(dataMaxExtras.horas_maximas) : PARAMETROS_DEFAULT.maximoHorasExtras,
-  }), [dataNocturna, dataMaxExtras]);
+    metaHorasDiarias: dataMetaDiaria?.horas_maximas !== undefined ? Number(dataMetaDiaria.horas_maximas) : PARAMETROS_DEFAULT.metaHorasDiarias,
+  }), [dataNocturna, dataMaxExtras, dataMetaDiaria]);
 
   const metaHoras = dataMeta?.horas_maximas !== undefined ? Number(dataMeta.horas_maximas) : 192;
 
@@ -171,6 +177,12 @@ export default function ReporteRecargos() {
         const esDomingo = current.getUTCDay() === 0;
         const { esFestivo } = FestivosColombia.esFestivo(fechaIso);
 
+        const fechaSig = new Date(current);
+        fechaSig.setUTCDate(fechaSig.getUTCDate() + 1);
+        const fechaSigIso = fechaSig.toISOString().split('T')[0];
+        const esDomingoSig = fechaSig.getUTCDay() === 0;
+        const { esFestivo: esFestivoSig } = FestivosColombia.esFestivo(fechaSigIso);
+
         const d = turnosBrutosMap.get(fechaIso);
         
         if (d) {
@@ -183,6 +195,8 @@ export default function ReporteRecargos() {
                 hora_salida_2: extraerHora(d.turno?.hora_salida_2 || catalogoTurno?.hora_salida_2),
                 es_festivo: esFestivo,
                 es_domingo: esDomingo,
+                es_festivo_sig: esFestivoSig,
+                es_domingo_sig: esDomingoSig,
                 codigo_turno: d.turno?.tipo_turno || d.codigo_turno || catalogoTurno?.codigo || '',
                 tipo_turno: d.turno?.tipo_turno || d.tipo_turno || catalogoTurno?.tipo_turno || '',
             });
@@ -195,6 +209,8 @@ export default function ReporteRecargos() {
                     hora_salida: '',
                     es_festivo: esFestivo,
                     es_domingo: esDomingo,
+                    es_festivo_sig: esFestivoSig,
+                    es_domingo_sig: esDomingoSig,
                     codigo_turno: nov.codigo_novedad || 'NOV',
                     tipo_turno: nov.tipo || 'NOVEDAD'
                 });
@@ -205,6 +221,8 @@ export default function ReporteRecargos() {
                     hora_salida: '',
                     es_festivo: esFestivo,
                     es_domingo: esDomingo,
+                    es_festivo_sig: esFestivoSig,
+                    es_domingo_sig: esDomingoSig,
                     codigo_turno: 'D',
                     tipo_turno: 'DESCANSO'
                 });

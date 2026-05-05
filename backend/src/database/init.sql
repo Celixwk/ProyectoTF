@@ -169,6 +169,8 @@ CREATE TABLE "detalle_programacion" (
     "id_empleado" INTEGER NOT NULL,
     "id_usuario_registro" INTEGER,
     "origen_registro" VARCHAR(20) DEFAULT 'Sistema',
+    "hora_entrada_real" TIMESTAMP(6),
+    "hora_salida_real" TIMESTAMP(6),
 
     CONSTRAINT "detalle_programacion_pkey" PRIMARY KEY ("id_detalle_programacion")
 );
