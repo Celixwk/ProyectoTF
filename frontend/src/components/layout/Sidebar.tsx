@@ -4,9 +4,7 @@ import {
   Clock,
   Calendar,
   Settings,
-  Building2,
   CalendarCheck,
-  ClipboardList,
   DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,13 +12,10 @@ import { cn } from '@/lib/utils';
 const navigation = [
   { name: 'Empleados', href: '/empleados', icon: Users },
   { name: 'Turnos', href: '/turnos', icon: Clock },
-  { name: 'Vist. Programación', href: '/programacion', icon: Calendar },
-  { name: 'Generar Programación', href: '/programacion-areas', icon: Building2 },
-  { name: 'Gestión Mensual', href: '/gestion-mensual', icon: ClipboardList },
+  { name: 'Programación', href: '/programacion', icon: Calendar },
   { name: 'Recargos', href: '/recargos', icon: DollarSign },
-  // { name: 'Novedades', href: '/novedades', icon: FileText },
   { name: 'Configuración', href: '/configuracion', icon: Settings },
-  { name: 'Config. Programación y Novedades', href: '/configuracion-programacion', icon: CalendarCheck },
+  { name: 'Config. Programación', href: '/configuracion-programacion', icon: CalendarCheck },
 ];
 
 export default function Sidebar() {

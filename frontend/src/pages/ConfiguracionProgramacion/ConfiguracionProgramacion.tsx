@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { consultasService, empleadosService, areasService, novedadesService, programacionService, parametrizacionService, turnosService } from '@/services/api.service';
+import { consultasService, empleadosService, areasService, programacionService, parametrizacionService, turnosService } from '@/services/api.service';
 import { BannerNecesidadRegenerar } from '@/utils/BannerNecesidadRegenerar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Save, Users, Settings2, ArrowRight, Calendar as CalendarIcon, AlertCircle, Trash2, Search, Clock } from 'lucide-react';
-import { format, eachDayOfInterval, isSameDay, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Save, Users, Settings2, Calendar as CalendarIcon, AlertCircle, Search, Clock } from 'lucide-react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import type { EmpleadoCompleto, Area, Turno } from '@/types/api.types';
 
@@ -24,11 +23,8 @@ export default function ConfiguracionProgramacion() {
   const queryClient = useQueryClient();
   const [idEmpleadoSeleccionado, setIdEmpleadoSeleccionado] = useState<number | null>(null);
   const [busquedaEmpleado, setBusquedaEmpleado] = useState('');
-  const [tipoSeleccionado, setTipoSeleccionado] = useState<number | undefined>(undefined);
-  const [novedades, setNovedades] = useState<Array<{ fecha: Date; id_tipo: number; id_novedad_empleado?: number }>>([]);
   const [areasPermitidas, setAreasPermitidas] = useState<number[]>([]);
   const [maxTrabajadoresPorArea, setMaxTrabajadoresPorArea] = useState<Record<number, string>>({});
-  const [cambiosPendientes, setCambiosPendientes] = useState<Map<string, any>>(new Map());
   const [bannerIgnorado, setBannerIgnorado] = useState(false);
   const [metaHorasInput, setMetaHorasInput] = useState<string>('');
   const [inicioNocturnoInput, setInicioNocturnoInput] = useState<string>('');
@@ -162,41 +158,6 @@ export default function ConfiguracionProgramacion() {
     }
   }, [maxDiasConsecutivosData]);
 
-  const { data: tiposNovedadData } = useQuery({
-    queryKey: ['tipos-novedades'],
-    queryFn: () => novedadesService.listarTipos(),
-    staleTime: 60_000
-  });
-
-  const tiposNovedad = useMemo(() => {
-    if (!tiposNovedadData) return [];
-    const PALETAS = [
-      { color: 'bg-blue-600 text-white', bgPill: 'bg-blue-600' },
-      { color: 'bg-emerald-600 text-white', bgPill: 'bg-emerald-600' },
-      { color: 'bg-rose-600 text-white', bgPill: 'bg-rose-600' },
-      { color: 'bg-amber-500 text-black', bgPill: 'bg-amber-500' },
-      { color: 'bg-slate-800 text-white', bgPill: 'bg-slate-800' },
-      { color: 'bg-violet-600 text-white', bgPill: 'bg-violet-600' },
-      { color: 'bg-pink-600 text-white', bgPill: 'bg-pink-600' },
-      { color: 'bg-cyan-600 text-white', bgPill: 'bg-cyan-600' },
-    ];
-    return tiposNovedadData.map((t: any, index: number) => {
-      const paleta = PALETAS[index % PALETAS.length];
-      return {
-        id: t.id_novedad_tipo,
-        nombre: t.nombre_novedad,
-        color: paleta.color,
-        bgPill: paleta.bgPill,
-        corta: t.codigo || t.nombre_novedad.substring(0, 3).toUpperCase()
-      };
-    });
-  }, [tiposNovedadData]);
-
-  useEffect(() => {
-    if (tiposNovedad.length > 0 && (!tipoSeleccionado || !tiposNovedad.find((t: any) => t.id === tipoSeleccionado))) {
-      setTipoSeleccionado(tiposNovedad[0].id);
-    }
-  }, [tiposNovedad, tipoSeleccionado]);
 
   const guardarMetaHorasMutation = useMutation({
     mutationFn: (horas: number) => parametrizacionService.guardar('META_HORAS_PERIODO', { horas_maximas: horas }),
@@ -286,15 +247,6 @@ export default function ConfiguracionProgramacion() {
     queryFn: () => areasService.listar(),
   });
 
-  const { data: novedadesMes } = useQuery({
-    queryKey: ['novedades-completas', idEmpleadoSeleccionado, fechaInicio, fechaFin],
-    queryFn: () => consultasService.obtenerNovedadesCompletas({
-      id_empleado: idEmpleadoSeleccionado!,
-      inicio: fechaInicio,
-      fin: fechaFin
-    }),
-    enabled: !!idEmpleadoSeleccionado && !!fechaInicio && !!fechaFin
-  });
 
   const empleados = empleadosData?.empleados || [];
 
@@ -308,13 +260,6 @@ export default function ConfiguracionProgramacion() {
 
   const empleadoSeleccionado = empleados?.find((e: any) => e.id_empleado === idEmpleadoSeleccionado);
 
-  const diasEnRango = useMemo(() => {
-    try {
-      return eachDayOfInterval({ start: parseISO(fechaInicio), end: parseISO(fechaFin) });
-    } catch {
-      return [];
-    }
-  }, [fechaInicio, fechaFin]);
 
   useEffect(() => {
     if (areas?.length) {
@@ -328,77 +273,13 @@ export default function ConfiguracionProgramacion() {
 
   useEffect(() => {
     if (!idEmpleadoSeleccionado || !empleadoSeleccionado) {
-      setNovedades([]);
       setAreasPermitidas([]);
-      setCambiosPendientes(new Map());
       return;
     }
     if (isSaving.current) return;
-
     setAreasPermitidas(empleadoSeleccionado.areas_permitidas || []);
-    const dataArray = Array.isArray(novedadesMes) ? novedadesMes : (novedadesMes?.novedades || []);
-    const actualesEnDb = dataArray
-      .filter((n: any) => Number(n.id_empleado) === idEmpleadoSeleccionado)
-      .map((n: any) => ({
-        fecha: parseFechaSinAjuste(n.fecha)!,
-        id_tipo: n.id_novedad_tipo,
-        id_novedad_empleado: n.id_novedad_empleado
-      }));
+  }, [idEmpleadoSeleccionado, empleadoSeleccionado]);
 
-    setNovedades(actualesEnDb);
-    setCambiosPendientes(new Map());
-  }, [idEmpleadoSeleccionado, empleadoSeleccionado, novedadesMes]);
-
-  const handleDiaToggle = (fecha: Date) => {
-    if (!tipoSeleccionado) return;
-    const fechaStr = format(fecha, 'yyyy-MM-dd');
-    setNovedades(prev => {
-      const existe = prev.find(n => isSameDay(n.fecha, fecha));
-      const nuevosCambios = new Map(cambiosPendientes);
-
-      if (existe) {
-        if (existe.id_tipo === tipoSeleccionado) {
-          nuevosCambios.set(fechaStr, {
-            fecha: fechaStr,
-            id_tipo: existe.id_tipo,
-            id_novedad_empleado: existe.id_novedad_empleado,
-            tipo: 'eliminar'
-          });
-          setCambiosPendientes(nuevosCambios);
-          return prev.filter(n => !isSameDay(n.fecha, fecha));
-        }
-        nuevosCambios.set(fechaStr, {
-          fecha: fechaStr,
-          id_tipo: tipoSeleccionado,
-          id_novedad_empleado: existe.id_novedad_empleado,
-          tipo: 'modificar'
-        });
-        setCambiosPendientes(nuevosCambios);
-        return prev.map(n => isSameDay(n.fecha, fecha) ? { ...n, id_tipo: tipoSeleccionado } : n);
-      }
-
-      nuevosCambios.set(fechaStr, { fecha: fechaStr, id_tipo: tipoSeleccionado, tipo: 'crear' });
-      setCambiosPendientes(nuevosCambios);
-      return [...prev, { fecha, id_tipo: tipoSeleccionado }];
-    });
-  };
-
-  const handleLimpiarMes = () => {
-    if (novedades.length === 0) return;
-    const nuevosCambios = new Map(cambiosPendientes);
-    novedades.forEach(n => {
-      const key = format(n.fecha, 'yyyy-MM-dd');
-      nuevosCambios.set(key, {
-        fecha: key,
-        id_tipo: n.id_tipo,
-        id_novedad_empleado: n.id_novedad_empleado,
-        tipo: 'eliminar'
-      });
-    });
-    setCambiosPendientes(nuevosCambios);
-    setNovedades([]);
-    toast.info("Días marcados para eliminar localmente. Presione Guardar.");
-  };
 
   const handleCapacidadChange = (id_area: number, value: string) => {
     const numericValue = value.replace(/[^0-9]/g, '');
@@ -423,36 +304,23 @@ export default function ConfiguracionProgramacion() {
     mutationFn: async (payload: { idEmpleado: number, areas: number[] }) => {
       isSaving.current = true;
       await empleadosService.actualizar(payload.idEmpleado, { areas_permitidas: payload.areas });
-      if (cambiosPendientes.size > 0) {
-        const operaciones = Array.from(cambiosPendientes.values());
-        await novedadesService.sincronizar({
-          id_empleado: payload.idEmpleado,
-          operaciones
-        });
-      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['empleados-completos'] });
-      await queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
       await queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
-      await queryClient.invalidateQueries({ queryKey: ['programacion-consolidado'] });
-
       await queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
       await refetchAlertas();
-
-      setCambiosPendientes(new Map());
       setBannerIgnorado(false);
-      toast.success('Configuración sincronizada correctamente');
+      toast.success('Áreas de cobertura guardadas correctamente');
       setTimeout(() => { isSaving.current = false; }, 500);
     },
     onError: () => {
       isSaving.current = false;
-      toast.error('Error al sincronizar configuración');
+      toast.error('Error al guardar áreas de cobertura');
     }
   });
 
   const hayCambiosEnAreas = JSON.stringify([...areasPermitidas].sort()) !== JSON.stringify([...(empleadoSeleccionado?.areas_permitidas || [])].sort());
-  const hayCambiosPendientes = cambiosPendientes.size > 0;
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
@@ -471,11 +339,6 @@ export default function ConfiguracionProgramacion() {
               <span className="text-[10px] uppercase font-bold text-slate-400 block px-1">Fin</span>
               <Input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="h-9 text-xs" />
             </div>
-          </div>
-          <div className="hidden sm:block text-slate-300 dark:text-slate-600"><ArrowRight className="h-5 w-5" /></div>
-          <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-xl border border-indigo-100 dark:border-indigo-800/50 min-w-[140px] text-center">
-            <p className="text-[10px] font-black text-indigo-400 dark:text-indigo-300 uppercase">Días en Rango</p>
-            <p className="text-lg font-black text-indigo-700 dark:text-indigo-400">{diasEnRango.length}</p>
           </div>
         </div>
       </header>
@@ -548,15 +411,22 @@ export default function ConfiguracionProgramacion() {
       </div>
 
       {idEmpleadoSeleccionado ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <Card className="lg:col-span-1 shadow-lg border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-            <CardHeader className="bg-slate-50/80 dark:bg-slate-800/80 border-b dark:border-slate-700 py-4">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <Card className="shadow-lg border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
+            <CardHeader className="bg-slate-50/80 dark:bg-slate-800/80 border-b dark:border-slate-700 py-4 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <Settings2 className="h-4 w-4" /> Áreas de Cobertura
               </CardTitle>
+              <Button
+                className="h-10 font-black px-6 bg-indigo-600 hover:bg-indigo-700 rounded-xl"
+                onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado!, areas: areasPermitidas })}
+                disabled={guardarTodoMutation.isPending || !hayCambiosEnAreas}
+              >
+                <Save className="h-4 w-4 mr-2" /> {guardarTodoMutation.isPending ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
+              </Button>
             </CardHeader>
             <CardContent className="p-4 bg-white dark:bg-slate-800">
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {areas?.map((area: Area) => {
                   const isChecked = areasPermitidas.includes(area.id_area);
                   const prefObj = preferenciasEmpleados[idEmpleadoSeleccionado] || {};
@@ -597,7 +467,7 @@ export default function ConfiguracionProgramacion() {
                               if (!t) return null;
                               return (
                                 <SelectItem key={t.id_turno} value={t.id_turno.toString()}>
-                                  <span className="font-black text-indigo-600">{t.tipo_turno}</span> 
+                                  <span className="font-black text-indigo-600">{t.tipo_turno}</span>
                                   <span className="text-[10px] text-slate-500 ml-2">
                                     [{t.hora_entrada?.substring(0,5)} - {t.hora_salida?.substring(0,5)}
                                     {t.hora_entrada_2 && t.hora_salida_2 ? ` y ${t.hora_entrada_2.substring(0,5)} - ${t.hora_salida_2.substring(0,5)}` : ''}]
@@ -615,79 +485,11 @@ export default function ConfiguracionProgramacion() {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="lg:col-span-2 shadow-lg border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50/80 dark:bg-slate-800/80 border-b dark:border-slate-700 gap-4 py-3">
-              <div className="flex items-center gap-4">
-                <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-300">Calendario de Disponibilidad</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleLimpiarMes}
-                  className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 h-8 font-bold text-xs uppercase"
-                >
-                  <Trash2 className="h-3 w-3 mr-1" /> Limpiar Mes
-                </Button>
-              </div>
-              <div className="flex bg-white dark:bg-slate-800 px-2 py-1 rounded-xl border dark:border-slate-700 shadow-sm items-center">
-                <Select
-                  value={tipoSeleccionado?.toString() || ""}
-                  onValueChange={v => setTipoSeleccionado(parseInt(v))}
-                >
-                  <SelectTrigger className="h-8 text-xs font-bold w-[200px] border-none bg-transparent shadow-none focus:ring-0 dark:text-slate-300">
-                    <SelectValue placeholder="Seleccione Novedad..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tiposNovedad.map((t: any) => (
-                      <SelectItem key={t.id} value={t.id.toString()} className="text-xs font-bold py-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-3 h-3 rounded-full ${t.bgPill}`}></span>
-                          {t.nombre}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 bg-white dark:bg-slate-800">
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-                {diasEnRango.map(fecha => {
-                  const fechaISO = format(fecha, 'yyyy-MM-dd');
-                  const novedad = novedades.find(n => format(n.fecha, 'yyyy-MM-dd') === fechaISO);
-                  const tipo = tiposNovedad.find((t: any) => t.id === novedad?.id_tipo);
-                  return (
-                    <div
-                      key={fechaISO}
-                      onClick={() => handleDiaToggle(fecha)}
-                      className={`h-20 border-2 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative group shadow-sm ${novedad ? `${tipo?.color} border-transparent scale-[1.02]` : 'bg-white dark:bg-slate-900/50 hover:border-indigo-300 border-slate-50 dark:border-slate-700 text-slate-900 dark:text-slate-300'}`}
-                    >
-                      <span className="text-[10px] font-bold opacity-60 uppercase mb-1">{format(fecha, 'eee', { locale: es })}</span>
-                      <span className="text-lg font-black">{format(fecha, 'dd')}</span>
-                      {novedad && <span className="text-[9px] font-black tracking-tighter mt-1">{tipo?.corta}</span>}
-                      {cambiosPendientes.has(fechaISO) && (
-                        <div className="absolute top-1 right-1 w-2 h-2 bg-yellow-400 rounded-full shadow-sm" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-8 pt-6 border-t">
-                <Button
-                  className="w-full h-14 text-lg font-black bg-indigo-600 hover:bg-indigo-700 rounded-xl"
-                  onClick={() => guardarTodoMutation.mutate({ idEmpleado: idEmpleadoSeleccionado!, areas: areasPermitidas })}
-                  disabled={guardarTodoMutation.isPending || (!hayCambiosEnAreas && !hayCambiosPendientes)}
-                >
-                  <Save className="h-6 w-6 mr-3" /> {guardarTodoMutation.isPending ? 'SINCRONIZANDO...' : 'GUARDAR CAMBIOS'}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       ) : (
-        <div className="h-80 flex flex-col items-center justify-center border-4 border-dashed dark:border-slate-700 rounded-3xl text-slate-300 dark:text-slate-500 bg-slate-50/30 dark:bg-slate-800/30">
-          <CalendarIcon className="h-12 w-12 mb-4 opacity-20 text-indigo-600 dark:text-indigo-400" />
-          <p className="font-bold text-lg">Seleccione un colaborador para configurar</p>
+        <div className="h-40 flex flex-col items-center justify-center border-4 border-dashed dark:border-slate-700 rounded-3xl text-slate-300 dark:text-slate-500 bg-slate-50/30 dark:bg-slate-800/30">
+          <Settings2 className="h-10 w-10 mb-3 opacity-20 text-indigo-600 dark:text-indigo-400" />
+          <p className="font-bold text-base">Seleccione un colaborador para configurar sus áreas</p>
         </div>
       )}
 

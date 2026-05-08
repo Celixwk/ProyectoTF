@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { novedadesService } from '@/services/api.service';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -10,12 +10,9 @@ import { Calendar as CalendarIcon, Save, Loader2 } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
-const TIPOS_NOVEDAD = [
-    { id: 1, nombre: 'Descanso', color: 'bg-blue-600' },
-    { id: 2, nombre: 'Vacaciones', color: 'bg-emerald-600' },
-    { id: 3, nombre: 'Incapacidad', color: 'bg-rose-600' },
-    { id: 4, nombre: 'Licencia', color: 'bg-amber-500' },
-    { id: 5, nombre: 'Suspensión', color: 'bg-slate-800' },
+const PALETA_COLORES = [
+    'bg-blue-600', 'bg-emerald-600', 'bg-rose-600', 'bg-amber-500',
+    'bg-slate-800', 'bg-violet-600', 'bg-orange-500', 'bg-teal-600',
 ];
 
 interface ModalNovedadRapidaProps {
@@ -28,12 +25,19 @@ interface ModalNovedadRapidaProps {
 
 export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionada, onSuccess }: ModalNovedadRapidaProps) {
     const queryClient = useQueryClient();
-    const [tipoNovedad, setTipoNovedad] = useState<string>("6");
+    const [tipoNovedad, setTipoNovedad] = useState<string>("");
     const [fechaInicio, setFechaInicio] = useState<string>(fechaSeleccionada || "");
     const [fechaFin, setFechaFin] = useState<string>(fechaSeleccionada || "");
 
+    const { data: tiposNovedad = [] } = useQuery({
+        queryKey: ['tipos-novedades'],
+        queryFn: () => novedadesService.listarTipos(),
+        staleTime: 60_000
+    });
+
     const esFormularioValido =
         empleado &&
+        tipoNovedad !== "" &&
         fechaInicio !== "" &&
         fechaFin !== "" &&
         new Date(fechaInicio) <= new Date(fechaFin);
@@ -61,11 +65,12 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
             });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'] });
-            queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'] });
-            queryClient.invalidateQueries({ queryKey: ['novedades-completas'] });
-            queryClient.invalidateQueries({ queryKey: ['novedades-lectura'] });
-            queryClient.invalidateQueries({ queryKey: ['validar-programacion'] });
+            queryClient.invalidateQueries({ queryKey: ['programacion-mensual'], exact: false });
+            queryClient.invalidateQueries({ queryKey: ['programacion-rango'], exact: false });
+            queryClient.invalidateQueries({ queryKey: ['no-asignados-dia'], exact: false });
+            queryClient.invalidateQueries({ queryKey: ['novedades-completas'], exact: false });
+            queryClient.invalidateQueries({ queryKey: ['novedades-lectura'], exact: false });
+            queryClient.invalidateQueries({ queryKey: ['validar-programacion'], exact: false });
 
             const fechaCorte = parseISO(fechaInicio);
             onSuccess(fechaCorte);
@@ -101,14 +106,14 @@ export function ModalNovedadRapida({ isOpen, onClose, empleado, fechaSeleccionad
                         <Label className="text-xs font-black uppercase text-slate-400 ml-1">Tipo de Novedad</Label>
                         <Select value={tipoNovedad} onValueChange={setTipoNovedad}>
                             <SelectTrigger className="h-12 bg-slate-50 border-slate-200 rounded-xl font-bold">
-                                <SelectValue />
+                                <SelectValue placeholder="Seleccionar tipo..." />
                             </SelectTrigger>
                             <SelectContent>
-                                {TIPOS_NOVEDAD.map(t => (
-                                    <SelectItem key={t.id} value={t.id.toString()} className="font-medium">
+                                {tiposNovedad.map((t: any, idx: number) => (
+                                    <SelectItem key={t.id_novedad_tipo} value={t.id_novedad_tipo.toString()} className="font-medium">
                                         <div className="flex items-center gap-2">
-                                            <div className={`w-3 h-3 rounded-full ${t.color}`} />
-                                            {t.nombre}
+                                            <div className={`w-3 h-3 rounded-full ${PALETA_COLORES[idx % PALETA_COLORES.length]}`} />
+                                            {t.nombre_novedad}
                                         </div>
                                     </SelectItem>
                                 ))}

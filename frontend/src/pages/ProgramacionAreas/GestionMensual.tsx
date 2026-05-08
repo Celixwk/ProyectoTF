@@ -37,7 +37,11 @@ const parseFechaSinAjuste = (fechaStr: string) => {
     return new Date(y, m - 1, d);
 };
 
-export default function GestionMensual() {
+interface GestionMensualProps {
+    onIrAGenerar?: () => void;
+}
+
+export default function GestionMensual({ onIrAGenerar }: GestionMensualProps = {}) {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -103,7 +107,7 @@ export default function GestionMensual() {
         staleTime: 0
     });
 
-    const { data: noAsignadosPorDia = {}, refetch: refetchNoAsignados } = useQuery({
+    const { refetch: refetchNoAsignados } = useQuery({
         queryKey: ['no-asignados-dia', fechaInicio, fechaFin],
         queryFn: () => programacionService.obtenerEmpleadosNoAsignadosPorDia(undefined, undefined, fechaInicio, fechaFin),
         enabled: paso === 'detalle' && !!fechaInicio && !!fechaFin
@@ -378,30 +382,6 @@ export default function GestionMensual() {
             return;
         }
 
-        // VALIDACIÓN DE DOBLE ASIGNACIÓN (Anti-Robo)
-        if (empArrastrado.id_area_origen === -1) {
-            const disponiblesHabil = noAsignadosPorDia[fechaNorm] || [];
-            const esHabil = disponiblesHabil.some((p: any) => Number(p.id_empleado) === Number(empArrastrado.id_empleado));
-
-            if (!esHabil) {
-                const yaTieneTurno = obtenerProgramacionParaValidar().find(p =>
-                    p.id_empleado === empArrastrado.id_empleado &&
-                    p.fecha.split('T')[0] === fechaNorm &&
-                    !p._eliminado
-                );
-
-                if (yaTieneTurno) {
-                    const nombreArea = yaTieneTurno.nombre_area || yaTieneTurno.area?.nombre_area || 'otra área';
-                    toast.error(`⚠️ CONFLICTO: ${empArrastrado.nombre_empleado} ya trabaja el día ${fechaNorm} en ${nombreArea}.`);
-                    setEmpleadoArrastrado(null);
-                    return;
-                } else {
-                    toast.error(`⛔ NO DISPONIBLE: ${empArrastrado.nombre_empleado} tiene descanso o novedad el día ${fechaNorm}.`);
-                    setEmpleadoArrastrado(null);
-                    return;
-                }
-            }
-        }
 
         const cambioId = `${Date.now()}-${Math.random()}`;
         const cambiosAGenerar: CambioLocal[] = [];
@@ -578,7 +558,7 @@ export default function GestionMensual() {
                         <CalendarDays className="mx-auto h-12 w-12 text-slate-400 dark:text-slate-500 mb-4" />
                         <h3 className="text-lg font-medium text-slate-900 dark:text-slate-300">¿No hay programación generada?</h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-6">Debe generar primero la distribución automática en el motor de áreas.</p>
-                        <Button variant="outline" onClick={() => navigate('/programacion-areas')}>Ir a Programación Áreas <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                        <Button variant="outline" onClick={() => onIrAGenerar ? onIrAGenerar() : navigate('/programacion-areas')}>Ir a Generar Programación <ArrowRight className="ml-2 h-4 w-4" /></Button>
                     </div>
                 </div>
             )}
@@ -603,7 +583,7 @@ export default function GestionMensual() {
                                 <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
                                 <h3 className="text-xl font-bold">Sin Registros</h3>
                                 <p className="text-slate-500 mb-4">No se encontró programación para este rango.</p>
-                                <Button onClick={() => navigate('/programacion-areas')}>Generar Ahora</Button>
+                                <Button onClick={() => onIrAGenerar ? onIrAGenerar() : navigate('/programacion-areas')}>Generar Ahora</Button>
                             </Card>
                         </div>
                     ) : (
@@ -808,8 +788,11 @@ export default function GestionMensual() {
                                 </div>
                                 <div className="overflow-y-auto flex-1 p-1">
                                     {(() => {
-                                        const poolDia = noAsignadosPorDia[menuContextualVacio.fecha] || [];
-                                        const disponiblesHoy = poolDia.filter((emp: any) => {
+                                        const todosEmpleados = empleadosInfo.map((emp: any) => ({
+                                            ...emp,
+                                            nombre_completo: emp.nombre
+                                        }));
+                                        const disponiblesHoy = todosEmpleados.filter((emp: any) => {
                                             const yaEnGridHoy = cambiosLocales.some(c =>
                                                 c.id_empleado === emp.id_empleado &&
                                                 c.fecha === menuContextualVacio.fecha &&
@@ -819,14 +802,14 @@ export default function GestionMensual() {
                                         }).sort((a: any, b: any) => a.nombre_completo.localeCompare(b.nombre_completo));
 
                                         if (disponiblesHoy.length === 0) {
-                                            return <div className="p-3 text-center text-xs text-slate-500 dark:text-slate-400 italic">No hay personal disponible este día.</div>;
+                                            return <div className="p-3 text-center text-xs text-slate-500 dark:text-slate-400 italic">No hay empleados registrados.</div>;
                                         }
 
-                                        const capacitados = disponiblesHoy.filter((emp: any) => 
-                                            emp.areas?.some((a: any) => Number(a.id_area) === Number(menuContextualVacio.areaId))
+                                        const capacitados = disponiblesHoy.filter((emp: any) =>
+                                            (emp.areas_habilitadas || []).some((id: any) => Number(id) === Number(menuContextualVacio.areaId))
                                         );
-                                        const apoyos = disponiblesHoy.filter((emp: any) => 
-                                            !emp.areas?.some((a: any) => Number(a.id_area) === Number(menuContextualVacio.areaId))
+                                        const apoyos = disponiblesHoy.filter((emp: any) =>
+                                            !(emp.areas_habilitadas || []).some((id: any) => Number(id) === Number(menuContextualVacio.areaId))
                                         );
 
                                         return (

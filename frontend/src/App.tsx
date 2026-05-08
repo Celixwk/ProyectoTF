@@ -1,13 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Empleados from './pages/Empleados/Empleados';
 import Turnos from './pages/Turnos/Turnos';
-import Programacion from './pages/Programacion/Programacion';
+import ProgramacionUnificada from './pages/Programacion/ProgramacionUnificada';
 import Recargos from './pages/Recargos/Recargos';
 import Novedades from './pages/Novedades/Novedades';
 import Configuracion from './pages/Configuracion/Configuracion';
 import ConfiguracionProgramacion from './pages/ConfiguracionProgramacion/ConfiguracionProgramacion';
-import ProgramacionAreas from './pages/ProgramacionAreas/ProgramacionAreas';
-import GestionMensual from './pages/ProgramacionAreas/GestionMensual';
 import Usuarios from './pages/Usuarios/Usuarios';
 import Login from './pages/Login/Login';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
@@ -26,13 +24,13 @@ function App() {
           <Route index element={<Navigate to="/programacion" replace />} />
           <Route path="empleados" element={<Empleados />} />
           <Route path="turnos" element={<Turnos />} />
-          <Route path="programacion" element={<Programacion />} />
+          <Route path="programacion" element={<ProgramacionUnificada />} />
+          <Route path="programacion-areas" element={<Navigate to="/programacion?tab=generar" replace />} />
+          <Route path="gestion-mensual" element={<Navigate to="/programacion?tab=gestion" replace />} />
           <Route path="recargos" element={<Recargos />} />
           <Route path="novedades" element={<Novedades />} />
           <Route path="configuracion" element={<Configuracion />} />
           <Route path="configuracion-programacion" element={<ConfiguracionProgramacion />} />
-          <Route path="programacion-areas" element={<ProgramacionAreas />} />
-          <Route path="gestion-mensual" element={<GestionMensual />} />
           <Route path="usuarios" element={<Usuarios />} />
         </Route>
 
