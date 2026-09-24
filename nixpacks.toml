@@ -1,0 +1,18 @@
+providers = ["node"]
+
+[variables]
+NIXPACKS_WORK_DIR = "backend"
+
+[phases.install]
+cmds = ["npm install", "npx prisma generate"]
+
+[phases.build]
+cmds = [
+    "npx tsc",
+    "mkdir -p dist/generated dist/database",
+    "cp -r src/generated/* dist/generated/",
+    "cp -r src/database/* dist/database/"
+]
+
+[start]
+cmd = "npm start"
