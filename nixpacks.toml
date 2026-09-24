@@ -8,8 +8,8 @@ cmds = [
 
 [phases.build]
 cmds = [
-    "cd backend && npm install typescript @types/node @types/express @types/cors @types/morgan ts-node tsx --no-save",
-    "cd backend && ./node_modules/.bin/tsc",
+    "cd backend && npm install typescript@5.3.3 @types/node @types/express @types/cors @types/morgan ts-node tsx --no-save",
+    "cd backend && ./node_modules/.bin/tsc -p tsconfig.json",
     "mkdir -p backend/dist/generated backend/dist/database",
     "cp -r backend/src/generated/* backend/dist/generated/ || true",
     "cp -r backend/src/database/* backend/dist/database/ || true"
