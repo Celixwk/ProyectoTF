@@ -30,7 +30,6 @@ interface OpcionesAsignacion {
     permitirRefuerzoComoFallback?: boolean;
     areasQueUsanRefuerzo?: Set<number>;
     cuposRestantes?: Map<number, number>;
-    preferenciasTurnos?: Record<number, Record<number, number | null>>;
     balancearHoras?: boolean;
 }
 
@@ -94,15 +93,6 @@ export function capa5_calcularScore(
     // Con -50000 garantizamos que NUNCA suelten el turno a menos que choquen contra la barrera del límite global de días.
     score -= (diasConsecutivos * 50000);
 
-    // "Soft Constraint": si este empleado tiene un turno preferido en esta área que coincide con el turno actual
-    if (opciones?.preferenciasTurnos && opciones.preferenciasTurnos[empleado.id_empleado]) {
-        const turnoPreferido = opciones.preferenciasTurnos[empleado.id_empleado][idArea];
-        if (turnoPreferido === turno.id_turno) {
-            // Bonificación máxima para intentar asignar obligatoriamente este empleado a este turno si es posible
-            score -= 10000;
-        }
-    }
-
     if (esFallback) score += penalizacion;
 
     return score;
@@ -141,23 +131,6 @@ export function capa5_seleccionarEmpleadoParaArea(
         }
 
         filtrados = filtrados.filter(e => {
-            // Turno Fijo Absoluto / Hard Constraint Global
-            const prefEmpleado = opciones?.preferenciasTurnos?.[e.id_empleado];
-            if (prefEmpleado) {
-                const areasConTurnoFijo = Object.keys(prefEmpleado).filter(k => prefEmpleado[Number(k)] !== null);
-                if (areasConTurnoFijo.length > 0) {
-                    // Este empleado es un especialista fijo en al menos un área.
-                    // REGLA: Si están configurados como Turno Fijo, no pueden ser comodines ni refuerzos fuera de su(s) área(s) fija(s).
-                    const turnoFijoParaEstaArea = prefEmpleado[area.id_area];
-                    if (!turnoFijoParaEstaArea || turnoFijoParaEstaArea !== turno.id_turno) {
-                        // Rechazado porque:
-                        // a) No es su área fija configurada.
-                        // b) Sí es su área fija, pero no es el turno configurado.
-                        return false;
-                    }
-                }
-            }
-
             let dias = 0;
             const hoy = new Date(fecha);
             const hoyTime = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());

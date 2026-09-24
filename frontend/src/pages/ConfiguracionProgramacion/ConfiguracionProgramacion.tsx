@@ -32,9 +32,8 @@ export default function ConfiguracionProgramacion() {
   const [metaHorasDiariasInput, setMetaHorasDiariasInput] = useState<string>('');
   const [maxDiasConsecutivosInput, setMaxDiasConsecutivosInput] = useState<string>('');
   
-  // States para turnos globales y preferencias
+  // State para turnos globales por área
   const [configAreasTurnos, setConfigAreasTurnos] = useState<Record<number, number[]>>({}); // area -> turnoIds
-  const [preferenciasEmpleados, setPreferenciasEmpleados] = useState<Record<number, Record<number, number | null>>>({}); // idEmpleado -> area -> turnoId
 
   const isSaving = useRef(false);
 
@@ -97,11 +96,6 @@ export default function ConfiguracionProgramacion() {
     queryFn: () => parametrizacionService.obtener('CONFIGURACION_TURNOS_AREA'),
   });
 
-  const { data: configTurnosEmpleadoParam, refetch: refetchTurnosEmpleados } = useQuery({
-    queryKey: ['parametro-turnos-empleados'],
-    queryFn: () => parametrizacionService.obtener('PREFERENCIAS_EMPLEADOS_TURNOS'),
-  });
-
   useEffect(() => {
     if (configTurnosAreaParam?.valor_texto) {
       try {
@@ -109,14 +103,6 @@ export default function ConfiguracionProgramacion() {
       } catch (e) { console.error(e); }
     }
   }, [configTurnosAreaParam]);
-
-  useEffect(() => {
-    if (configTurnosEmpleadoParam?.valor_texto) {
-      try {
-        setPreferenciasEmpleados(JSON.parse(configTurnosEmpleadoParam.valor_texto));
-      } catch (e) { console.error(e); }
-    }
-  }, [configTurnosEmpleadoParam]);
 
   useEffect(() => {
     if (metaHorasData?.horas_maximas !== undefined) {
@@ -211,13 +197,6 @@ export default function ConfiguracionProgramacion() {
       toast.success('Configuración de turnos para áreas guardada');
     },
     onError: () => toast.error('Error guardando turnos de áreas'),
-  });
-
-  const guardarPreferenciasEmpleadosMutation = useMutation({
-    mutationFn: (preferencias: Record<number, Record<number, number | null>>) => parametrizacionService.guardar('PREFERENCIAS_EMPLEADOS_TURNOS', { valor_texto: JSON.stringify(preferencias) }),
-    onSuccess: () => {
-      refetchTurnosEmpleados();
-    },
   });
 
   const fechaConflicto = useMemo(() => {
@@ -429,57 +408,15 @@ export default function ConfiguracionProgramacion() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {areas?.map((area: Area) => {
                   const isChecked = areasPermitidas.includes(area.id_area);
-                  const prefObj = preferenciasEmpleados[idEmpleadoSeleccionado] || {};
-                  const turnoPrefId = prefObj[area.id_area] || null;
-
                   return (
-                  <div
-                    key={area.id_area}
-                    className={`flex flex-col space-y-2 p-4 rounded-xl border transition-all ${isChecked ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-50 dark:ring-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 border-slate-100 dark:border-slate-700'}`}
-                  >
-                    <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}>
+                    <div
+                      key={area.id_area}
+                      className={`flex items-center space-x-3 p-4 rounded-xl border transition-all cursor-pointer ${isChecked ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 ring-2 ring-indigo-50 dark:ring-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 border-slate-100 dark:border-slate-700'}`}
+                      onClick={() => setAreasPermitidas(prev => prev.includes(area.id_area) ? prev.filter(id => id !== area.id_area) : [...prev, area.id_area])}
+                    >
                       <Checkbox checked={isChecked} className="h-5 w-5 rounded-md" />
                       <span className={`text-sm font-bold flex-1 ${isChecked ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400'}`}>{area.nombre_area}</span>
                     </div>
-                    {isChecked && configAreasTurnos[area.id_area]?.length > 0 && (
-                      <div className="pl-8 pt-1 flex items-center gap-2">
-                        <Label className="text-[10px] uppercase text-indigo-500 font-bold whitespace-nowrap">Turno Fijo (Opc.):</Label>
-                        <Select
-                          value={turnoPrefId ? turnoPrefId.toString() : "none"}
-                          onValueChange={(val) => {
-                            const valId = val === "none" ? null : parseInt(val);
-                            setPreferenciasEmpleados(prev => {
-                              const newPrefs = { ...prev };
-                              if (!newPrefs[idEmpleadoSeleccionado]) newPrefs[idEmpleadoSeleccionado] = {};
-                              newPrefs[idEmpleadoSeleccionado][area.id_area] = valId;
-                              guardarPreferenciasEmpleadosMutation.mutate(newPrefs);
-                              return newPrefs;
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-[10px] font-bold flex-1 bg-white border-indigo-200">
-                            <SelectValue placeholder="Libre (Auto)" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none" className="text-slate-500 italic text-xs">Libre (Auto)</SelectItem>
-                            {configAreasTurnos[area.id_area]?.map(tId => {
-                              const t = turnosSistema?.find((ts: Turno) => ts.id_turno === tId);
-                              if (!t) return null;
-                              return (
-                                <SelectItem key={t.id_turno} value={t.id_turno.toString()}>
-                                  <span className="font-black text-indigo-600">{t.tipo_turno}</span>
-                                  <span className="text-[10px] text-slate-500 ml-2">
-                                    [{t.hora_entrada?.substring(0,5)} - {t.hora_salida?.substring(0,5)}
-                                    {t.hora_entrada_2 && t.hora_salida_2 ? ` y ${t.hora_entrada_2.substring(0,5)} - ${t.hora_salida_2.substring(0,5)}` : ''}]
-                                  </span>
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
                   );
                 })}
               </div>

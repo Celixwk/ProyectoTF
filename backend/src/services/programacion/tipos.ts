@@ -128,7 +128,6 @@ export interface OpcionesGeneracion {
   descansosRequeridos?: Map<number, number>;
   idUsuario?: number;
   configuracion?: Record<number, { turnosIds: number[] }>;
-  preferenciasTurnos?: Record<number, Record<number, number | null>>;
   balancearHoras?: boolean;
   maximoHorasExtras?: number;
 }

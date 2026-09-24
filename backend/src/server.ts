@@ -71,9 +71,19 @@ async function iniciarServidor() {
       console.log('✅ BD ya inicializada, omitiendo verificación');
     }
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 SERVIDOR CORRIENDO\n📡 Puerto: ${PORT}\n🔗 URL: http://localhost:${PORT}`);
       console.log(`📂 Sirviendo Frontend desde: ${frontendPath}`);
+    });
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Puerto ${PORT} ocupado. Cierra el proceso anterior y vuelve a intentar.`);
+        console.error(`   En PowerShell: Stop-Process -Id (Get-NetTCPConnection -LocalPort ${PORT}).OwningProcess -Force`);
+      } else {
+        console.error('❌ Error en el servidor:', err.message);
+      }
+      process.exit(1);
     });
   } catch (error) {
     console.error('❌ Error fatal al iniciar servidor:', error);

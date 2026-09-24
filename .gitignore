@@ -1,4 +1,4 @@
-# ─── Dependencias ──────────────────────────────────────────────
+i# ─── Dependencias ──────────────────────────────────────────────
 node_modules/
 
 # ─── Variables de entorno ──────────────────────────────────────
@@ -39,3 +39,4 @@ backend/src/generated/
 # ─── Sistema operativo ─────────────────────────────────────────
 .DS_Store
 Thumbs.db
+node_modules

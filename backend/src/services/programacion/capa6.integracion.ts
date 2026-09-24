@@ -122,20 +122,25 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
       const config = opciones.configuracion[area.id_area];
       if (!config || !config.turnosIds.includes(tPrisma.id_turno)) continue;
 
-      const totalRequerido = necesidadesPorArea.get(area.id_area) || 0;
-      const turnosHabilitadosArea = config.turnosIds;
-      const indexTurnoActual = turnosHabilitadosArea.indexOf(tPrisma.id_turno);
+      // Si ya hay una asignación manual para este área+turno exacto, saltarlo
+      // (no asignar auto a un slot que ya está cubierto manualmente)
+      const yaOcupadoManual = manualesHoy.some(
+        m => m.id_area === area.id_area && m.id_turno === tPrisma.id_turno
+      );
+      if (yaOcupadoManual) continue;
 
-      const basePorTurno = Math.floor(totalRequerido / turnosHabilitadosArea.length);
-      const residuo = totalRequerido % turnosHabilitadosArea.length;
+      // Si ya hay una asignación automática generada hoy para este área+turno, saltarlo
+      const yaOcupadoAuto = asignacionesAutomaticas.some(
+        a => a.id_area === area.id_area && a.id_turno === tPrisma.id_turno
+      );
+      if (yaOcupadoAuto) continue;
 
-      let cupoParaEsteTurno = basePorTurno + (indexTurnoActual < residuo ? 1 : 0);
       const cupoRealRestanteArea = cuposRestantesDia.get(area.id_area) || 0;
+      if (cupoRealRestanteArea <= 0) continue;
 
-      if (cupoParaEsteTurno > 0 && cupoRealRestanteArea > 0) {
-        areasConCupoParaTurno.push(area);
-        maximosTemporales.set(area.id_area, Math.min(cupoParaEsteTurno, cupoRealRestanteArea));
-      }
+      // Máximo 1 persona por área+turno por día (regla dura de negocio)
+      areasConCupoParaTurno.push(area);
+      maximosTemporales.set(area.id_area, 1);
     }
 
     if (areasConCupoParaTurno.length === 0) continue;
@@ -185,6 +190,12 @@ export async function capa6_generarProgramacionDia(fecha: Date, opciones?: Opcio
   if (asignacionesAutomaticas.length === 0 && poolTrabajo.filter(e => e.disponible).length > 0) {
     return { ...respuestaBase, guardado: { realizado: false, razon: 'fallo_distribucion_con_personal_disponible' } };
   }
+
+  // Borrar registros automáticos previos de este día antes de guardar los nuevos
+  // Evita que empleados con asignaciones anteriores queden con datos obsoletos
+  await prisma.detalleProgramacion.deleteMany({
+    where: { fecha: fechaNormalizada, origen_registro: 'Automatico' }
+  });
 
   const resultadoGuardado = await capa6_guardarAsignaciones(asignacionesAutomaticas, opciones?.idUsuario);
   return { ...respuestaBase, guardado: { realizado: resultadoGuardado.guardadas > 0, ...resultadoGuardado } };

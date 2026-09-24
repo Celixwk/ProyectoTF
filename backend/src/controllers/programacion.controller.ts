@@ -182,22 +182,14 @@ export const generarAutomatica = async (req: Request, res: Response) => {
             });
         }
 
-        // Obtener parametrizaciones globales (días, preferencias y máximo extras)
-        const [paramDias, paramPreferencias, paramExtras] = await Promise.all([
+        // Obtener parametrizaciones globales (días y máximo extras)
+        const [paramDias, paramExtras] = await Promise.all([
             prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAX_DIAS_CONSECUTIVOS' } }),
-            prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'PREFERENCIAS_EMPLEADOS_TURNOS' } }),
             prisma.parametrizacion.findUnique({ where: { nombre_parametro: 'MAXIMO_HORAS_EXTRAS' } })
         ]);
 
         const maxDiasConsecutivosArea = paramDias?.horas_maximas ? Number(paramDias.horas_maximas) : 3;
         const maximoHorasExtras = paramExtras?.horas_maximas ? Number(paramExtras.horas_maximas) : 48;
-
-        let preferenciasEmpleados = {};
-        if (paramPreferencias?.valor_texto) {
-            try {
-                preferenciasEmpleados = JSON.parse(paramPreferencias.valor_texto);
-            } catch (e) { console.error("Error parseando preferencias:", e); }
-        }
 
         let totalAsignaciones = 0;
         let totalGuardadas = 0;
@@ -215,7 +207,6 @@ export const generarAutomatica = async (req: Request, res: Response) => {
                 idUsuario: id_usuario_registro ? Number(id_usuario_registro) : undefined,
                 maxDiasConsecutivosArea,
                 maximoHorasExtras,
-                preferenciasTurnos: preferenciasEmpleados,
                 balancearHoras: balancearHoras === true || String(balancearHoras) === "true"
             });
 
