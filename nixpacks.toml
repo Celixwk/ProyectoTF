@@ -4,7 +4,7 @@ providers = ["node"]
 cmds = [
     "cd backend && npm install",
     "cd backend && npm run prisma:generate",
-    "cd backend && npx prisma db push --accept-data-loss",
+    "cd backend && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss",
     "cd backend && node src/scripts/setup-database.js"
 ]
 
