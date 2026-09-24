@@ -1,7 +1,7 @@
 providers = ["node"]
 
 [phases.install]
-cmds = ["cd backend && npm install", "cd backend && npm run prisma:generate"]
+cmds = ["cd backend && npm install --include=dev", "cd backend && npm run prisma:generate"]
 
 [phases.build]
 cmds = [
