@@ -3,10 +3,8 @@ providers = ["node"]
 [phases.install]
 cmds = [
     "cd backend && npm install",
-    "cd backend && npm run prisma:generate",
-    "cd backend && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss",
-    "cd backend && node src/scripts/setup-database.js"
+    "cd backend && npm run prisma:generate"
 ]
 
 [start]
-cmd = "cd backend && npm start"
+cmd = "cd backend && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss && node src/scripts/setup-database.js && npm start"
