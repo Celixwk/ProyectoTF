@@ -1,18 +1,15 @@
 providers = ["node"]
 
-[variables]
-NIXPACKS_WORK_DIR = "backend"
-
 [phases.install]
-cmds = ["npm install", "npx prisma generate"]
+cmds = ["cd backend && npm install", "cd backend && npm run prisma:generate"]
 
 [phases.build]
 cmds = [
-    "npx tsc",
-    "mkdir -p dist/generated dist/database",
-    "cp -r src/generated/* dist/generated/",
-    "cp -r src/database/* dist/database/"
+    "cd backend && npx tsc",
+    "mkdir -p backend/dist/generated backend/dist/database",
+    "cp -r backend/src/generated/* backend/dist/generated/ || true",
+    "cp -r backend/src/database/* backend/dist/database/ || true"
 ]
 
 [start]
-cmd = "npm start"
+cmd = "cd backend && npx prisma db push --schema=src/prisma/schema.prisma --accept-data-loss && npm start"
