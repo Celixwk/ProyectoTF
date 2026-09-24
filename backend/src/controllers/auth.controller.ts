@@ -25,7 +25,7 @@ export const authController = {
                 return res.status(401).json({ success: false, error: 'Credenciales inválidas' });
             }
 
-            if (user.estado && user.estado !== 'Activo') {
+            if (user.estado && user.estado.toLowerCase() === 'inactivo') {
                 return res.status(403).json({ success: false, error: 'Usuario inactivo' });
             }
 
