@@ -1,7 +1,11 @@
 providers = ["node"]
 
+[variables]
+NPM_CONFIG_PRODUCTION = "false"
+NODE_ENV = "development"
+
 [phases.install]
-cmds = ["cd backend && NODE_ENV=development npm install", "cd backend && npm run prisma:generate"]
+cmds = ["cd backend && npm install", "cd backend && npm run prisma:generate"]
 
 [phases.build]
 cmds = [
@@ -12,4 +16,4 @@ cmds = [
 ]
 
 [start]
-cmd = "cd backend && npm start"
+cmd = "export NODE_ENV=production && cd backend && npm start"
